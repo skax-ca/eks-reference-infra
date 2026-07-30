@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# pre-commit — OpenTofu 로컬 게이트 (fmt → tflint → trivy)
+# 활성화: git config core.hooksPath .githooks  (clone마다 1회)
+# 의도적 우회는 git commit --no-verify (사유를 커밋 메시지에 남길 것)
+set -euo pipefail
+
+# Terraform 관련 파일이 staged된 경우에만 실행 (문서 커밋엔 비용 0)
+staged=$(git diff --cached --name-only --diff-filter=ACMR |
+  grep -E '\.(tf|tfvars)$|\.terraform\.lock\.hcl$|^\.tflint\.hcl$|^\.trivyignore$' || true)
+[ -z "$staged" ] && exit 0
+
+echo "[pre-commit] Terraform 변경 감지 — 로컬 게이트 실행"
+
+echo "  1/4 backend.hcl 유출 검사"
+# design/50 D25 — 버킷명은 git에 들어가지 않는다. 훅이 마지막 방어선이다.
+if git diff --cached --name-only --diff-filter=ACMR | grep -qE '(^|/)backend(\..+)?\.hcl$'; then
+  echo "  ✗ backend.hcl 이 staged 되었다 — .gitignore 를 우회했다는 뜻이다." >&2
+  echo "    이 파일에는 state 버킷명이 있고, 커밋되면 D25 근거가 무너진다." >&2
+  echo "    git restore --staged <파일> 로 제외할 것." >&2
+  exit 1
+fi
+
+echo "  2/4 tofu fmt -check"
+tofu fmt -recursive -check
+
+echo "  3/4 tflint --recursive"
+tflint --recursive
+
+echo "  4/4 trivy config (MEDIUM+)"
+# .terraform/(init 캐시)과 다운로드된 원격 모듈 내부는 upstream 코드 — 게이트 대상에서 제외한다.
+# 이 repo는 배포 루트라 사실상 모든 리소스가 모듈 안에 있다: 여기서 잡는 것은
+# 루트가 직접 쓰는 provider·backend 설정과 루트 리소스뿐이다.
+trivy config --quiet --exit-code 1 --severity MEDIUM,HIGH,CRITICAL \
+  --skip-dirs '**/.terraform' --tf-exclude-downloaded-modules .
+
+echo "[pre-commit] 게이트 통과 ✓"
