@@ -112,6 +112,29 @@ module "vpc" {
 
 ---
 
+## 4-1. ⚠️ 대상 계정은 **공용 개발 계정**이다 (F13 · D27-2) — 가장 먼저 읽을 것
+
+`AWS_PROFILE=team` → 계정 `533616270150`, 신원 IAM user `silverte`.
+**이 계정은 우리 전용이 아니다.** 실측(2026-07-30): VPC **23개**, tfstate 버킷 **7개**가
+다른 사람들 것이다(`yg-` `jsh-` `pizza-` `cjh220-` `bae-` `lshdev-` `hj-` `kgkang-` `lyg-` `ym-` …).
+
+| 규칙 | 내용 |
+|------|------|
+| **남의 자산을 건드리지 않는다** | 우리 자산은 **`Workload=ref` 태그**로 식별한다. 이름만 보고 판단하지 않는다 |
+| **`AWSAFTExecution`을 손대지 않는다** | **D27-1**: 신뢰 정책이 깨져 있지만(F14) 우리는 그 Role을 쓰지 않는다. 고치는 것도 남의 자산 변경이다 |
+| **삭제 대상 사람 검토** | apply 승인 전 plan의 **destroy/replace 목록을 읽는다.** 공용 계정이므로 **예외 없음** |
+| **`prevent_destroy` 유지** | VPC 모듈 D12. 실수 삭제의 마지막 방어선 |
+| **`aws` CLI는 항상 `--profile team`** | default 자격증명이 없다. 프로파일을 빼면 실패한다(조용히 다른 계정을 치지 않는다) |
+
+- ⚠️ **`AdministratorAccess`가 자동 트리거에 연결된다.** PoC에서는 사람이 TFC에서 돌렸지만
+  이제 `pull_request`가 `plan`을 자동 실행한다 — 이것이 PoC 대비 **실질적으로 달라진 위험**이다.
+  `apply`의 Environment 승인 게이트가 "사람이 검토"를 이행하는 지점이다.
+- ⚠️ **다른 사람 리소스는 우리 plan에 나타나지 않는다**(우리 state에 없으므로).
+  위험은 plan에 잡히는 범위가 아니라 **실행 Role이 손댈 수 있는 범위 전체**다.
+- 근거: 모듈 repo `design/50` F13·D27-2. PoC repo `05` §7.1이 원문이다.
+
+---
+
 ## 5. 부트스트랩은 IaC 밖이다 (D21) — 완화책이 규약이다
 
 `bootstrap/`은 aws CLI 스크립트다. 닭-달걀이 성립하지 않는 대신 **drift 감지·이력·IaC 자산성을
@@ -123,6 +146,18 @@ module "vpc" {
 | 기대 상태 명문화 | `bootstrap/README.md`의 표가 `.tf`를 대체하는 SSOT다 |
 | drift 감지 대체 | `verify.sh`(**read-only**)가 불일치를 exit 1로 낸다. ⚠️ **음성 테스트로 실제로 잡는지 증명**해야 한다 |
 | IaC 승격 경로 | `bootstrap/README.md`에 `import` 블록 초안 |
+
+**생성 대상 (D27-1 반영)**
+
+| 리소스 | 이름 | 비고 |
+|--------|------|------|
+| S3 버킷 | `s3-ref-dev-an2-tfstate-<guid12>` | 버저닝·SSE·퍼블릭 차단 + **lifecycle**(D29) |
+| OIDC provider | `token.actions.githubusercontent.com` | `aud`=`sts.amazonaws.com`. `Name` 태그 `iamoidc-ref-dev-an2-gha` |
+| **입구** Role | `iamr-ref-dev-an2-gha-entry-01` | 신뢰=OIDC `sub` 3패턴. 권한=**실행 Role assume 하나뿐** |
+| **실행** Role | `iamr-ref-dev-an2-gha-exec-01` | **신설**(D27-1). 신뢰=입구 Role만. 권한=`AdministratorAccess` |
+
+⛔ **`AWSAFTExecution`은 생성 대상도 변경 대상도 아니다** — §4-1 참조. 기존 D27(신뢰 정책 전체 교체)은
+**철회**됐다. `bootstrap.sh`에 `update-assume-role-policy`가 등장하면 안 된다.
 
 ---
 
