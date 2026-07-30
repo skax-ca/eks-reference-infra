@@ -37,27 +37,34 @@
   훅 실행 비트 `100755` 확인(**chmod 누락을 실제로 잡았다** — 누락 시 훅이 조용히 안 돈다)
 - `git config core.hooksPath .githooks` 활성화됨
 
-### ⏸ Phase 1 잔여 = **GitHub App 생성** (사용자 작업, 브라우저 전용)
+### ✅ Phase 1 **완료** — GitHub App + D20 실측 검증 (2026-07-30)
 
-⚠️ **API로 만들 수 없다** — `POST /orgs/{org}/apps`는 없고 manifest 변환은 브라우저 `code`를 요구한다(실측).
+**미해결 1번(private repo git tag 소싱 인증) 종결.** 상세는 `docs/deployment-facts.md` §1.
 
-생성 URL: `https://github.com/organizations/skax-ca/settings/apps/new`
+| 실측값 | 값 |
+|--------|-----|
+| App slug / ID | `skax-ca-module-reader` / `4432001` (owner=`skax-ca` **Organization** → 개인 종속 없음) |
+| installation ID | `149998961` · `repository_selection=selected` |
+| 권한 | `contents: read` + `metadata: read` (**metadata는 GitHub이 자동 부여** — 과다 권한 아님) |
+| 접근 가능 repo | **정확히 1개** `skax-ca/iac-module-library` |
+| 토큰 | `ghs_` 접두사 40자, **1시간 만료** |
+| repo 변수/시크릿 | `MODULE_READER_APP_ID`(변수) · `MODULE_READER_KEY`(secret) 등록됨 |
 
-| 항목 | 값 |
-|------|-----|
-| 이름 | `skax-ca-module-reader` (임의, org 내 고유) |
-| Homepage URL | `https://github.com/skax-ca/iac-module-library` (형식상 필수) |
-| Webhook | **Active 체크 해제** |
-| Repository permissions | **Contents: Read-only** — 이것 하나만 |
-| Where can this be installed | **Only on this account** |
-| 설치 후 | Install App → **Only select repositories** → `iac-module-library` **1개만** |
-
-산출물 2개를 이 repo에 넣는다:
-```bash
-gh variable set MODULE_READER_APP_ID --repo skax-ca/iac-reference-infra --body '<App ID>'
-gh secret   set MODULE_READER_KEY    --repo skax-ca/iac-reference-infra < <다운로드한 .pem>
+**실험 설계 — 음성 대조군이 핵심이었다.** 로컬은 `osxkeychain`만으로 이미 clone된다(F1).
+helper를 그대로 두면 "App 토큰이 동작했다"를 증명할 수 없어, 걷어내고 **먼저 실패를 확인**했다.
 ```
-⚠️ `.pem`은 repo 안에 두지 않는다(`.gitignore`가 `*.pem`을 막지만 애초에 넣지 않는다).
+격리: GIT_CONFIG_NOSYSTEM=1 · GIT_CONFIG_GLOBAL=<빈 파일> · GIT_TERMINAL_PROMPT=0
+① insteadOf 없음  → fatal: Authentication failed for   ✓ 실패 = 격리 성립
+② App 토큰        → Downloading git::...?ref=vpc-v1.0.0  ✓ 성공
+```
+⚠️ **`insteadOf` 값에는 토큰이 평문으로 들어간다.** 로컬 실험은 임시 config를 쓰고 지운다 —
+`~/.gitconfig`에 남기면 만료 토큰이 영구히 박힌다.
+
+⚠️ **App 생성은 API로 불가**(실측): `POST /orgs/{org}/apps` 없음, manifest 변환은 브라우저 `code` 필요.
+고객사 인수인계 문서에 **브라우저 수동 단계**로 명기해야 한다.
+⚠️ **App 생성 ≠ 설치.** 처음에 `GET /app`은 200인데 `GET /app/installations`가 **빈 배열**이었다 —
+App은 정의, Installation이 적용이다. 설치 없이는 토큰 발급 대상이 없다.
+설치 대상은 소싱**당하는** repo(`iac-module-library`)다. `iac-reference-infra`가 아니다.
 
 ### ⏭️ 이후 Phase (의존 순서가 중요하다 — 닭-달걀 2차)
 

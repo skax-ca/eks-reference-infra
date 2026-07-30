@@ -30,22 +30,67 @@
 | 실행 Role **이름** | `AWSAFTExecution` (D27, 기존 재사용) | ✅ | ARN은 §2 |
 | 입구 Role **이름** | `iamr-ref-dev-an2-gha-entry-01` | ✅ 설계 확정 | ARN은 §2 |
 | state key | `dev/networking.tfstate` | ✅ | backend `key` |
+| GitHub App slug / ID | `skax-ca-module-reader` / `4432001` | ✅ 2026-07-30 실측 | 모듈 소싱 인증(D20) |
+| App installation ID | `149998961` | ✅ 2026-07-30 실측 | 토큰 발급 대상 |
 
 > 이 repo는 **2026-07-15 이후 생성**(2026-07-30)이므로 immutable `sub` 적용 대상으로 추정된다.
 > ⚠️ **추정이다.** 실제 형태는 §3에서 실측해 확정한다.
+
+### ✅ D20 검증 완료 (2026-07-30) — 미해결 1번 종결
+
+App 토큰만으로 private repo 모듈 소싱이 된다는 것을 **음성 대조군과 함께** 확인했다.
+
+| 확인 항목 | 실측값 |
+|-----------|--------|
+| App owner | `skax-ca` (**Organization** — 개인 종속 없음, D20의 목적) |
+| `repository_selection` | `selected` (전체 설치 아님) |
+| 부여된 권한 | `contents: read` + `metadata: read` |
+| 토큰으로 접근 가능한 repo | **정확히 1개** — `skax-ca/iac-module-library` |
+| installation token | `ghs_` 접두사, 40자, **1시간 만료** |
+
+> ℹ️ **`metadata: read`는 우리가 준 것이 아니다.** GitHub이 모든 App에 자동 부여하는 최소 권한
+> (repo 존재·이름 조회용)이다. 권한을 과하게 준 것이 아니므로 보안 리뷰에서 이 줄을 근거로 든다.
+
+**실험 설계 — 음성 대조군이 핵심이다.** 로컬은 `credential.helper=osxkeychain`만으로 이미 clone이
+된다(F1). helper를 그대로 두고 App 토큰을 얹어 성공하면 *"App 토큰이 동작했다"* 가 아니라
+*"keychain이 동작했다"* 일 수 있다. 그래서 helper를 걷어내고 **먼저 실패하는 것을 확인**했다.
+
+```
+격리: GIT_CONFIG_NOSYSTEM=1 · GIT_CONFIG_GLOBAL=<빈 파일> · GIT_TERMINAL_PROMPT=0
+
+① 음성 대조군 (insteadOf 없음)  → fatal: Authentication failed for   ✓ 실패 = 격리 성립
+② 본 실험     (App 토큰 insteadOf) → Downloading git::...?ref=vpc-v1.0.0  ✓ 성공
+⇒ 성공의 원인이 App 토큰임이 확정된다. 소싱 URL 은 git::https:// 그대로다.
+```
+
+⚠️ **`insteadOf` 값에는 토큰이 평문으로 들어간다.** CI에서는 `git config --global`이 runner의
+일회용 파일이라 run 종료와 함께 사라지지만, **로컬에서 실험할 때는 반드시 임시 config를 쓰고
+끝나면 삭제한다.** 개인 `~/.gitconfig`에 남기면 만료된 토큰이 영구히 박힌다.
 
 ---
 
 ## 2. git에 두지 않는 값 — 어디에 있는가
 
-| 항목 | 저장 위치 | 주입 경로 |
-|------|----------|----------|
-| **state 버킷명** | GitHub repo 변수 `TF_STATE_BUCKET` / 로컬 gitignore된 `backend.hcl` | `tofu init -backend-config="bucket=..."` |
-| **AWS 계정 ID** | 입구 Role ARN에 포함 → repo 변수 `AWS_ENTRY_ROLE_ARN` | `configure-aws-credentials`의 `role-to-assume` |
-| **입구 Role ARN** | repo 변수 `AWS_ENTRY_ROLE_ARN` | 동일 |
-| **실행 Role ARN** | repo 변수 `AWS_EXECUTION_ROLE_ARN` | provider `assume_role.role_arn` |
-| **GitHub App private key** | repo **secret** `MODULE_READER_KEY` | `create-github-app-token` |
-| **GitHub App ID** | repo 변수 `MODULE_READER_APP_ID` | 동일 |
+**이유가 세 종류다. 섞어 쓰면 판단이 흐려진다.**
+
+| 이유 | 의미 |
+|------|------|
+| 🔒 **비밀** | 유출 자체가 사고다. GitHub **secret**에만 둔다 |
+| 🙈 **비노출** | 비밀은 아니지만 굳이 알릴 이유가 없다(계정 식별 → IAM principal 열거 가능). D25 |
+| 🔁 **이식성** | 노출돼도 무해하지만 **고객사가 값만 바꾸면 되게** 하려고 코드 밖에 둔다 |
+
+| 항목 | 이유 | 저장 위치 | 주입 경로 |
+|------|------|----------|----------|
+| **state 버킷명** | 🙈 | repo 변수 `TF_STATE_BUCKET` / 로컬 gitignore된 `backend.hcl` | `tofu init -backend-config="bucket=..."` |
+| **AWS 계정 ID** | 🙈 | 입구 Role ARN에 포함 → repo 변수 `AWS_ENTRY_ROLE_ARN` | `configure-aws-credentials`의 `role-to-assume` |
+| **입구 Role ARN** | 🙈 | repo 변수 `AWS_ENTRY_ROLE_ARN` | 동일 |
+| **실행 Role ARN** | 🙈 | repo 변수 `AWS_EXECUTION_ROLE_ARN` | provider `assume_role.role_arn` |
+| **GitHub App private key** | 🔒 | repo **secret** `MODULE_READER_KEY` | `create-github-app-token` |
+| **GitHub App ID** | 🔁 | repo 변수 `MODULE_READER_APP_ID` | 동일 |
+
+> ℹ️ **App ID(`4432001`)는 비밀이 아니다** — 워크플로 로그에도 찍히고 §1에 값을 적어 두었다.
+> 변수로 두는 이유는 **이식성**이다: 고객사는 자기 App을 만들고 변수만 바꾸면 워크플로를 안 고친다.
+> 반대로 **private key는 진짜 비밀**이라 secret이고, §1에 값을 적지 않는다.
 
 버킷명 형식은 `s3-ref-dev-an2-tfstate-<guid12>` (D25). **GUID는 `bootstrap.sh`가 생성하고
 실행자에게 출력한다** — 이 문서에 적지 않는다.
