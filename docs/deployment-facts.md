@@ -103,22 +103,51 @@ git grep -c "$TF_STATE_BUCKET" ; # → 0 이어야 한다 (grep 실패 = 없음)
 
 ---
 
-## 3. 실측 대기 — OIDC `sub` claim (Phase 2)
+## 3. ✅ OIDC `sub` claim — 실측 완료 (2026-07-30, Phase 2)
 
-⚠️ **신뢰 정책을 쓰기 전에 반드시 채운다.** 추정으로 쓰면 `Not authorized to perform
-sts:AssumeRoleWithWebIdentity`를 만나고, 그 시점에는 원인이 `aud`인지 `sub`인지 provider ARN인지
-구분되지 않는다. **그래서 Phase 2가 Phase 3보다 앞에 있다.**
+**신뢰 정책에 그대로 넣을 값이다.** 추정이 아니라 실제 JWT를 디코드해 얻었다.
 
-| job | 트리거 | 예상 `sub` (추정) | 실측값 |
-|-----|--------|------------------|--------|
-| PR plan | `pull_request` | `repo:skax-ca@310520211/iac-reference-infra@1316830050:pull_request` | ⏸ |
-| main plan | `push` → `main` | `...@1316830050:ref:refs/heads/main` | ⏸ |
-| apply | `environment: dev` | `...@1316830050:environment:dev` | ⏸ |
+| # | job | 트리거 | **실측 `sub`** |
+|---|-----|--------|---------------|
+| ① | PR plan (environment 없음) | `pull_request` | `repo:skax-ca@310520211/iac-reference-infra@1316830050:pull_request` |
+| ② | main plan (environment 없음) | `push` → `main` | `repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main` |
+| ③ | apply | `environment: dev` | `repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev` |
 
-측정 방법: `id-token: write` 권한으로 `$ACTIONS_ID_TOKEN_REQUEST_URL`에서 JWT를 받아 payload를
-디코드해 출력한다. **AWS 리소스가 전혀 필요 없다** — 그래서 부트스트랩보다 먼저 할 수 있다.
+공통: `aud = sts.amazonaws.com` · `iss = https://token.actions.githubusercontent.com`
 
-⚠️ 실측 후 throwaway 워크플로는 **삭제**한다(커밋으로).
+측정: run [`30524527959`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30524527959)(PR) ·
+[`30524983985`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30524983985)(push).
+`id-token: write` + `$ACTIONS_ID_TOKEN_REQUEST_URL`에서 JWT를 받아 payload를 디코드했다.
+**AWS 리소스가 전혀 필요 없었다** — 그래서 부트스트랩보다 먼저 할 수 있었고, 그것이 Phase 순서의 이유다.
+
+### 확정된 사실 3가지
+
+1. **immutable `sub`가 맞다.** 형태는 `repo:<org>@<org_id>/<repo>@<repo_id>:...`다.
+   ⛔ 이름 기반(`repo:skax-ca/iac-reference-infra:...`)으로 썼다면 **세 패턴 전부 불일치**했다.
+2. **`environment`를 선언한 job만 environment claim을 받는다.** ③의 claim 키 목록에만
+   `environment`·`environment_node_id`가 존재한다 — D28이 claim 스키마 수준에서 확인됐다.
+3. ⚠️ **`environment`가 `ref`를 덮어쓴다.** ③은 `ref = refs/heads/main`인데도 `sub`는
+   `:environment:dev`다. 따라서 **apply job의 브랜치 제한을 `sub`로 걸 수 없다** —
+   필요하면 `token.actions.githubusercontent.com:ref` 조건을 별도로 추가해야 한다.
+
+### 신뢰 정책에 넣을 형태
+
+```json
+"StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
+"StringLike": {
+  "token.actions.githubusercontent.com:sub": [
+    "repo:skax-ca@310520211/iac-reference-infra@1316830050:pull_request",
+    "repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main",
+    "repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev"
+  ]
+}
+```
+
+> ℹ️ 값에 와일드카드가 없으므로 `StringEquals`로도 되지만, 향후 환경·브랜치 추가 시 패턴을 쓰게 되므로
+> `StringLike`로 둔다. ⚠️ **`repo:...*` 같은 넓은 와일드카드는 쓰지 않는다** — org 내 다른 repo가
+> 이 Role을 assume할 수 있게 된다.
+
+✅ throwaway 워크플로는 측정 후 삭제했다.
 
 ---
 
