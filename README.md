@@ -23,7 +23,7 @@ repo로 복사해 주는 것이 이 repo의 존재 이유다.
 | 문서 | 내용 |
 |------|------|
 | `iac-module-library` `docs/design/50-reference-consumer-repo.md` | **D-CONSUME** — D20~D29 결정과 근거. 이 repo의 모든 구조가 여기서 나온다 |
-| 같은 repo `docs/consumer/*` | 소비 규약(다중 환경·동적 자격증명). ⚠️ 첫 apply 이후 개정 예정 |
+| 같은 repo `docs/consumer/*` | 🗄️ **TFC 시절 잔재 — 규약이 아니다**(D26-1). 인용 금지. 개정하지 않는다 |
 | 이 repo `docs/deployment-facts.md` | 이 **인스턴스**의 배포 사실 — 값이 아니라 **어디에 있는지**를 기록한다 |
 
 이 분리는 D26이다: **규약은 모듈 repo(모든 소비 repo가 따르는 계약), 사실은 소비 repo(인스턴스 값).**
@@ -71,12 +71,15 @@ bootstrap/verify.sh        # 부트스트랩 drift (D21 완화책)
 
 ## 현재 상태
 
-**Phase 1 (골격) 진행 중.** `live/`·`bootstrap/`·워크플로는 아직 비어 있다.
+**Phase 3 (부트스트랩) 대기 중.** `live/`·`bootstrap/`·워크플로는 아직 비어 있다.
 
 | Phase | 내용 | 상태 |
 |-------|------|------|
-| 1 | repo 골격 + GitHub App | 🔄 진행 |
-| 2 | OIDC `sub` claim 실측 | ⏸ 대기 |
-| 3 | `bootstrap.sh` (버킷·OIDC·Role) | ⏸ 대기 |
+| 1 | repo 골격 + GitHub App | ✅ 완료 (`cfb575a` · D20 실측 검증 `efe1776`) |
+| 2 | OIDC `sub` claim 실측 | ✅ 완료 (`0cc0ec0`+`a2416d9` · 값은 `docs/deployment-facts.md` §3) |
+| 3 | `bootstrap.sh` (버킷·OIDC·Role) | ⏭️ **다음** |
 | 4 | `live/dev/networking` + apply | ⏸ 대기 |
-| 5 | 실측 반영 → 모듈 repo `docs/consumer/*` 개정 | ⏸ 대기 |
+| 5 | 실측 반영 → 모듈 repo `design/50` 개정 + 이 repo `docs/` 갱신 | ⏸ 대기 |
+
+> ⚠️ Phase 5는 **`docs/consumer/*` 개정이 아니다**(D26-1로 변경). 그 디렉토리는 TFC 잔재 보관소이고,
+> 개정 대상은 규약의 SSOT인 모듈 repo `docs/design/50-reference-consumer-repo.md`다.

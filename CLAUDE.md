@@ -27,8 +27,9 @@
 
 | 대상 | 위치 |
 |------|------|
-| 소비 **규약** (소싱 인증·backend 규약·OIDC 체인·plan artifact 규칙) | 모듈 repo `docs/consumer/*` · `docs/design/50` |
+| 소비 **규약** (소싱 인증·backend 규약·OIDC 체인·plan artifact 규칙) | 모듈 repo **`docs/design/50`(D-CONSUME) — SSOT** |
 | 이 인스턴스의 배포 **사실** | 이 repo `docs/deployment-facts.md` |
+| TFC 시절 잔재 (참고용, **인용 금지**) | 모듈 repo `docs/consumer/*` — D26-1 |
 
 ---
 

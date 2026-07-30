@@ -103,7 +103,7 @@ run [`30524527959`](https://github.com/skax-ca/iac-reference-infra/actions/runs/
 ### ⏭️ 이후 Phase
 
 ```
-3 bootstrap.sh (S3·OIDC·Role) → 4 live/dev/networking + apply → 5 모듈 repo docs/consumer/* 개정
+3 bootstrap.sh (S3·OIDC·Role) → 4 live/dev/networking + apply → 5 모듈 repo docs/design/50 개정
 ```
 신뢰 정책 입력값은 **전부 확보됐다** — 위 3패턴 + `aud` + provider URL.
 
