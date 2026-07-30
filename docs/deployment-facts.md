@@ -152,22 +152,43 @@ git grep -c "$TF_STATE_BUCKET" ; # → 0 이어야 한다 (grep 실패 = 없음)
 
 ---
 
-## 4. 부트스트랩 결과 (Phase 3)
+## 4. ✅ 부트스트랩 결과 — 완료 (2026-07-30, Phase 3)
 
-`bootstrap/README.md`의 기대 상태 표가 SSOT다. 이 절은 그곳을 가리킨다.
+`bootstrap/README.md` §2의 기대 상태 표가 SSOT다. 이 절은 **그곳을 가리키고 값의 소재만 적는다**.
 
-| 리소스 | 이름 | 상태 |
-|--------|------|------|
-| state 버킷 | `s3-ref-dev-an2-tfstate-<guid12>` (버저닝·SSE·퍼블릭차단·**lifecycle**) | ⏸ |
-| OIDC provider | `Name` 태그 `iamoidc-ref-dev-an2-gha` (식별자는 URL) | ⏸ |
-| 입구 Role | `iamr-ref-dev-an2-gha-entry-01` | ⏸ |
-| 실행 Role | `AWSAFTExecution` — **신뢰 정책 전체 교체**(D27) | ⏸ |
+| 리소스 | 이름 | 값의 소재 | 상태 |
+|--------|------|----------|------|
+| state 버킷 | `s3-ref-dev-an2-tfstate-<guid12>` (버저닝·SSE·퍼블릭차단·**lifecycle**) | repo 변수 `TF_STATE_BUCKET` / 로컬 `backend.hcl` | ✅ |
+| OIDC provider | `Name` 태그 `iamoidc-ref-dev-an2-gha` (식별자는 URL) | 이름이 곧 값 | ✅ |
+| **입구** Role | `iamr-ref-dev-an2-gha-entry-01` | ARN은 repo 변수 `AWS_ENTRY_ROLE_ARN` | ✅ |
+| **실행** Role | `iamr-ref-dev-an2-gha-exec-01` — **신설**(D27-1) | ARN은 repo 변수 `AWS_EXEC_ROLE_ARN` | ✅ |
+
+> ⚠️ **D27은 철회됐다.** 최초 설계는 `AWSAFTExecution`의 신뢰 정책을 **전체 교체**하는 것이었으나,
+> 대상 계정이 공용 개발 계정(§1 F13)임이 실측되어 **D27-1**(실행 Role 신설)로 바뀌었다.
+> `AWSAFTExecution`은 **손대지 않았다** — 신뢰 정책이 깨진 채로 남아 있고, 그건 우리 문제가 아니다.
+
+### 검증 (실측)
+
+| 수용 기준 | 결과 |
+|-----------|------|
+| 멱등성 — 2회차 변경 0건 | ✅ `=== 변경 0건 ===` |
+| `verify.sh` exit 0 | ✅ drift 없음 |
+| **음성 테스트** — 어긋내면 exit 1 | ✅ S3 버저닝 + IAM inline 정책 2건 주입 → **DRIFT 2건 · exit 1** → `bootstrap.sh`가 **그 2건만** 수정 → exit 0 |
+| 부트스트랩 **이전** 상태 감지 | ✅ 6건 전부 `absent`로 잡고 exit 1 |
+| **D25** — 버킷명이 git에 없다 | ✅ `git grep -c "<bucket>"` → **0** |
+
+### 이 단계에서 나온 실측 (설계에 없던 것)
+
+1. **IAM은 신뢰 정책 principal의 존재를 검증한다.** "ARN이 결정적이니 계산으로 상호 참조를 끊는다"는
+   접근은 동작하지 않는다 → 생성 순서가 **OIDC → 입구 → 실행 → 입구 inline**으로 고정된다.
+   (`Resource`는 존재 검증을 받지 않기 때문에 마지막 단계가 가능하다.)
+2. **IAM은 eventual consistency다.** 방금 만든 Role이 principal로 인정되기까지 수 초 걸린다 →
+   `Invalid principal`일 때만 재시도한다. 없으면 **첫 실행은 반드시 실패**한다.
+3. **IAM `--description`은 한글을 거부한다** (tab/LF/CR + U+0020~U+007E + U+00A1~U+00FF만 허용).
+4. **OIDC provider의 `--thumbprint-list`는 선택 인자다** (CLI 스키마 실측) → 설정하지 않는다.
 
 ⚠️ **D29**: 버저닝 + `use_lockfile=true`는 lock 객체 버전을 폭증시킨다(OpenTofu 공식 경고).
-lifecycle 규칙이 **선택이 아니다**.
-
-⚠️ **D27 알려진 문제**: TFC용 입구 Role이 삭제되어 `AWSAFTExecution`의 신뢰 정책 principal이
-unique ID로 치환됐다 → 현재 assume 불가. `update-assume-role-policy`로 전체 교체한다.
+lifecycle 규칙이 **선택이 아니다** — 비현행 7일 · 불완전 MPU 7일로 설정했다.
 
 ---
 

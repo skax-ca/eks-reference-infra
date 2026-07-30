@@ -71,14 +71,14 @@ bootstrap/verify.sh        # 부트스트랩 drift (D21 완화책)
 
 ## 현재 상태
 
-**Phase 3 (부트스트랩) 대기 중.** `live/`·`bootstrap/`·워크플로는 아직 비어 있다.
+**Phase 4 (VPC 배포) 대기 중.** `live/`와 워크플로가 아직 비어 있다.
 
 | Phase | 내용 | 상태 |
 |-------|------|------|
 | 1 | repo 골격 + GitHub App | ✅ 완료 (`cfb575a` · D20 실측 검증 `efe1776`) |
 | 2 | OIDC `sub` claim 실측 | ✅ 완료 (`0cc0ec0`+`a2416d9` · 값은 `docs/deployment-facts.md` §3) |
-| 3 | `bootstrap.sh` (버킷·OIDC·Role) | ⏭️ **다음** |
-| 4 | `live/dev/networking` + apply | ⏸ 대기 |
+| 3 | `bootstrap.sh` (버킷·OIDC·Role) | ✅ 완료 — 멱등·음성 테스트·D25 검증 통과 (`bootstrap/README.md` §4) |
+| 4 | `live/dev/networking` + apply | ⏭️ **다음** |
 | 5 | 실측 반영 → 모듈 repo `design/50` 개정 + 이 repo `docs/` 갱신 | ⏸ 대기 |
 
 > ⚠️ Phase 5는 **`docs/consumer/*` 개정이 아니다**(D26-1로 변경). 그 디렉토리는 TFC 잔재 보관소이고,
