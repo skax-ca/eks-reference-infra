@@ -100,21 +100,39 @@ run [`30524527959`](https://github.com/skax-ca/iac-reference-infra/actions/runs/
    `touch`가 실패했고 문서가 커밋에서 누락됐다(`0cc0ec0` → `a2416d9`로 보정).
    → **커밋 후 `git status`가 clean인지 확인한다.**
 
-### ⏭️ 이후 Phase
+### ✅ Phase 3 완료 (2026-07-30, 커밋 `d2393a1`)
 
 ```
-3 bootstrap.sh (S3·OIDC·Role) → 4 live/dev/networking + apply → 5 모듈 repo docs/design/50 개정
+✅3 bootstrap → ⏭️4 live/dev/networking + apply → 5 모듈 repo docs/design/50 개정
 ```
-신뢰 정책 입력값은 **전부 확보됐다** — 위 3패턴 + `aud` + provider URL.
 
-**Phase 3** — `bootstrap.sh`(멱등) + `verify.sh`(read-only) + `README.md`(기대 상태 + import 초안).
-⚠️ 완화책 4종은 **수용 기준**이다. `verify.sh`는 **음성 테스트로 실제로 잡는지 증명**해야 한다.
-⚠️ **D29**: 버저닝 + `use_lockfile` → lock 객체 버전 폭증(공식 경고) → **lifecycle 필수**.
-⚠️ **D27**: `AWSAFTExecution` 신뢰 정책 principal이 unique ID로 치환돼 **assume 불가** →
-`update-assume-role-policy`로 **전체 교체**.
+**⚠️ 대상 계정은 공용 개발 계정이다**(F13, `CLAUDE.md` §4-1). VPC 23개·tfstate 버킷 7개가
+남의 것이다. **`Workload=ref` 태그로만 우리 자산을 판별한다.**
 
-**Phase 4** — `live/dev/networking/` + `deploy.yml`(**한 run 두 job**: plan → 승인 → `tofu apply tfplan`).
+**⛔ D27 철회 → D27-1**: `AWSAFTExecution`을 **건드리지 않고** 실행 Role을 신설했다.
+전체 교체(`update-assume-role-policy`)는 공용 계정에서 남의 파이프라인을 말없이 끊는다.
+실측 확인: `AWSAFTExecution` principal은 `AROAXYPQCDNDOM5Y4T6V3` 그대로다.
+
+생성물 — 값은 **repo 변수에만**(D25 확장, git에 없음):
+`s3-ref-dev-an2-tfstate-<guid12>` · OIDC provider · `iamr-ref-dev-an2-gha-entry-01`(입구) ·
+`iamr-ref-dev-an2-gha-exec-01`(실행, Admin)
+
+수용 기준 전부 실측 통과: 멱등(2회차 0건) · 음성 테스트(S3+IAM 2건 주입→exit 1→그 2건만 수정) ·
+사전 감지(6건 absent) · D25(`git grep` → 0).
+
+**🔑 구현에서 나온 실측 4건** (`docs/deployment-facts.md` §4 · `bootstrap/README.md` §3):
+1. **IAM은 신뢰 정책 principal의 존재를 검증한다** — "ARN이 결정적이니 계산으로 상호 참조를
+   끊는다"는 접근은 **반증됐다**. 순서가 `OIDC → 입구 → 실행 → 입구 inline`으로 **고정**된다.
+   (`Resource`는 존재 검증을 안 받아 마지막 단계가 가능하다.)
+2. **IAM eventual consistency** — 방금 만든 Role이 principal로 인정되기까지 수 초.
+   재시도 없으면 **첫 실행은 반드시 실패**한다 → 멱등성이 실패를 가려주는 상태(수렴이 아니라 운).
+3. IAM `--description`은 **한글 거부**(Latin-1 범위만).
+4. OIDC `--thumbprint-list`는 **선택 인자** → 설정하지 않는다(만료 부채 회피).
+
+**⏭️ Phase 4** — `live/dev/networking/` + `deploy.yml`(**한 run 두 job**: plan → 승인 → `tofu apply tfplan`).
 쪼개면 "승인한 계획 ≠ 적용된 계획" 구멍이 열린다. `concurrency` 필수.
+- 로컬 `backend.hcl` 생성됨(gitignore). repo 변수 3개 등록 완료.
+- ⚠️ **apply 승인 시 destroy/replace 목록을 사람이 읽는다**(D27-2) — 공용 계정이라 예외 없음.
 
 ### ⚠️ 과잉 주장 금지
 
