@@ -66,20 +66,46 @@ helper를 그대로 두면 "App 토큰이 동작했다"를 증명할 수 없어,
 App은 정의, Installation이 적용이다. 설치 없이는 토큰 발급 대상이 없다.
 설치 대상은 소싱**당하는** repo(`iac-module-library`)다. `iac-reference-infra`가 아니다.
 
-### ⏭️ 이후 Phase (의존 순서가 중요하다 — 닭-달걀 2차)
+### ✅ Phase 2 **완료** — OIDC `sub` 3패턴 실측 (2026-07-30, 커밋 `0cc0ec0`+`a2416d9`)
+
+**미해결 3번 종결.** 신뢰 정책에 그대로 넣을 값을 확보했다. 전문은 `docs/deployment-facts.md` §3.
+
+| # | job | **실측 `sub`** |
+|---|-----|---------------|
+| ① | PR plan (env 없음) | `repo:skax-ca@310520211/iac-reference-infra@1316830050:pull_request` |
+| ② | main plan (env 없음) | `repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main` |
+| ③ | apply (`environment: dev`) | `repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev` |
+
+`aud = sts.amazonaws.com` · `iss = https://token.actions.githubusercontent.com`
+run [`30524527959`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30524527959)(PR) ·
+[`30524983985`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30524983985)(push). 워크플로는 삭제됨.
+
+**확정 사실 3가지**
+1. **immutable `sub`가 맞다** — `repo:<org>@<org_id>/<repo>@<repo_id>:...`.
+   ⛔ 이름 기반으로 썼다면 **세 패턴 전부 불일치**했다.
+2. `environment`를 선언한 job만 `environment`·`environment_node_id` claim을 받는다(스키마 수준 확인).
+3. ⚠️ **`environment`가 `ref`를 덮어쓴다.** ③은 `ref=refs/heads/main`인데 `sub`는 `:environment:dev`다
+   → **apply job의 브랜치 제한을 `sub`로 걸 수 없다.** 필요하면 `...:ref` 조건을 별도로 추가한다.
+   **설계 때 예상하지 못한 제약이다.**
+
+⛔ 신뢰 정책에 `repo:...*` 같은 넓은 와일드카드를 쓰지 말 것 — org 내 다른 repo가 assume하게 된다.
+
+### 🧯 이번 세션에서 한 오판 2건 (같은 실수 반복 방지)
+
+1. **run이 안 보인다고 "Actions 비활성화"로 결론냈다.** 실제로는 폴링(07:51~07:53)을
+   run 생성(07:54:09) **전에 끝낸 것**이었다. org 정책까지 뒤지고 `admin:org` 스코프를 추가했는데
+   불필요했다. billing usage의 "Actions 1분"이 오판을 잡은 단서였다.
+   → **run 목록이 비었을 때 충분히 기다린다.** GitHub의 run 생성에는 수십 초 지연이 있다.
+2. **`git add A B`는 A가 없으면 B도 스테이징되지 않는다.** `git rm`이 디렉토리를 없애
+   `touch`가 실패했고 문서가 커밋에서 누락됐다(`0cc0ec0` → `a2416d9`로 보정).
+   → **커밋 후 `git status`가 clean인지 확인한다.**
+
+### ⏭️ 이후 Phase
 
 ```
-2 sub claim 실측(AWS 무관) → 3 bootstrap.sh → 4 apply → 5 모듈 repo docs/consumer/* 개정
-                  ↑
-   신뢰 정책은 sub를 알아야 하고, sub는 repo+워크플로가 있어야 나온다
+3 bootstrap.sh (S3·OIDC·Role) → 4 live/dev/networking + apply → 5 모듈 repo docs/consumer/* 개정
 ```
-
-**Phase 2** — throwaway 워크플로가 **3개 job**의 JWT claim을 출력한다:
-`pull_request` / `push`→main / `environment: dev`. ⚠️ **plan job과 apply job의 sub가 다르다**(D28) —
-`environment:`를 선언한 job만 `:environment:`를 받는다 → 신뢰 정책 **3패턴**.
-예상(추정): `repo:skax-ca@310520211/iac-reference-infra@1316830050:...` — **추정이다. 실측 후 확정.**
-측정법: `id-token: write` + `$ACTIONS_ID_TOKEN_REQUEST_URL`에서 JWT 받아 payload 디코드.
-실측 후 워크플로 **삭제**(커밋으로).
+신뢰 정책 입력값은 **전부 확보됐다** — 위 3패턴 + `aud` + provider URL.
 
 **Phase 3** — `bootstrap.sh`(멱등) + `verify.sh`(read-only) + `README.md`(기대 상태 + import 초안).
 ⚠️ 완화책 4종은 **수용 기준**이다. `verify.sh`는 **음성 테스트로 실제로 잡는지 증명**해야 한다.
