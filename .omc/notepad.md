@@ -111,7 +111,8 @@ run [`30524527959`](https://github.com/skax-ca/iac-reference-infra/actions/runs/
 
 **⛔ D27 철회 → D27-1**: `AWSAFTExecution`을 **건드리지 않고** 실행 Role을 신설했다.
 전체 교체(`update-assume-role-policy`)는 공용 계정에서 남의 파이프라인을 말없이 끊는다.
-실측 확인: `AWSAFTExecution` principal은 `AROAXYPQCDNDOM5Y4T6V3` 그대로다.
+실측 확인: `AWSAFTExecution` principal은 **삭제된 주체의 unique ID로 치환된 채 그대로**다.
+(⚠️ 값은 적지 않는다 — 남의 자산 식별자다. notepad는 커밋된다.)
 
 생성물 — 값은 **repo 변수에만**(D25 확장, git에 없음):
 `s3-ref-dev-an2-tfstate-<guid12>` · OIDC provider · `iamr-ref-dev-an2-gha-entry-01`(입구) ·

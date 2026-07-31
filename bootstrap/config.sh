@@ -19,7 +19,38 @@ set -euo pipefail
 # ── 대상 ────────────────────────────────────────────────────────────────────
 export AWS_PROFILE="${AWS_PROFILE:-team}"
 readonly REGION="ap-northeast-2"
-readonly EXPECTED_ACCOUNT="533616270150"
+
+# ⛔ 계정 ID 는 git 에 두지 않는다 (D25 의 연장 — 계정 식별 정보 일반).
+#    ⚠️ 기본값을 주지 않는 것이 핵심이다. 미설정이면 여기서 **즉시 중단**한다:
+#      · 안전장치가 유지된다 — assert_account 가 실제 계정과 대조한다
+#      · ARN 조립도 유지된다 — oidc_arn()·role_arn() 이 이 값을 소비한다
+#      · 부수 효과로 실행자가 **어느 계정에 도는지 매번 명시**하게 된다.
+#        공용 계정(F13)에서는 그 자체가 방어다 — 조용히 다른 계정을 치지 않는다.
+#
+#    ⛔ "해시로 저장해 비교하면 되지 않나"는 **이미 기각된 안**이다(D25).
+#       계정 ID 공간이 10^12 뿐이라 노트북으로도 전수 해싱이 가능하다 —
+#       해시가 보호가 되지 않는다. 남는 해법은 "값을 밖에서 받는다" 하나다.
+#
+#    사용: EXPECTED_ACCOUNT=<12자리> bash bootstrap/bootstrap.sh
+#          값의 소재는 docs/deployment-facts.md §2 가 가리킨다.
+#
+# ⚠️ `: "${VAR:?msg}"` 를 쓰지 않는다. 그 형식은 bash 기본 **exit 1** 을 내는데,
+#    verify.sh 의 계약은 `0=일치 / 1=drift / 2=실행 불가` 다 —
+#    미설정은 drift 가 아니라 **실행 불가**이므로 2로 끝나야 한다.
+#    (실측: `:?` 로 두었더니 exit 1 이 나와 CI 가 "drift 있음"으로 오판할 수 있었다.)
+[[ -n "${EXPECTED_ACCOUNT:-}" ]] || {
+  echo "ERROR: EXPECTED_ACCOUNT 가 설정되지 않았다 — 어느 계정에 부트스트랩할지 명시할 것." >&2
+  echo "       예: EXPECTED_ACCOUNT=123456789012 bash bootstrap/bootstrap.sh" >&2
+  echo "       공용 계정이므로 기본값을 두지 않는다(D25). 값의 소재는 docs/deployment-facts.md §2." >&2
+  exit 2
+}
+
+# 형식 검증 — 오타로 엉뚱한 계정을 기대하게 되는 것을 조기에 잡는다.
+[[ "$EXPECTED_ACCOUNT" =~ ^[0-9]{12}$ ]] || {
+  echo "ERROR: EXPECTED_ACCOUNT 는 12자리 숫자여야 한다 (받은 값의 길이: ${#EXPECTED_ACCOUNT})" >&2
+  exit 2
+}
+readonly EXPECTED_ACCOUNT
 
 # ── 네이밍 토큰 (모듈 repo architecture/02) ─────────────────────────────────
 readonly WORKLOAD="ref"       # D24
