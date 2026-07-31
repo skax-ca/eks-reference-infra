@@ -1,5 +1,24 @@
 # Notepad — iac-reference-infra
 
+## 📍 지금 어디인가 (2026-07-31 기준)
+
+```
+✅1 골격+App소싱  ✅2 OIDC sub  ✅3 bootstrap  ✅4 apply(66개 생성)  ✅5 design/50 개정
+                                    ✅6-2 계정정보 정리  ✅MCP 구성
+                                    ⏭️6-3 confused deputy  ⏸6-1 prevent_destroy
+```
+
+**⏭️ 다음 작업 = 6-3 (Flow Logs confused deputy 방어).** 방침이 **이미 확정돼 있다** —
+이 파일 아래 「6-3」 절을 읽고 **재논의 없이 착수**한다. 시작점은 **모듈 repo**
+`modules/vpc/flow-logs.tf` (설계 → 구현 → 검증 순서, `CLAUDE.md` §0).
+
+⚠️ **MCP 서버가 방금 추가됐다**(`.mcp.json`). 재시작 후 첫 사용 시 승인 프롬프트가 뜬다.
+`mcp__opentofu__get-resource-docs`로 스키마를 확인하는 것이 `CLAUDE.md` §6의 요구다.
+
+💰 **비용이 돌고 있다**: `live/dev/networking` 66개 리소스 · NAT 1개(월 ~$43) + Flow Logs.
+
+---
+
 ## Priority Context
 
 **레퍼런스 소비 repo** — 2026-07-30 신설. `skax-ca/iac-reference-infra`(private, Team `iac`/maintain).
@@ -168,7 +187,7 @@ CIDR은 계정 VPC 23개의 연결 대역을 전수 조회해 빈 곳을 골랐�
 
 **"repo 변수가 로그에 평문으로 남는다"를 문서화하면서 그 로그를 인용해 버킷명을 git에 넣었다.**
 D25를 지적하는 문장이 D25를 위반했다. → **발견을 서술할 때가 가장 위험하다.**
-현재 유출 0건(버킷명·VPC ID). 계정 ID만 2곳 남았고 정리 대상으로 §2에 등재.
+(계정 ID 2곳도 그때 등재만 했고, **아래 Phase 6-2에서 전부 해소했다.**)
 
 ### ✅ Phase 5 완료 (2026-07-31) — 모듈 repo `design/50`·`design/10` 개정
 
@@ -190,13 +209,91 @@ D-CONSUME 범위가 **D20~D30**으로 늘었다(범위 참조 4곳 함께 갱신
 D25 연장·D26 둘 다와 어긋나지만 단순 삭제하면 실측 provenance를 잃는다.
 `docs/consumer/*`의 12곳과 함께 판단할 사안이다.
 
-### ⏭️ 다음 (Phase 6 후보 — 미착수)
+---
 
-1. **⏸ `prevent_destroy` 판정** — 유일하게 남은 미검증. teardown 2단계를 실제로 시도해야 한다.
-   ⚠️ **파기하면 NAT 월 ~$43이 멈춘다** — 리허설 자산을 계속 둘지가 선행 결정이다.
-2. **계정 ID 정리 결정** — 소비 repo 2곳(`bootstrap/config.sh` 안전장치 / `CLAUDE.md` 문서) +
-   모듈 repo 다수. 성격이 달라 한 판단으로 못 묶는다.
-3. **Flow Logs confused deputy 조건 도입** (모듈 repo 열린 항목 7, 차단 해소됨)
+## Phase 6 — 3항목 (사용자가 "1,2,3을 차례대로" 지시, 순서는 2 → 3 → 1)
+
+### ✅ 6-2 계정 정보 정리 **완료** (2026-07-31)
+
+모듈 [PR#2](https://github.com/skax-ca/iac-module-library/pull/2)(`f19049a`) · 소비 [PR#6](https://github.com/skax-ca/iac-reference-infra/pull/6)(`98c7310`).
+**두 repo `git grep` 기준 계정ID·개인식별자·버킷명 전부 0건.**
+
+전수 조사 16건이 4가지로 갈렸다 → A `bootstrap/config.sh`(1) · B 소비 `CLAUDE.md`(1) ·
+C 모듈 `design/50` F6/F13/F14(1) · D 모듈 `docs/consumer/dynamic-credentials.md`(13).
+
+- **A가 핵심.** 이전 판단("안전장치라 코드에 있어야 한다")은 **절반만 맞았다** — 안전장치는
+  값을 *비교*할 뿐이고, 진짜 이유는 `oidc_arn()`·`role_arn()`이 값을 ***소비***한다는 것이었다.
+  → **기본값 없는 환경변수**로 전환: `EXPECTED_ACCOUNT=<12자리> bash bootstrap/bootstrap.sh`
+- 🔑 **`: "${VAR:?msg}"`를 쓰면 안 된다.** bash 기본 **exit 1**인데 `verify.sh` 계약은
+  `0=일치 / 1=drift / 2=실행불가`다 → **CI가 "drift 있음"으로 오판**한다. 초안이 실제로 그랬고
+  명시적 체크 + `exit 2`로 고쳤다. 실측: 미설정·형식오류·계정불일치 전부 exit 2, 정상 exit 0.
+- ⛔ **"해시로 비교하면 되지 않나"는 D25가 이미 기각**했다 — 10¹² 공간은 전수 해싱 가능.
+- 동료 리소스 prefix 10개 + 남의 Role unique principal ID도 함께 제거(**개인 식별 정보**에 가깝다).
+- D는 `<poc-account-id>` 치환 → **D20 기각안의 "public 전환 선결 과제"가 해소**됐다.
+- 🔑 **오탐 2종은 손대지 않았다**: `955636489371`(lock SHA256 substring) ·
+  `111122223333`(AWS 공식 예제 ID, `tofu test` mock — 올바른 관행).
+- 🔑 **검증은 `grep -rn`이 아니라 `git grep`으로 한다.** grep이 파일 하나를 조용히 놓쳤다
+  (python `rglob`은 찾음). 신경 쓸 범위가 정확히 "git이 추적하는 것"이다.
+
+### ✅ MCP 구성 완료 (2026-07-31, [PR#7](https://github.com/skax-ca/iac-reference-infra/pull/7) `984dc11`)
+
+모듈 repo의 `.mcp.json`을 그대로 복사(`diff` 0) — `opentofu`(0.1.5) · `aws-docs`(1.1.28).
+**`CLAUDE.md` §6이 `mcp__opentofu__get-resource-docs`를 요구하는데 서버가 없었다.** Phase 4에서
+실제로 비용을 냈다(s3 backend `assume_role` 스키마를 WebFetch+로컬 init으로 우회).
+⚠️ `.mcp.json`은 **커밋되는 팀 공유 설정**이라 고객사 복사본에 따라간다 — 사내 CA 경로는 고쳐야 한다.
+ℹ️ **적용은 Claude Code 재시작 후**, 첫 사용 시 승인 프롬프트.
+
+### ⏭️ 6-3 Flow Logs confused deputy 방어 — **착수 직전. 방침 확정됨**
+
+모듈 repo 열린 항목 7. 차단 조건("실계정 apply로 검증 가능한 시점")이 Phase 4로 **해소됐다**.
+
+**문제**: `modules/vpc/flow-logs.tf:40-51`의 신뢰 정책에 **`Condition`이 없다.**
+`vpc-flow-logs.amazonaws.com`은 **전 세계 공용 서비스 principal**이라, 남이 자기 VPC의 flow log를
+만들면서 `deliver_logs_permission_arn`에 **우리 Role ARN**을 지정하면 서비스가 그걸 assume해
+**우리 로그 그룹에 남의 트래픽을 쓴다.** 피해 방향이 직관과 반대다 — 우리 로그가 새는 게 아니라
+**남의 로그가 들어오고 CloudWatch ingestion 비용이 우리에게 청구**된다.
+ℹ️ 공격 성립에 우리 **계정 ID**가 필요하다 → 6-2가 진입 비용을 올렸지만 그건 defense-in-depth다.
+
+**확정 방침 (사용자 결정)**
+
+```json
+"Condition": {
+  "StringEquals": { "aws:SourceAccount": "<account>" },
+  "ArnLike": { "aws:SourceArn": "arn:<partition>:ec2:<region>:<account>:vpc-flow-log/*" }
+}
+```
+- ⚠️ **와일드카드가 불가피**하다. flow log ID를 넣으면 Role ↔ flow log **순환 참조**가 되어
+  plan이 실패한다. AWS 공식도 인정한다 — *"If you don't know the flow log ID, you can replace
+  that portion of the ARN with a wildcard (\*)"*. 계정·리전·서비스 구간은 남으므로 차단은 성립.
+- 구현: `data.aws_caller_identity`·`aws_partition`·`aws_region` 3개 추가.
+  **각각 D10 kill switch 게이트**(`count = local.enabled ? 1 : 0`)를 통과해야 한다 —
+  기존 `data.aws_availability_zones.this`가 그 패턴의 선례다(`main.tf:90`).
+- 버전: **`vpc-v1.1.0`**(마이너). 변수 추가는 없으나 **동작 변경**이고 잘못 걸면 배달이 멈춘다.
+- ⛔ 기각: `flow_logs_confused_deputy_protection` 변수로 opt-in — 보안 기본값을 끄는 스위치를
+  계약에 남기게 된다.
+
+**검증 (사용자 결정 — 실계정까지)**
+1. 모듈 repo: 조건 추가 → `tofu test` → fmt/tflint/trivy → 태그 `vpc-v1.1.0`
+2. 소비 repo: `?ref=vpc-v1.1.0`으로 올려 PR → apply (IAM role은 **in-place update**, replace 아님)
+3. ✅ **수용 기준 = apply 후 새 로그 레코드가 계속 도착하는가.**
+   `aws logs get-log-events`로 apply 시각 이후 이벤트 확인.
+   ⚠️ **`apply` 성공은 증거가 아니다** — 이 실패 모드의 정의가 "**조용히 실패**"다.
+
+**참고**: 현재 로그 그룹 `/aws/vpc/flow-log/ref-dev-an2-main`, 스트림 `eni-…-all`에 레코드 도착 중.
+D11 경로가 살아 있으므로 음성/양성 판정이 가능하다.
+
+### ⏸ 6-1 `prevent_destroy` 판정 — 미착수 (마지막)
+
+미검증 6항목 중 **유일하게 남은 것**. `deletion_protection = true`로 걸어 두고 apply까지 갔으나
+**"보호가 설정됐다"이지 "동작한다"가 아니다** — 파기를 시도해야 판정된다.
+teardown 2단계: `deletion_protection = false` apply → `vpc_enabled = false` apply.
+⚠️ **파기하면 NAT 월 ~$43이 멈춘다** — 리허설 자산을 계속 둘지가 **선행 결정**이라 자동 진행 금지.
+
+---
+
+## 💰 현재 진행 중 비용
+
+`live/dev/networking` 66개 리소스가 살아 있다. NAT Gateway 1개(월 ~$43) + Flow Logs CloudWatch.
 
 ### ⚠️ 과잉 주장 금지
 
