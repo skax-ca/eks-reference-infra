@@ -87,11 +87,14 @@ App 토큰만으로 private repo 모듈 소싱이 된다는 것을 **음성 대�
 | **입구 Role ARN** | 🙈 | repo 변수 `AWS_ENTRY_ROLE_ARN` | 동일 |
 | **실행 Role ARN** | 🙈 | repo 변수 `AWS_EXEC_ROLE_ARN` | provider `assume_role.role_arn` (`TF_VAR_execution_role_arn` 경유) |
 | **GitHub App private key** | 🔒 | repo **secret** `MODULE_READER_KEY` | `create-github-app-token` |
-| **GitHub App ID** | 🔁 | repo 변수 `MODULE_READER_APP_ID` | 동일 |
+| **GitHub App Client ID** | 🔁 | repo 변수 `MODULE_READER_CLIENT_ID` | `create-github-app-token`의 `client-id` |
 
-> ℹ️ **App ID(`4432001`)는 비밀이 아니다** — 워크플로 로그에도 찍히고 §1에 값을 적어 두었다.
-> 변수로 두는 이유는 **이식성**이다: 고객사는 자기 App을 만들고 변수만 바꾸면 워크플로를 안 고친다.
-> 반대로 **private key는 진짜 비밀**이라 secret이고, §1에 값을 적지 않는다.
+> ℹ️ **Client ID(`Iv23…`)는 비밀이 아니다** — public `/apps/{slug}` 엔드포인트로 조회되고 워크플로
+> 로그에도 찍힌다. 변수로 두는 이유는 **이식성**이다: 고객사는 자기 App을 만들고 변수만 바꾸면
+> 워크플로를 안 고친다. 반대로 **private key는 진짜 비밀**이라 secret이고, §1에 값을 적지 않는다.
+> 🔁 **`app-id` → `client-id` 전환(2026-07-31)**: `create-github-app-token@v3.2.0`이 `app-id`를
+> legacy로 경고한다(동작은 유지). Client ID로 옮기며 변수도 `MODULE_READER_APP_ID`(숫자 `4432001`)에서
+> `MODULE_READER_CLIENT_ID`로 교체했다. 숫자 App ID는 client-id와 **다른 값**이다.
 
 버킷명 형식은 `s3-ref-dev-an2-tfstate-<guid12>` (D25). **GUID는 `bootstrap.sh`가 생성하고
 실행자에게 출력한다** — 이 문서에 적지 않는다.
