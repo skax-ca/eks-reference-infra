@@ -18,12 +18,22 @@ state 버킷·OIDC provider·2단 Role을 **AWS CLI 스크립트로** 만든다.
 ## 1. 실행
 
 ```bash
+export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다 (아래)
+
 ./bootstrap.sh      # 생성·수렴 (AWS_PROFILE 기본 team)
 ./verify.sh         # drift 확인만 (read-only). exit 0=일치 / 1=drift / 2=실행 불가
 ```
 
-- ⚠️ **대상 계정은 공용 개발 계정이다**(`CLAUDE.md` §4-1). 스크립트는 계정 ID를 검증하고
-  다르면 즉시 중단한다 — 조용히 다른 계정을 치지 않게 하는 장치다.
+- ⛔ **`EXPECTED_ACCOUNT`에 기본값을 두지 않는다** — 계정 ID는 git에 남기지 않는다
+  (D25의 연장). 미설정이면 스크립트가 **즉시 중단**한다. 값의 소재는
+  `docs/deployment-facts.md` §2가 가리킨다.
+  - 이 값은 **검증에만 쓰이는 것이 아니다.** `oidc_arn()`·`role_arn()`이 ARN을 조립할 때
+    소비하므로, 빠지면 부트스트랩 전체가 성립하지 않는다.
+  - ⛔ *"해시로 저장해 비교하면 되지 않나"* 는 **이미 기각된 안**이다(D25) — 계정 ID 공간이
+    10¹²뿐이라 전수 해싱이 가능하다. **해시가 보호가 되지 않는다.**
+- ⚠️ **대상 계정은 공용 개발 계정이다**(`CLAUDE.md` §4-1). 스크립트는 `sts get-caller-identity`로
+  실제 계정과 `EXPECTED_ACCOUNT`를 대조하고 다르면 즉시 중단한다 — 조용히 다른 계정을 치지 않게
+  하는 장치다. **필수 주입이 된 덕에 실행자가 매번 대상을 명시하게 되므로 이 방어가 강해졌다.**
 - ⛔ **`AWSAFTExecution`을 건드리지 않는다**(D27-1). `update-assume-role-policy`가
   이 디렉토리에서 그 Role을 향하면 규약 위반이다.
 - 스크립트는 **bash 전용**이다(`config.sh`가 bash 배열을 쓴다). zsh에서 `source` 하지 않는다.
