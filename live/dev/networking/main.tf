@@ -59,7 +59,7 @@ module "vpc" {
   #    이 코드는 인증 방식을 모른다. SSH URL 로 바꾸면 로컬/CI 갈래가 생긴다.
   # ⛔ ?ref= 는 **정확 태그 핀**이다. git 소싱에 ~> 는 동작하지 않는다 —
   #    업그레이드는 이 줄을 올리는 명시적 커밋이고, 그 커밋이 곧 승격 게이트다.
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v1.0.0"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v1.1.0"
 
   # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(02 §1.4(b)).
   # {ref, dev, an2} → vpc-ref-dev-an2-main · snet-ref-dev-an2-pub-uniq-a
