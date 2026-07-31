@@ -22,7 +22,7 @@ repo로 복사해 주는 것이 이 repo의 존재 이유다.
 
 | 문서 | 내용 |
 |------|------|
-| `iac-module-library` `docs/design/50-reference-consumer-repo.md` | **D-CONSUME** — D20~D29 결정과 근거. 이 repo의 모든 구조가 여기서 나온다 |
+| `iac-module-library` `docs/design/50-reference-consumer-repo.md` | **D-CONSUME** — D20~D30 결정과 근거. 이 repo의 모든 구조가 여기서 나온다 |
 | 같은 repo `docs/consumer/*` | 🗄️ **TFC 시절 잔재 — 규약이 아니다**(D26-1). 인용 금지. 개정하지 않는다 |
 | 이 repo `docs/deployment-facts.md` | 이 **인스턴스**의 배포 사실 — 값이 아니라 **어디에 있는지**를 기록한다 |
 
