@@ -399,12 +399,19 @@ GitHub은 **secret만 마스킹**한다. repo 변수(`vars.*`)는 마스킹 대�
 | 2 | primary/secondary 조합 제약 | 첫 apply | ✅ | 위 조합을 API가 수락했다. primary가 `10.0.0.0/15` 밖이라 성립 |
 | 3 | CIDR 겹침 | 첫 apply | ✅ | `cidrsubnet()` 파생 서브넷 **20개** 전부 생성. 겹쳤다면 API가 거부한다 |
 | 4 | Flow Logs 실제 **배달** | 첫 apply 이후 | ✅ | 스트림 `eni-…-all`에 실제 레코드: `2 <account> eni-… → 10.51.32.63 … ACCEPT OK` (목적지가 `pub-uniq-a` 대역 = NAT ENI) |
-| 5 | `prevent_destroy` 실동작 (D12) | **teardown 시나리오** | ⏸ | `deletion_protection = true`로 걸어 두었으나 **파기를 시도해야 판정된다** |
+| 5 | `prevent_destroy` 실동작 (D12) | **teardown 시나리오** | ✅¹ | `vpc_enabled = false` PR([#9](https://github.com/skax-ca/iac-reference-infra/pull/9)) → CI **plan job이 D12 validation으로 거부**: `deletion_protection = true인 상태에서는 vpc_enabled = false로 파기할 수 없다`. apply skip, 자산 그대로. PR은 merge 없이 닫음 |
 | 6 | **`git tag` 소싱 경로** | 첫 CI `init` | ✅ | `Downloading git::…iac-module-library.git?ref=vpc-v1.0.0` — App 토큰 + `insteadOf` |
 | — | 가짜 diff 없음 (`ignore_tags`) | 두 번째 apply | ✅ | `No changes.` → `Apply complete! Resources: 0 added, 0 changed, 0 destroyed.` |
 
-⚠️ **5번은 판정되지 않았다.** enterprise 형상으로 범위가 넓어진 것이지 전부가 된 것이 아니다.
-표에 ✅가 찍힌 것만 "실증했다"고 쓴다(`CLAUDE.md` §7).
+**¹ 5번 판정 범위 — §7 정직성**: 라이브로 판정된 것은 D12의 **교차변수 validation** 가드다
+(`vpc_enabled = false` while `deletion_protection = true` → plan 거부). 이것이 이 모듈의 실제
+teardown 시도(D10 kill switch)가 부딪히는 가드이자 "실수 삭제의 마지막 방어선"(§4-1)이다.
+D12의 **다른 절반인 `prevent_destroy` lifecycle 메타 인자**(`prevent_destroy = var.deletion_protection`,
+`tofu destroy`·replace를 막는다)는 라이브 plan에 존재하고(`= true`) 모듈 계약 테스트
+`reject_teardown_while_protected`가 증명하지만, **destroy-plan을 별도로 라이브 실행하진 않았다**
+— deploy.yml에 destroy 경로가 없고(스코프 밖), 사용자가 자산 유지를 택했다. 두 가드를 뭉뚱그리지 않는다.
+
+✅가 찍힌 것만 "실증했다"고 쓴다(`CLAUDE.md` §7). **미검증 6항목이 모두 판정됐다.**
 
 ### 실행 기록
 
@@ -414,6 +421,8 @@ GitHub은 **secret만 마스킹**한다. repo 변수(`vars.*`)는 마스킹 대�
 | [`30592915255`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30592915255) | PR plan | ✅ `Plan: 66 to add, 0 to change, 0 to destroy` |
 | [`30593495627`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30593495627) | push→main | ✅ **`Apply complete! Resources: 66 added, 0 changed, 0 destroyed.`** |
 | [`30593853991`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30593853991) | push→main | ✅ **두 번째 apply — `No changes` · `0 added, 0 changed, 0 destroyed`** |
+| [`30604797319`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30604797319) | push→main | ✅ vpc-v1.1.0 승격 apply — `0 added, 1 changed, 0 destroyed`(Flow Logs 역할 confused deputy 조건, IAM in-place) |
+| [`30605752914`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30605752914) | PR plan | ✅**판정** 6-1 — plan이 D12 validation으로 **거부**(파기 시도 차단), apply skip |
 
 ### 계정 실측 (2026-07-31, apply 후)
 

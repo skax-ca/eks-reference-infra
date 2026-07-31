@@ -4,13 +4,13 @@
 
 ```
 ✅1 골격+App소싱  ✅2 OIDC sub  ✅3 bootstrap  ✅4 apply(66개 생성)  ✅5 design/50 개정
-                       ✅6-2 계정정보 정리  ✅MCP(opentofu·aws-docs·aws-api)  ✅6-3 confused deputy
-                                    ⏸6-1 prevent_destroy  ← 유일하게 남음(선행 결정 필요)
+   ✅6-2 계정정보 정리  ✅MCP(opentofu·aws-docs·aws-api)  ✅6-3 confused deputy  ✅6-1 prevent_destroy
+                        🎉 미검증 6항목 전부 판정 · Phase 6 완결
 ```
 
-**⏸ 다음 작업 = 6-1 (`prevent_destroy` 판정).** 미검증 6항목 중 **유일하게 남은 것**.
-teardown을 시도해야 판정된다 — ⚠️ **파기하면 NAT 월 ~$43이 멈춘다.** 리허설 자산을 계속 둘지가
-**선행 결정**이라 자동 진행 금지. 이 파일 아래 「6-1」 절 참조.
+**🎉 Phase 6 완결(2026-07-31).** 미검증 6항목이 모두 판정됐다(판정표 SSOT = `docs/deployment-facts.md` §6).
+남은 것은 정리성 미결 항목뿐(아래 「미결 항목」). **다음 방향은 사용자와 정한다** — 리허설 자산
+teardown 여부(6-1은 파기 "거부"만 확인했고 실제 파기는 안 했다. NAT 월 ~$43 계속), 또는 새 작업.
 
 ⚠️ **MCP 서버 3종이 `.mcp.json`에 있다**(opentofu·aws-docs·**aws-api**). aws-api는 2026-07-31
 추가분 — 재시작 후 첫 사용 시 승인 프롬프트. `mcp__opentofu__get-resource-docs`로 스키마 확인이
@@ -290,12 +290,24 @@ apply 완료 시각(epoch ms) 이후로 `aws logs filter-log-events --start-time
 **⚠️ 오판 없이 진행한 지점 하나**: `tofu test`(mock)는 조건의 **존재**만 잠근다 — **배달을 막지 않는지**는
 증명 못 한다. 그래서 실계정 로그 도착을 별도 수용 기준으로 잡았고, `apply` 성공에 만족하지 않았다.
 
-### ⏸ 6-1 `prevent_destroy` 판정 — 미착수 (마지막)
+### ✅ 6-1 `prevent_destroy` 판정 **완료** (2026-07-31, 사용자 결정 = "파기 거부만 확인·자산 유지")
 
-미검증 6항목 중 **유일하게 남은 것**. `deletion_protection = true`로 걸어 두고 apply까지 갔으나
-**"보호가 설정됐다"이지 "동작한다"가 아니다** — 파기를 시도해야 판정된다.
-teardown 2단계: `deletion_protection = false` apply → `vpc_enabled = false` apply.
-⚠️ **파기하면 NAT 월 ~$43이 멈춘다** — 리허설 자산을 계속 둘지가 **선행 결정**이라 자동 진행 금지.
+**방식**: 검증 PR [#9](https://github.com/skax-ca/iac-reference-infra/pull/9)에 `vpc_enabled = false`(+ 기존 `deletion_protection = true`)를
+걸어 **보호를 켠 채 파기를 시도** → CI plan job이 D12 교차변수 validation으로 **거부**:
+`deletion_protection = true인 상태에서는 vpc_enabled = false로 파기할 수 없다`. **apply skip, 66개 자산 그대로.**
+PR은 merge 없이 닫음(자산 유지). run [`30605752914`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30605752914).
+
+**🔑 실측 2건**
+1. **pre-push `validate`는 이 조합을 못 잡는다** — 교차변수 validation은 validate가 아니라 **plan 시점**에
+   평가된다(모듈 주석 실측과 일치). 그래서 push는 통과하고 **CI plan**에서 걸렸다. 어느 게이트가 무엇을
+   잡는지가 실증됐다.
+2. **§7 정직성 — 판정된 건 validation 가드**다(`deployment-facts.md` §6 각주 ¹ 참조).
+   D12의 다른 절반인 **`prevent_destroy` lifecycle 메타 인자**(`tofu destroy`·replace 차단)는 라이브 plan에
+   존재하고 모듈 계약 테스트가 증명하나, destroy-plan을 **별도 라이브 실행하진 않았다**(deploy.yml에
+   destroy 경로 없음 + 자산 유지 결정). 두 가드를 뭉뚱그리지 않는다.
+
+⚠️ **실제 파기는 하지 않았다.** teardown 2단계(`deletion_protection=false` apply → `vpc_enabled=false` apply)는
+자산을 없앨 때 밟는다. NAT 월 ~$43은 계속 과금 중.
 
 ---
 
@@ -306,8 +318,9 @@ teardown 2단계: `deletion_protection = false` apply → `vpc_enabled = false` 
 ### ⚠️ 과잉 주장 금지
 
 판정표 SSOT는 `docs/deployment-facts.md` §6. **✅가 찍힌 것만 실증했다고 쓴다.**
-⏸ **5번 `prevent_destroy`는 판정되지 않았다** — `deletion_protection = true`로 걸어 두었을 뿐,
-파기를 시도해야 판정된다. teardown은 2단계다(`deletion_protection=false` → `vpc_enabled=false`).
+✅ **미검증 6항목 전부 판정됐다**(6-1 각주 ¹의 validation/lifecycle 구분 포함). 그래도
+**실제 파기는 안 했다** — teardown 2단계(`deletion_protection=false` → `vpc_enabled=false`)는
+자산 정리를 결정할 때 밟는다.
 
 ## 미결 항목
 
