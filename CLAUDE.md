@@ -99,7 +99,7 @@ module "vpc" {
 | 항목 | 규칙 |
 |------|------|
 | plan → apply | plan을 **artifact로 저장**해 승인 후 **그 파일을 apply**한다. `tofu apply tfplan` — 재-plan 금지 |
-| 승인 게이트 | Environment protection rules(required reviewers). apply job만 `environment:`를 선언한다 |
+| 승인 게이트 | apply job만 `environment: dev`를 선언한다. ⚠️ **required reviewers는 이 org(GitHub Free)에서 걸 수 없다** — `docs/deployment-facts.md` §5.3 |
 | 동시 실행 | `concurrency: {group: live-dev-networking, cancel-in-progress: false}` |
 | 자격증명 | GitHub OIDC → 입구 Role → 실행 Role(**2단 체인**). 정적 키 금지 |
 | state | S3 + `use_lockfile = true` (DynamoDB 불필요) |
@@ -128,7 +128,10 @@ module "vpc" {
 
 - ⚠️ **`AdministratorAccess`가 자동 트리거에 연결된다.** PoC에서는 사람이 TFC에서 돌렸지만
   이제 `pull_request`가 `plan`을 자동 실행한다 — 이것이 PoC 대비 **실질적으로 달라진 위험**이다.
-  `apply`의 Environment 승인 게이트가 "사람이 검토"를 이행하는 지점이다.
+- ⚠️ **"사람이 검토"의 이행 지점은 Environment 승인이 아니라 `PR merge`다.** GitHub Free에서는
+  required reviewers를 걸 수 없어(`docs/deployment-facts.md` §5.3) apply가 대기 없이 진행된다.
+  `deploy.yml`이 destroy/replace 목록을 PR 댓글로 끌어올리지만 **강제력은 없다** — merge 전에
+  그 댓글을 읽는 것이 규율이다.
 - ⚠️ **다른 사람 리소스는 우리 plan에 나타나지 않는다**(우리 state에 없으므로).
   위험은 plan에 잡히는 범위가 아니라 **실행 Role이 손댈 수 있는 범위 전체**다.
 - 근거: 모듈 repo `design/50` F13·D27-2. PoC repo `05` §7.1이 원문이다.
@@ -186,8 +189,13 @@ tofu fmt -recursive -check → tflint --recursive → trivy config . → tofu va
 
 ## 7. 과잉 주장 금지
 
-첫 `apply`가 판정하는 것은 모듈 미검증 6항목 중 **6번(git tag 소싱 경로)과 minimal 경로뿐**이다.
-secondary CIDR·CIDR 겹침·Flow Logs 배달·`prevent_destroy`는 **후속 apply 시나리오**다.
+**판정표의 SSOT는 `docs/deployment-facts.md` §6이다.** 여기에 복제하지 않는다 — 두 곳에 적으면 갈라진다.
+
+- 배포 루트가 **enterprise 형상**(9그룹·secondary CIDR 2개)이라, 설계가 상정한 minimal 대비
+  첫 apply의 판정 범위가 **넓어졌다**. 그렇다고 전부가 판정되는 것은 아니다:
+  **Flow Logs 실제 배달**과 **`prevent_destroy` 실동작**은 여전히 별도 시나리오다.
+- ⚠️ 모듈 repo `design/50` §4의 *"첫 apply는 6번과 minimal 경로만 판정한다"* 는
+  **이 배포 루트에는 맞지 않는다.** Phase 5에서 그 문장을 고친다.
 
 이 구분을 흐리면 "apply로 검증했다"는 과잉 주장이 되고, 그것이 모듈 repo
 `docs/reference/poc-findings.md`가 경계하는 바로 그 실수다. **실증한 것만 실증했다고 쓴다.**
