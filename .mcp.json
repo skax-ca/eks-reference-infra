@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "opentofu": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@opentofu/opentofu-mcp-server"
+      ],
+      "env": {}
+    },
+    "aws-docs": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "awslabs.aws-documentation-mcp-server@latest"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_DOCUMENTATION_PARTITION": "aws",
+        "SSL_CERT_FILE": "${HOME}/.claude/certs/ca-bundle.pem",
+        "REQUESTS_CA_BUNDLE": "${HOME}/.claude/certs/ca-bundle.pem",
+        "AWS_CA_BUNDLE": "${HOME}/.claude/certs/ca-bundle.pem"
+      }
+    }
+  }
+}
