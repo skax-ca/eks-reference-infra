@@ -100,7 +100,21 @@ App 토큰만으로 private repo 모듈 소싱이 된다는 것을 **음성 대�
 ```bash
 # 버킷명이 git 어디에도 없는지 (D25 수용 기준)
 git grep -c "$TF_STATE_BUCKET" ; # → 0 이어야 한다 (grep 실패 = 없음)
+git grep -l "<계정 ID>"          # 아래 예외 2건 외에는 없어야 한다
 ```
+
+### ⚠️ 미해결 — 계정 ID가 git에 2곳 남아 있다 (2026-07-31 확인)
+
+D25의 연장은 *"계정 ID·Role ARN도 git에 두지 않는다"* 인데, Phase 1·3의 산출물에 2건이 남아 있다.
+**정리 대상으로 등재한다** — 성격이 서로 달라 한 번에 같은 판단을 내릴 수 없다.
+
+| 위치 | 맥락 | 왜 남아 있나 / 논점 |
+|------|------|--------------------|
+| `bootstrap/config.sh` | `readonly EXPECTED_ACCOUNT=…` | **안전장치다.** 잘못된 계정에 부트스트랩이 도는 것을 막는다 — 값이 코드에 있어야 기능한다. 환경변수로 빼면 안전장치가 "빠뜨릴 수 있는 것"이 된다 |
+| `CLAUDE.md` §4-1 | 공용 계정 경고문 | 순수 문서다. 값 없이 "프로파일 `team`이 가리키는 계정"으로 서술해도 경고 기능은 유지된다 |
+
+- 버킷명·VPC ID는 **0건**이다(위 명령으로 확인). 새는 것은 계정 ID뿐이다.
+- ⚠️ 이 문서를 쓰면서도 한 번 새게 했다 — §5.5 참조. **발견을 서술할 때가 가장 위험하다.**
 
 ---
 
@@ -323,11 +337,11 @@ assume을 시도했다는 뜻이다. 동시에 **개인 IAM user는 실행 Role�
 
 ### 5.5 ⚠️ repo 변수는 CI 로그에 **평문**으로 남는다
 
-같은 run의 로그에서 확인했다:
+같은 run의 로그에서 확인했다 — `-backend-config="bucket=<실제 버킷명>"`이 **그대로 찍혀 있었다.**
 
-```
-tofu init -backend-config="bucket=s3-ref-dev-an2-tfstate-733a8852498c" …
-```
+> ⚠️ **이 문서에는 그 로그를 인용하지 않는다.** 초안에서 실제로 인용했다가 되돌렸다 —
+> "값이 로그에 남는다"를 지적하면서 그 값을 git에 옮겨 적으면 D25를 그 자리에서 위반한다.
+> **§2의 원칙(값이 아니라 포인터)은 발견을 서술할 때도 예외가 없다.**
 
 GitHub은 **secret만 마스킹**한다. repo 변수(`vars.*`)는 마스킹 대상이 아니다.
 §2에서 버킷명·Role ARN을 "🙈 비노출"로 분류하고 repo 변수에 둔 것은 **git 에 남기지 않기**
@@ -349,18 +363,58 @@ GitHub은 **secret만 마스킹**한다. repo 변수(`vars.*`)는 마스킹 대�
 `CLAUDE.md` §7과 `design/50` §4의 *"첫 apply는 6번과 minimal 경로만 판정한다"* 는
 **이 배포 루트에는 더 이상 맞지 않는다** — secondary CIDR 2개와 isolated 라우팅이 실제로 만들어진다.
 
-| # | 항목 | 판정 시점 | 왜 | 결과 |
-|---|------|----------|-----|------|
-| 1 | secondary CIDR `depends_on` 순서 | **첫 apply** | `secondary_cidr_blocks`에 2개를 넘긴다 | ⏸ |
-| 2 | primary/secondary 조합 제약 | **첫 apply** | `10.50.0.0/24` + `10.51.0.0/16` + `100.64.0.0/16` 조합을 API가 수락하는지 | ⏸ |
-| 3 | CIDR 겹침 | **첫 apply** | 20개 서브넷이 `cidrsubnet()` 파생이다. 겹치면 API가 거부한다 | ⏸ |
-| 4 | Flow Logs 실제 **배달** | **첫 apply 이후 별도 확인** | 로그 그룹 생성 ≠ 이벤트 도착. CWL에 실제로 쌓이는지 봐야 한다 | ⏸ |
-| 5 | `prevent_destroy` 실동작 (D12) | **teardown 시나리오** | `deletion_protection = true`로 두었으나, 파기를 시도해야 판정된다 | ⏸ |
-| 6 | **`git tag` 소싱 경로** | **첫 CI `init`** | 로컬은 이미 통과(F1·아래). CI 경로가 미검증분이다 | ⏸ |
-| — | 가짜 diff 없음 (`ignore_tags`) | **두 번째 apply = `No changes`** | §5.2 | ⏸ |
+| # | 항목 | 판정 시점 | 결과 | 증거 |
+|---|------|----------|------|------|
+| 1 | secondary CIDR `depends_on` 순서 | 첫 apply | ✅ | `describe-vpcs` → `10.50.0.0/24`·`10.51.0.0/16`·`100.64.0.0/16` 3개 모두 `associated` |
+| 2 | primary/secondary 조합 제약 | 첫 apply | ✅ | 위 조합을 API가 수락했다. primary가 `10.0.0.0/15` 밖이라 성립 |
+| 3 | CIDR 겹침 | 첫 apply | ✅ | `cidrsubnet()` 파생 서브넷 **20개** 전부 생성. 겹쳤다면 API가 거부한다 |
+| 4 | Flow Logs 실제 **배달** | 첫 apply 이후 | ✅ | 스트림 `eni-…-all`에 실제 레코드: `2 <account> eni-… → 10.51.32.63 … ACCEPT OK` (목적지가 `pub-uniq-a` 대역 = NAT ENI) |
+| 5 | `prevent_destroy` 실동작 (D12) | **teardown 시나리오** | ⏸ | `deletion_protection = true`로 걸어 두었으나 **파기를 시도해야 판정된다** |
+| 6 | **`git tag` 소싱 경로** | 첫 CI `init` | ✅ | `Downloading git::…iac-module-library.git?ref=vpc-v1.0.0` — App 토큰 + `insteadOf` |
+| — | 가짜 diff 없음 (`ignore_tags`) | 두 번째 apply | ✅ | `No changes.` → `Apply complete! Resources: 0 added, 0 changed, 0 destroyed.` |
 
-⚠️ **여전히 4·5는 첫 apply가 판정하지 않는다.** 범위가 넓어진 것이지 전부가 된 것이 아니다.
+⚠️ **5번은 판정되지 않았다.** enterprise 형상으로 범위가 넓어진 것이지 전부가 된 것이 아니다.
 표에 ✅가 찍힌 것만 "실증했다"고 쓴다(`CLAUDE.md` §7).
+
+### 실행 기록
+
+| run | 트리거 | 결과 |
+|-----|--------|------|
+| [`30592702396`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30592702396) | PR plan | ❌ backend 403 — §5.4의 발견 |
+| [`30592915255`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30592915255) | PR plan | ✅ `Plan: 66 to add, 0 to change, 0 to destroy` |
+| [`30593495627`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30593495627) | push→main | ✅ **`Apply complete! Resources: 66 added, 0 changed, 0 destroyed.`** |
+| [`30593853991`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30593853991) | push→main | ✅ **두 번째 apply — `No changes` · `0 added, 0 changed, 0 destroyed`** |
+
+### 계정 실측 (2026-07-31, apply 후)
+
+| 대상 | 값 |
+|------|-----|
+| VPC | `vpc-ref-dev-an2-main` (ID는 계정 식별로 이어지므로 여기 적지 않는다) |
+| 연결 CIDR | `10.50.0.0/24` · `10.51.0.0/16` · `100.64.0.0/16` |
+| Subnet / Route Table / NAT / IGW | 20 / **12**(우리 11 + VPC 기본 RT 1) / 1 / 1 |
+| Flow Logs | `/aws/vpc/flow-log/ref-dev-an2-main` — `ACTIVE`, 레코드 도착 확인 |
+| 우리 VPC의 자동 태거 키 | `CreationTime`·`Creator`·`cz-org`·`cz-owner`·`cz-ext1~3` — **7개가 실제로 붙었다** |
+
+> ⚠️ RT가 12인 것은 오류가 아니다. AWS가 VPC 생성 시 **기본 RT 1개**를 자동으로 만든다.
+> 우리 state에는 11개만 있고, 나머지 1개는 우리 것이 아니므로 plan에 나타나지 않는다.
+
+### 3개의 인증 경로가 한 run 안에서 전부 동작했다
+
+| 경로 | 무엇을 증명하나 |
+|------|----------------|
+| GitHub App 토큰 → `insteadOf` → `git::https://` | private repo 모듈 소싱(D20)이 **CI에서** 동작한다 |
+| OIDC → 입구 Role | Phase 2에서 실측한 `sub` 패턴이 신뢰 정책과 **실제로** 맞았다 |
+| 입구 Role → 실행 Role (**provider + backend 양쪽**) | 2단 체인(D27-1). backend가 별도 경로라는 것이 §5.4의 발견이다 |
+
+### 로컬 사전 통과 (2026-07-31, CI 이전)
+
+| 게이트 | 결과 |
+|--------|------|
+| `tofu init -backend=false` | ✅ 모듈 소싱 성공 — aws **6.57.1**(모듈 repo lock과 동일) |
+| `tofu validate` | ✅ Success |
+| `tofu fmt -recursive -check` | ✅ 0건 |
+| `tflint --recursive` | ✅ exit 0 |
+| `trivy config` | ✅ 0건 |
 
 ### 로컬 사전 통과 (2026-07-31, CI 이전)
 

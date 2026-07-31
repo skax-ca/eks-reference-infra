@@ -129,16 +129,55 @@ run [`30524527959`](https://github.com/skax-ca/iac-reference-infra/actions/runs/
 3. IAM `--description`은 **한글 거부**(Latin-1 범위만).
 4. OIDC `--thumbprint-list`는 **선택 인자** → 설정하지 않는다(만료 부채 회피).
 
-**⏭️ Phase 4** — `live/dev/networking/` + `deploy.yml`(**한 run 두 job**: plan → 승인 → `tofu apply tfplan`).
-쪼개면 "승인한 계획 ≠ 적용된 계획" 구멍이 열린다. `concurrency` 필수.
-- 로컬 `backend.hcl` 생성됨(gitignore). repo 변수 3개 등록 완료.
-- ⚠️ **apply 승인 시 destroy/replace 목록을 사람이 읽는다**(D27-2) — 공용 계정이라 예외 없음.
+### ✅ Phase 4 완료 (2026-07-31) — **첫 apply 성공, 미검증 6항목 중 5개 판정**
+
+`live/dev/networking/` + `deploy.yml`(한 run 두 job). PR #2 → apply → PR #3 → 두 번째 apply.
+
+| run | 결과 |
+|-----|------|
+| `30592702396` PR plan | ❌ backend 403 — **설계의 빈틈 발견**(아래 1번) |
+| `30592915255` PR plan | ✅ `Plan: 66 to add, 0 to change, 0 to destroy` |
+| `30593495627` push | ✅ **`Apply complete! Resources: 66 added, 0 changed, 0 destroyed.`** |
+| `30593853991` push | ✅ **두 번째 apply — `No changes` · `0/0/0`** ← `ignore_tags` 판정 |
+
+**형상 = enterprise**(사용자 결정, 설계는 minimal 상정). 9그룹·서브넷 20·RT 11·NAT 1·IGW 1·FlowLogs.
+CIDR은 계정 VPC 23개의 연결 대역을 전수 조회해 빈 곳을 골랐다:
+`10.50.0.0/24`(primary) · `10.51.0.0/16` · `100.64.0.0/16`.
+
+**판정표 SSOT = `docs/deployment-facts.md` §6.** ✅ 1·2·3·4·6 + `ignore_tags`. **⏸ 5번(`prevent_destroy`)만 남았다** — teardown을 시도해야 판정된다.
+
+#### 🔑 Phase 4에서 나온 실측 4건 (전부 `docs/deployment-facts.md` §5)
+
+1. **🔴 backend는 provider의 `assume_role`을 쓰지 않는다** (§5.4). `design/50` §3의 2단 체인 그림에
+   **backend 경로가 빠져 있다.** backend는 provider와 독립적으로 자격증명을 해결하므로(공식)
+   입구 Role 그대로 S3를 쳐서 403이 났다 — 입구 Role 권한은 `sts:AssumeRole` 하나뿐(D27-1).
+   → `backend.hcl`에 `assume_role`을 넣어 CI가 매 job 조립한다. `-backend-config=K=V`는
+   **문자열만** 받아서 객체인 `assume_role`을 못 넘긴다 → **파일이 유일한 경로**.
+   ⛔ 기각: 입구 Role에 S3 권한 추가 — D27-1의 신뢰 경계가 깨진다.
+2. **자동 태거가 실제로 돈다** (§5.2). VPC 22/23 · Subnet 78/82 · IGW 16/17에
+   `CreationTime`·`Creator`·`cz-org`·`cz-owner`·`cz-ext1~3`이 **생성 주체와 무관하게** 붙는다.
+   우리 VPC에도 apply 직후 7개가 붙었고, `ignore_tags`(keys 2 + prefix `cz-`)로 **가짜 diff 0건**.
+3. **승인 게이트는 GitHub Free에서 불가** (§5.3). required reviewers·wait timer 둘 다 422(billing).
+   **branch policy만 걸린다** → 채택: free 유지 + **PR merge가 검토 지점**(강제력 없음).
+   뜻밖의 소득: branch policy가 Phase 2의 구멍(`environment`가 `sub`의 `ref`를 덮어써서
+   브랜치 제한 불가)을 메운다.
+4. **repo 변수는 CI 로그에 평문으로 남는다** (§5.5). secret만 마스킹된다.
+
+#### ⚠️ 이번 세션의 오판 1건
+
+**"repo 변수가 로그에 평문으로 남는다"를 문서화하면서 그 로그를 인용해 버킷명을 git에 넣었다.**
+D25를 지적하는 문장이 D25를 위반했다. → **발견을 서술할 때가 가장 위험하다.**
+현재 유출 0건(버킷명·VPC ID). 계정 ID만 2곳 남았고 정리 대상으로 §2에 등재.
+
+**⏭️ Phase 5 — 모듈 repo `design/50` 개정.** 위 1·3번은 **소비 규약의 문제**라 모든 소비 repo가
+똑같이 부딪힌다. `design/50` §3(체인 그림에 backend 추가) · D27-2(승인 게이트는 Team 이상 요구) ·
+§4(“첫 apply는 minimal만 판정” 문구는 형상 의존) 세 곳을 고친다.
 
 ### ⚠️ 과잉 주장 금지
 
-첫 apply가 판정하는 것은 모듈 미검증 6항목 중 **6번(git tag 소싱)과 minimal 경로뿐**이다.
-secondary CIDR·CIDR 겹침·Flow Logs 배달·`prevent_destroy`는 **후속 시나리오**다.
-추가 판정 기준: **두 번째 apply가 `No changes`인가**(가짜 diff = `ignore_tags` 필요 여부).
+판정표 SSOT는 `docs/deployment-facts.md` §6. **✅가 찍힌 것만 실증했다고 쓴다.**
+⏸ **5번 `prevent_destroy`는 판정되지 않았다** — `deletion_protection = true`로 걸어 두었을 뿐,
+파기를 시도해야 판정된다. teardown은 2단계다(`deletion_protection=false` → `vpc_enabled=false`).
 
 ## 미결 항목
 
