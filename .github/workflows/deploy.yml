@@ -61,7 +61,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3.2.0
         with:
-          app-id: ${{ vars.MODULE_READER_APP_ID }}
+          client-id: ${{ vars.MODULE_READER_CLIENT_ID }}
           private-key: ${{ secrets.MODULE_READER_KEY }}
           owner: skax-ca
           repositories: iac-module-library
@@ -222,7 +222,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3.2.0
         with:
-          app-id: ${{ vars.MODULE_READER_APP_ID }}
+          client-id: ${{ vars.MODULE_READER_CLIENT_ID }}
           private-key: ${{ secrets.MODULE_READER_KEY }}
           owner: skax-ca
           repositories: iac-module-library
