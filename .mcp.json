@@ -22,6 +22,19 @@
         "REQUESTS_CA_BUNDLE": "${HOME}/.claude/certs/ca-bundle.pem",
         "AWS_CA_BUNDLE": "${HOME}/.claude/certs/ca-bundle.pem"
       }
+    },
+    "aws-api": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "awslabs.aws-api-mcp-server@latest"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_REGION": "ap-northeast-2",
+        "AWS_API_MCP_PROFILE_NAME": "team",
+        "READ_OPERATIONS_ONLY": "true"
+      }
     }
   }
 }

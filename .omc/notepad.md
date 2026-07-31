@@ -4,16 +4,17 @@
 
 ```
 ✅1 골격+App소싱  ✅2 OIDC sub  ✅3 bootstrap  ✅4 apply(66개 생성)  ✅5 design/50 개정
-                                    ✅6-2 계정정보 정리  ✅MCP 구성
-                                    ⏭️6-3 confused deputy  ⏸6-1 prevent_destroy
+                       ✅6-2 계정정보 정리  ✅MCP(opentofu·aws-docs·aws-api)  ✅6-3 confused deputy
+                                    ⏸6-1 prevent_destroy  ← 유일하게 남음(선행 결정 필요)
 ```
 
-**⏭️ 다음 작업 = 6-3 (Flow Logs confused deputy 방어).** 방침이 **이미 확정돼 있다** —
-이 파일 아래 「6-3」 절을 읽고 **재논의 없이 착수**한다. 시작점은 **모듈 repo**
-`modules/vpc/flow-logs.tf` (설계 → 구현 → 검증 순서, `CLAUDE.md` §0).
+**⏸ 다음 작업 = 6-1 (`prevent_destroy` 판정).** 미검증 6항목 중 **유일하게 남은 것**.
+teardown을 시도해야 판정된다 — ⚠️ **파기하면 NAT 월 ~$43이 멈춘다.** 리허설 자산을 계속 둘지가
+**선행 결정**이라 자동 진행 금지. 이 파일 아래 「6-1」 절 참조.
 
-⚠️ **MCP 서버가 방금 추가됐다**(`.mcp.json`). 재시작 후 첫 사용 시 승인 프롬프트가 뜬다.
-`mcp__opentofu__get-resource-docs`로 스키마를 확인하는 것이 `CLAUDE.md` §6의 요구다.
+⚠️ **MCP 서버 3종이 `.mcp.json`에 있다**(opentofu·aws-docs·**aws-api**). aws-api는 2026-07-31
+추가분 — 재시작 후 첫 사용 시 승인 프롬프트. `mcp__opentofu__get-resource-docs`로 스키마 확인이
+`CLAUDE.md` §6 요구. 실계정 조회(로그·describe)는 aws-api(**read-only**)로 하되, 없으면 `aws --profile team` CLI.
 
 💰 **비용이 돌고 있다**: `live/dev/networking` 66개 리소스 · NAT 1개(월 ~$43) + Flow Logs.
 
@@ -243,44 +244,51 @@ C 모듈 `design/50` F6/F13/F14(1) · D 모듈 `docs/consumer/dynamic-credential
 ⚠️ `.mcp.json`은 **커밋되는 팀 공유 설정**이라 고객사 복사본에 따라간다 — 사내 CA 경로는 고쳐야 한다.
 ℹ️ **적용은 Claude Code 재시작 후**, 첫 사용 시 승인 프롬프트.
 
-### ⏭️ 6-3 Flow Logs confused deputy 방어 — **착수 직전. 방침 확정됨**
+**➕ aws-api 추가 (2026-07-31)** — 실계정 조회용(`awslabs.aws-api-mcp-server`, PyPI v1.4.1).
+- 🔒 **`READ_OPERATIONS_ONLY=true`** — 공용 계정(§4-1)에서 MCP를 통한 우발적 변경 원천 차단.
+  우리의 실제 변경은 전부 IaC→CI(OIDC→Role) 경로다. MCP는 조회 전용.
+- 🔒 **`AWS_API_MCP_PROFILE_NAME=team`** — §4-1의 "항상 `--profile team`"을 MCP에 강제.
+  빼면 boto3가 ambient 자격증명으로 **조용히 다른 계정**을 칠 수 있다.
+- **CA 번들 env는 넣지 않았다** — `aws` CLI가 `AWS_CA_BUNDLE` 없이 동작 = AWS 엔드포인트 MITM 아님.
+  사내 CA만 담긴 번들을 걸면 오히려 public AWS TLS가 깨진다.
+- ⚠️ **모듈 repo `.mcp.json`과 의도적으로 다르다**(PR#7 parity에서 벗어남). aws-api는 **배포 검증
+  도구**라 소싱만 하는 모듈 repo엔 불필요하다. "parity 복원"으로 지우지 말 것.
+- ⚠️ 고객사 복사 시 `AWS_API_MCP_PROFILE_NAME`은 그들의 프로파일로 바꿔야 한다(버킷명·CA와 동급).
 
-모듈 repo 열린 항목 7. 차단 조건("실계정 apply로 검증 가능한 시점")이 Phase 4로 **해소됐다**.
+### ✅ 6-3 Flow Logs confused deputy 방어 **완료·검증됨** (2026-07-31)
 
-**문제**: `modules/vpc/flow-logs.tf:40-51`의 신뢰 정책에 **`Condition`이 없다.**
-`vpc-flow-logs.amazonaws.com`은 **전 세계 공용 서비스 principal**이라, 남이 자기 VPC의 flow log를
-만들면서 `deliver_logs_permission_arn`에 **우리 Role ARN**을 지정하면 서비스가 그걸 assume해
-**우리 로그 그룹에 남의 트래픽을 쓴다.** 피해 방향이 직관과 반대다 — 우리 로그가 새는 게 아니라
-**남의 로그가 들어오고 CloudWatch ingestion 비용이 우리에게 청구**된다.
-ℹ️ 공격 성립에 우리 **계정 ID**가 필요하다 → 6-2가 진입 비용을 올렸지만 그건 defense-in-depth다.
+모듈 [PR#3](https://github.com/skax-ca/iac-module-library/pull/3)(`vpc-v1.1.0`) + [PR#4](https://github.com/skax-ca/iac-module-library/pull/4)(열린 항목 7 닫음) ·
+소비 [PR#8](https://github.com/skax-ca/iac-reference-infra/pull/8)(`daf7c63`).
 
-**확정 방침 (사용자 결정)**
-
+**무엇을 고쳤나**: `modules/vpc/flow-logs.tf` 신뢰 정책에 `Condition` 추가. `vpc-flow-logs.amazonaws.com`은
+전 세계 공용 서비스 principal이라, 조건이 없으면 남이 자기 VPC flow log에 우리 Role ARN을 지정해
+**남의 트래픽이 우리 로그 그룹으로 들어오고 ingestion 비용이 우리에게 청구**된다(피해 방향이 반대).
 ```json
 "Condition": {
   "StringEquals": { "aws:SourceAccount": "<account>" },
-  "ArnLike": { "aws:SourceArn": "arn:<partition>:ec2:<region>:<account>:vpc-flow-log/*" }
+  "ArnLike":      { "aws:SourceArn": "arn:<partition>:ec2:<region>:<account>:vpc-flow-log/*" }
 }
 ```
-- ⚠️ **와일드카드가 불가피**하다. flow log ID를 넣으면 Role ↔ flow log **순환 참조**가 되어
-  plan이 실패한다. AWS 공식도 인정한다 — *"If you don't know the flow log ID, you can replace
-  that portion of the ARN with a wildcard (\*)"*. 계정·리전·서비스 구간은 남으므로 차단은 성립.
-- 구현: `data.aws_caller_identity`·`aws_partition`·`aws_region` 3개 추가.
-  **각각 D10 kill switch 게이트**(`count = local.enabled ? 1 : 0`)를 통과해야 한다 —
-  기존 `data.aws_availability_zones.this`가 그 패턴의 선례다(`main.tf:90`).
-- 버전: **`vpc-v1.1.0`**(마이너). 변수 추가는 없으나 **동작 변경**이고 잘못 걸면 배달이 멈춘다.
-- ⛔ 기각: `flow_logs_confused_deputy_protection` 변수로 opt-in — 보안 기본값을 끄는 스위치를
-  계약에 남기게 된다.
+`data.aws_caller_identity/aws_partition/aws_region` 3개 추가 — **게이트는 `local.flow_logs_enabled`**
+(role의 `count`와 일치. 방침 초안의 `local.enabled`보다 정확 — flow logs가 꺼지면 STS 호출도 사라진다).
 
-**검증 (사용자 결정 — 실계정까지)**
-1. 모듈 repo: 조건 추가 → `tofu test` → fmt/tflint/trivy → 태그 `vpc-v1.1.0`
-2. 소비 repo: `?ref=vpc-v1.1.0`으로 올려 PR → apply (IAM role은 **in-place update**, replace 아님)
-3. ✅ **수용 기준 = apply 후 새 로그 레코드가 계속 도착하는가.**
-   `aws logs get-log-events`로 apply 시각 이후 이벤트 확인.
-   ⚠️ **`apply` 성공은 증거가 아니다** — 이 실패 모드의 정의가 "**조용히 실패**"다.
+**🔑 구현에서 나온 실측 3건**
+1. **`aws_region.name`·`id`는 provider 6.x에서 deprecated → `region` 속성**(MCP `get-datasource-docs`로
+   확인). `.name`으로 썼으면 deprecation 경고 — `CLAUDE.md` §6 "스키마 추정 금지"가 실제로 막은 함정.
+2. **와일드카드가 불가피**하다 — flow log ID를 넣으면 Role ↔ flow log 순환 참조로 plan이 실패한다.
+   AWS 공식이 `vpc-flow-log/*`를 허용. 계정·리전·서비스 구간이 남아 차단은 성립.
+3. **`mock_provider`에서 data source의 computed 속성은 plan 시점에 known**(생성됨) — resource의
+   arn·id가 unknown인 것과 다르다. 덕분에 `assume_role_policy`가 완전히 known이 되어 `tofu test`가
+   조건의 **존재**를 `jsondecode`로 검사할 수 있다(신규 run 추가).
 
-**참고**: 현재 로그 그룹 `/aws/vpc/flow-log/ref-dev-an2-main`, 스트림 `eni-…-all`에 레코드 도착 중.
-D11 경로가 살아 있으므로 음성/양성 판정이 가능하다.
+**판정 (실계정 — 사용자 결정)**: apply `0 added, 1 changed, 0 destroyed`(IAM **in-place**, destroy/replace 0).
+apply 완료 시각(epoch ms) 이후로 `aws logs filter-log-events --start-time`가 `ACCEPT OK` 레코드를 돌려줬다
+→ 읽힌다 = CloudWatch 배달 성공 = 서비스가 **새 조건 하에서 role assume 성공**. `describe-flow-logs`
+`DeliverLogsStatus=SUCCESS` 일치. **조용한 실패였다면 apply 이후 레코드가 비어야 했다 — 음성 근거 확보.**
+⚠️ 계정 ID는 plan 출력·flow log 레코드에 평문으로 나타난다(불가피). **git·notepad에는 적지 않는다**(§5.5).
+
+**⚠️ 오판 없이 진행한 지점 하나**: `tofu test`(mock)는 조건의 **존재**만 잠근다 — **배달을 막지 않는지**는
+증명 못 한다. 그래서 실계정 로그 도착을 별도 수용 기준으로 잡았고, `apply` 성공에 만족하지 않았다.
 
 ### ⏸ 6-1 `prevent_destroy` 판정 — 미착수 (마지막)
 
