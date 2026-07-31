@@ -22,6 +22,11 @@ on:
     paths:
       - live/dev/networking/**
       - .github/workflows/deploy.yml
+  # 코드 변경 없이 재-plan 이 필요한 경우가 실제로 있다:
+  #   ① 승인 대기 중 state 가 바뀌어 apply 가 거부됐을 때(정상 동작이다)
+  #   ② drift 확인 — 계정 자동 태거처럼 우리 밖에서 리소스를 만지는 주체가 있다(§5.2)
+  # ⚠️ 이때도 **같은 run 안에서** plan → apply 가 이어진다. 별도 apply 워크플로를 만들지 않는다.
+  workflow_dispatch:
 
 # state 는 단일 자원이다. 두 run 이 겹치면 lock 경합이거나, 더 나쁘게는 뒤늦은 run 이
 # 오래된 plan 을 적용한다. cancel-in-progress 는 **false** 여야 한다 —
@@ -189,7 +194,13 @@ jobs:
   apply:
     name: apply
     needs: plan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # PR 에서는 apply 하지 않는다. main 에 들어온 것만 적용한다.
+    # ⚠️ 브랜치 조건을 여기 한 번 더 쓰는 이유: workflow_dispatch 는 임의 브랜치에서 눌릴 수 있다.
+    #    Environment 의 deployment branch policy(main 하나)가 최종 방어선이지만,
+    #    job 조건으로도 막아 두면 실패가 아니라 skip 으로 끝난다.
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # ⚠️ 이 한 줄이 두 가지를 동시에 한다:
     #    ① 승인 게이트(protection rules 가 걸려 있을 때)
