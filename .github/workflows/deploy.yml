@@ -1,0 +1,281 @@
+# live/dev/networking — plan → 승인 → apply
+#
+# ⛔ **한 워크플로 두 job 을 유지한다**(design/50 §3). 별도 워크플로로 쪼개면 plan artifact 를
+#    run 경계 **밖에서** 찾아야 하고, 그 조회 지점이 곧 "승인한 계획 ≠ 적용된 계획" 구멍이다.
+#    같은 run 안이면 `needs:` 가 그 관계를 구조적으로 보장한다.
+#
+# ⛔ **plan job 에 `environment:` 를 추가하지 않는다**(D28). environment 를 선언한 job 만
+#    OIDC `sub` 에 `:environment:<name>` 을 받는다. plan job 에 붙이면 sub 가 바뀌어
+#    입구 Role 의 신뢰 정책 3패턴과 어긋난다. 실측된 세 패턴은 docs/deployment-facts.md §3.
+#
+# ⛔ **apply 를 `tofu apply`(재-plan)로 바꾸지 않는다.** 승인한 것과 다른 것을 적용하게 된다.
+
+name: deploy · live/dev/networking
+
+on:
+  pull_request:
+    paths:
+      - live/dev/networking/**
+      - .github/workflows/deploy.yml
+  push:
+    branches: [main]
+    paths:
+      - live/dev/networking/**
+      - .github/workflows/deploy.yml
+
+# state 는 단일 자원이다. 두 run 이 겹치면 lock 경합이거나, 더 나쁘게는 뒤늦은 run 이
+# 오래된 plan 을 적용한다. cancel-in-progress 는 **false** 여야 한다 —
+# apply 중인 run 을 취소하면 state 와 실제가 갈라진다.
+concurrency:
+  group: live-dev-networking
+  cancel-in-progress: false
+
+env:
+  TF_ROOT: live/dev/networking
+  TOFU_VERSION: 1.12.5
+  TF_IN_AUTOMATION: "1"
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # plan — PR 과 push 양쪽에서 돈다. environment 를 **선언하지 않는다**(D28).
+  # ────────────────────────────────────────────────────────────────────────────
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC JWT 발급 — 이게 없으면 1단 인증 자체가 안 된다
+      contents: read
+      pull-requests: write # plan 요약을 PR 에 댓글로 남긴다
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # ── D20 · private repo 모듈 소싱 인증 ──────────────────────────────────
+      # 토큰은 1시간 만료이고 접근 범위는 iac-module-library 1개다(실측: repository_selection=selected).
+      - name: 모듈 repo 읽기 토큰 발급
+        id: app-token
+        uses: actions/create-github-app-token@v3.2.0
+        with:
+          app-id: ${{ vars.MODULE_READER_APP_ID }}
+          private-key: ${{ secrets.MODULE_READER_KEY }}
+          owner: skax-ca
+          repositories: iac-module-library
+
+      # 소싱 URL 은 코드에서 git::https:// 하나다. 인증은 **여기서만** 주입된다 —
+      # 코드가 인증 방식을 모르는 것이 D20 의 facade 원칙이다.
+      # ⚠️ insteadOf 값에 토큰이 평문으로 들어간다. runner 의 --global config 는 일회용이라
+      #    run 종료와 함께 사라진다(로컬에서 같은 명령을 ~/.gitconfig 에 하면 안 되는 이유).
+      - name: git insteadOf 주입
+        run: |
+          git config --global \
+            url."https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/".insteadOf \
+            "https://github.com/"
+
+      - uses: opentofu/setup-opentofu@v2.0.2
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      # ── OIDC 2단 체인 · 1단 ────────────────────────────────────────────────
+      # 입구 Role 의 권한은 "실행 Role 을 assume" 하나뿐이다. 정적 키는 어디에도 없다.
+      - name: AWS 인증 (입구 Role)
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_ENTRY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+          role-session-name: gha-plan-${{ github.run_id }}
+
+      # ── D25 · partial backend configuration ────────────────────────────────
+      # 버킷명이 코드에 없다. 여기서 repo 변수로 조립한다.
+      #
+      # ⚠️ **backend 는 provider 와 독립적으로 자격증명을 해결한다**(OpenTofu 공식).
+      #    provider 의 assume_role 은 backend 에 적용되지 않는다. 입구 Role 의 권한은
+      #    `sts:AssumeRole` 하나뿐이라(D27-1) 그대로 두면 state 를 읽다가 403 이 난다 —
+      #    2026-07-31 run 30592702396 에서 실제로 그렇게 실패했다.
+      #    → backend 에도 **같은 실행 Role 을 체인 assume** 시킨다. 이렇게 해야
+      #      "입구 Role 의 권한은 assume 하나뿐"이라는 D27-1 의 신뢰 경계가 유지된다.
+      #
+      # ⚠️ 파일로 넘기는 이유: `-backend-config=KEY=VALUE` 는 **문자열 값만** 받는다.
+      #    assume_role 은 객체라 CLI 플래그로 표현할 수 없다.
+      #    파일명 backend.hcl 은 .gitignore 대상이라 runner 에 만들어도 커밋될 수 없다.
+      - name: backend 설정 조립
+        working-directory: ${{ env.TF_ROOT }}
+        run: |
+          cat > backend.hcl <<EOF
+          bucket       = "${{ vars.TF_STATE_BUCKET }}"
+          key          = "dev/networking.tfstate"
+          region       = "ap-northeast-2"
+          use_lockfile = true
+
+          assume_role = {
+            role_arn     = "${{ vars.AWS_EXEC_ROLE_ARN }}"
+            session_name = "tofu-backend-${{ github.run_id }}"
+          }
+          EOF
+
+      - name: tofu init
+        working-directory: ${{ env.TF_ROOT }}
+        run: tofu init -backend-config=backend.hcl
+
+      - name: tofu plan
+        id: plan
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          # 2단째 assume 대상. ARN 에 계정 ID 가 있어 코드에 두지 않는다(D25 의 연장).
+          TF_VAR_execution_role_arn: ${{ vars.AWS_EXEC_ROLE_ARN }}
+        run: |
+          # -detailed-exitcode: 0=변경없음 · 1=오류 · 2=변경있음.
+          # "두 번째 apply 가 No changes 인가"(ignore_tags 판정)를 사람 눈이 아니라
+          # 종료 코드로 받기 위해 쓴다.
+          set +e
+          tofu plan -no-color -lock-timeout=5m -out=tfplan -detailed-exitcode
+          code=$?
+          set -e
+          case "$code" in
+            0) echo "changes=false" >> "$GITHUB_OUTPUT" ;;
+            2) echo "changes=true"  >> "$GITHUB_OUTPUT" ;;
+            *) exit "$code" ;;
+          esac
+
+      # ── D27-2 · "삭제 대상 사람 검토"를 이행하는 지점 ─────────────────────
+      # 공용 계정(F13)이라 예외가 없다. destroy/replace 를 전문 위로 끌어올려
+      # 스크롤하지 않아도 보이게 만든다.
+      - name: plan 요약 작성
+        id: summary
+        working-directory: ${{ env.TF_ROOT }}
+        run: |
+          tofu show -no-color tfplan > plan.txt
+          {
+            echo "### \`tofu plan\` — live/dev/networking"
+            echo
+            echo "변경 있음: **${{ steps.plan.outputs.changes }}**"
+            echo
+            echo "#### ⚠️ destroy / replace 대상"
+            echo "> 공용 개발 계정이다. 이 목록은 승인 전에 **사람이 읽는다**(D27-2)."
+            echo
+            echo '```'
+            grep -E 'will be destroyed|must be replaced|will be replaced' plan.txt || echo '(없음)'
+            echo '```'
+            echo
+            echo "<details><summary>plan 전문 (앞 50KB)</summary>"
+            echo
+            echo '```hcl'
+            head -c 50000 plan.txt
+            echo '```'
+            echo
+            echo "</details>"
+          } > summary.md
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: PR 에 plan 댓글
+        if: github.event_name == 'pull_request'
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file summary.md
+
+      # ⚠️ plan 파일에는 리소스 속성이 평문으로 들어간다. repo read 권한자가 받을 수 있으므로
+      #    보관을 하루로 제한한다(design/50 §3). 이는 완화이지 해결이 아니다 — 열린 항목 6.
+      - name: plan artifact 업로드
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: tfplan-${{ github.run_id }}
+          path: ${{ env.TF_ROOT }}/tfplan
+          retention-days: 1
+          if-no-files-found: error
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # apply — main push 에서만. environment: dev 가 승인 게이트이자 sub 패턴 ③의 근원이다.
+  # ────────────────────────────────────────────────────────────────────────────
+  apply:
+    name: apply
+    needs: plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # ⚠️ 이 한 줄이 두 가지를 동시에 한다:
+    #    ① 승인 게이트(protection rules 가 걸려 있을 때)
+    #    ② OIDC sub 를 `...:environment:dev` 로 바꾼다 — 신뢰 정책 3번째 패턴
+    #    ⚠️ environment 는 sub 에서 ref 를 **덮어쓴다**(Phase 2 실측). 그래서 브랜치 제한을
+    #       sub 로 걸 수 없고, Environment 의 deployment branch policy 가 그 자리를 맡는다.
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # 1~4단계는 plan job 과 같다. **자격증명은 job 간에 이동하지 않으므로** 재수행한다 —
+      # 중복이 아니라 격리다. 승인 대기 중 세션(최대 1시간, 연장 불가)이 만료돼도
+      # apply job 이 새로 인증하므로 승인 지연 자체는 문제가 되지 않는다.
+      - uses: actions/checkout@v7.0.1
+
+      - name: 모듈 repo 읽기 토큰 발급
+        id: app-token
+        uses: actions/create-github-app-token@v3.2.0
+        with:
+          app-id: ${{ vars.MODULE_READER_APP_ID }}
+          private-key: ${{ secrets.MODULE_READER_KEY }}
+          owner: skax-ca
+          repositories: iac-module-library
+
+      - name: git insteadOf 주입
+        run: |
+          git config --global \
+            url."https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/".insteadOf \
+            "https://github.com/"
+
+      - uses: opentofu/setup-opentofu@v2.0.2
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      - name: AWS 인증 (입구 Role)
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_ENTRY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+          role-session-name: gha-apply-${{ github.run_id }}
+
+      # plan job 과 같은 이유로 backend 도 실행 Role 을 체인 assume 한다(위 주석 참조).
+      - name: backend 설정 조립
+        working-directory: ${{ env.TF_ROOT }}
+        run: |
+          cat > backend.hcl <<EOF
+          bucket       = "${{ vars.TF_STATE_BUCKET }}"
+          key          = "dev/networking.tfstate"
+          region       = "ap-northeast-2"
+          use_lockfile = true
+
+          assume_role = {
+            role_arn     = "${{ vars.AWS_EXEC_ROLE_ARN }}"
+            session_name = "tofu-backend-${{ github.run_id }}"
+          }
+          EOF
+
+      - name: tofu init
+        working-directory: ${{ env.TF_ROOT }}
+        run: tofu init -backend-config=backend.hcl
+
+      # **같은 run** 의 artifact 다. run 경계를 넘지 않는 것이 이 설계의 핵심이다.
+      - name: plan artifact 내려받기
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: tfplan-${{ github.run_id }}
+          path: ${{ env.TF_ROOT }}
+
+      # ⛔ `tofu apply` (인자 없이) 로 바꾸면 재-plan 이 되어 승인 대상과 달라진다.
+      # ℹ️ TF_VAR_* 를 여기 넘기지 않는다. 저장된 plan 은 변수 값을 이미 품고 있고,
+      #    다시 넘기면 "승인한 계획"의 정의가 흐려진다.
+      # ⚠️ 승인 대기 중 state 가 바뀌었으면 이 명령이 거부한다 — **정상 동작**이다.
+      #    그때는 재-plan 이 필요하다(=새 run).
+      - name: tofu apply tfplan
+        working-directory: ${{ env.TF_ROOT }}
+        run: tofu apply -no-color -lock-timeout=5m tfplan
+
+      - name: apply 결과 요약
+        if: always()
+        working-directory: ${{ env.TF_ROOT }}
+        run: |
+          {
+            echo "### \`tofu apply\` — live/dev/networking"
+            echo
+            echo "적용한 계획: run \`${{ github.run_id }}\` 의 artifact \`tfplan-${{ github.run_id }}\`"
+            echo "커밋: \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

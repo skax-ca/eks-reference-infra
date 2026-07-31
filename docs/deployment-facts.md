@@ -28,8 +28,8 @@
 | region / regioncode | `ap-northeast-2` / `an2` | ✅ | — |
 | OIDC 발급자 | `token.actions.githubusercontent.com` | ✅ | provider URL |
 | OIDC audience | `sts.amazonaws.com` | ✅ | `aws-actions/configure-aws-credentials` 기본값 |
-| 실행 Role **이름** | `AWSAFTExecution` (D27, 기존 재사용) | ✅ | ARN은 §2 |
-| 입구 Role **이름** | `iamr-ref-dev-an2-gha-entry-01` | ✅ 설계 확정 | ARN은 §2 |
+| 실행 Role **이름** | `iamr-ref-dev-an2-gha-exec-01` (**D27-1, 신설**) | ✅ 2026-07-30 생성 | ARN은 §2 |
+| 입구 Role **이름** | `iamr-ref-dev-an2-gha-entry-01` | ✅ 2026-07-30 생성 | ARN은 §2 |
 | state key | `dev/networking.tfstate` | ✅ | backend `key` |
 | GitHub App slug / ID | `skax-ca-module-reader` / `4432001` | ✅ 2026-07-30 실측 | 모듈 소싱 인증(D20) |
 | App installation ID | `149998961` | ✅ 2026-07-30 실측 | 토큰 발급 대상 |
@@ -85,7 +85,7 @@ App 토큰만으로 private repo 모듈 소싱이 된다는 것을 **음성 대�
 | **state 버킷명** | 🙈 | repo 변수 `TF_STATE_BUCKET` / 로컬 gitignore된 `backend.hcl` | `tofu init -backend-config="bucket=..."` |
 | **AWS 계정 ID** | 🙈 | 입구 Role ARN에 포함 → repo 변수 `AWS_ENTRY_ROLE_ARN` | `configure-aws-credentials`의 `role-to-assume` |
 | **입구 Role ARN** | 🙈 | repo 변수 `AWS_ENTRY_ROLE_ARN` | 동일 |
-| **실행 Role ARN** | 🙈 | repo 변수 `AWS_EXECUTION_ROLE_ARN` | provider `assume_role.role_arn` |
+| **실행 Role ARN** | 🙈 | repo 변수 `AWS_EXEC_ROLE_ARN` | provider `assume_role.role_arn` (`TF_VAR_execution_role_arn` 경유) |
 | **GitHub App private key** | 🔒 | repo **secret** `MODULE_READER_KEY` | `create-github-app-token` |
 | **GitHub App ID** | 🔁 | repo 변수 `MODULE_READER_APP_ID` | 동일 |
 
@@ -192,18 +192,188 @@ lifecycle 규칙이 **선택이 아니다** — 비현행 7일 · 불완전 MPU 
 
 ---
 
-## 5. apply 판정 결과 (Phase 4~5)
+## 5. 배포 루트 `live/dev/networking` — 형상과 CI 제약 (Phase 4)
+
+### 5.1 형상 = enterprise (2026-07-31, 사용자 결정)
+
+모듈 repo `examples/vpc-enterprise`(9그룹 착수 템플릿)를 복사해 이 계정 대역에 맞췄다.
+설계 `design/50`이 상정한 것은 minimal(`examples/vpc`)이었으나 **enterprise로 상향**했다.
+
+| CIDR | 성격 | 배치 |
+|------|------|------|
+| `10.50.0.0/24` primary | uniq 소형 — 인프라 전용 | `ep-uniq` · `tgw-uniq` |
+| `10.51.0.0/16` secondary | uniq — 라우팅 가능 | `pub`·`elb`·`vm`·`node`·`db`·`data` |
+| `100.64.0.0/16` secondary | dup 허용(RFC 6598) | `pod-dup` |
+
+> 세 대역 모두 **대상 계정에서 미사용임을 실측**하고 골랐다(VPC 23개의 연결 CIDR 전수 조회).
+> 겹침이 지금 장애를 만들지는 않지만(peering·TGW 없음), 이 코드는 **고객사에 복사돼 나간다.**
+
+서브넷 20개 · RT 11개 · NAT 1개(`single_nat_gateway`) · IGW 1개 · Flow Logs 1개.
+`deletion_protection = true`(D12) — teardown이 2단계가 된다.
+
+### 5.2 ⚠️ 계정 자동 태거 — `ignore_tags`는 추정이 아니라 실측 요건이다
+
+`CLAUDE.md` §2가 *"실제 계정에서는 `ignore_tags`가 거의 항상 필요하다"* 고 경고만 해 뒀던 것의
+**실증**이다(2026-07-31).
+
+| 리소스 | 전체 | 자동 태그가 붙은 것 |
+|--------|------|-------------------|
+| VPC | 23 | **22** (나머지 1개는 태거 도입 전 default VPC) |
+| Subnet | 82 | **78** |
+| IGW | 17 | **16** |
+
+붙는 키는 생성 주체(CloudFormation·Terraform·콘솔)와 **무관하게 동일**하다:
+
+```
+CreationTime · Creator · cz-org · cz-owner · cz-ext1 · cz-ext2 · cz-ext3
+```
+
+구세대 6건은 `cz-owner`·`cz-project`·`cz-stage` — 태거가 한 번 개정된 흔적이다.
+→ `providers.tf`가 `keys = ["CreationTime","Creator"]` + `key_prefixes = ["cz-"]`로 방어한다.
+**판정 기준은 두 번째 apply가 `No changes`를 내는가**이고, 그것만이 이 블록이 맞다는 증거다.
+
+### 5.3 ⚠️ 승인 게이트 — GitHub **Free 플랜**에서 required reviewers를 걸 수 없다
+
+D27-2는 *"apply는 승인 게이트 필수. Environment protection rules"* 를 요구한다.
+**이 org에서는 그 요구가 이행되지 않는다.** 규칙별로 하나씩 시험해 경계를 확정했다(2026-07-31).
+
+| protection rule | free + private repo | 응답 |
+|-----------------|--------------------|------|
+| required reviewers | ❌ | `422 Please ensure the billing plan supports the required reviewers protection rule.` |
+| wait timer | ❌ | `422 ... supports the wait timer protection rule.` |
+| **deployment branch policy** | ✅ | 적용됨 — rule id `61366642`, 허용 브랜치 `main` 하나 |
+
+`gh api orgs/skax-ca` → `plan.name = "free"` · `filled_seats = 1`.
+
+**채택한 운영 형태(사용자 결정): free 유지 + PR merge를 검토 지점으로.**
+
+```
+PR 생성 → plan job 자동 실행 → PR 댓글에 destroy/replace 목록 + plan 전문
+       → 사람이 읽고 merge          ← 검토 지점 (강제력 없음)
+       → push:main → plan → apply   ← 대기 없이 진행
+```
+
+- ✅ 유지되는 것: `environment: dev` 선언(→ `sub` 패턴 ③ 일치) · branch policy(`main`만)
+- ❌ 잃는 것: **"읽어야 진행된다"는 강제력.** merge 권한자와 apply 승인자가 분리되지 않고,
+  자기 PR을 자기가 merge할 수 있다.
+- 완화: `deploy.yml`의 plan job이 `will be destroyed`·`must be replaced`를 **전문 위로 끌어올려**
+  PR 댓글과 job summary에 남긴다. 이는 *"읽을 수 있게 한다"* 이지 *"읽어야 진행된다"* 가 아니다.
+
+> ℹ️ **뜻밖의 소득**: 걸린 하나(branch policy)가 하필 §3의 미해결 제약을 메운다.
+> `environment`가 `sub`의 `ref`를 덮어써서 **apply job의 브랜치 제한을 `sub`로 걸 수 없었는데**,
+> deployment branch policy가 그 자리를 맡는다. IAM에서 표현 불가능한 조건을 GitHub 레이어가
+> 대신 거는 구조다.
+
+> ⏭️ **이것은 소비 규약의 문제이지 이 인스턴스의 문제가 아니다** — 모든 소비 repo가 부딪힌다.
+> 따라서 **모듈 repo `design/50` 개정(Phase 5)에 D27-2의 전제 조건으로 등재**해야 한다:
+> *"승인 게이트는 GitHub Team 이상을 요구한다. Free private repo에서는 이행 불가."*
+
+### 5.4 🔴 **backend는 provider의 `assume_role`을 쓰지 않는다** — 설계 §3의 빈틈
+
+**첫 CI plan이 여기서 실패했다** (run [`30592702396`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30592702396), 2026-07-31).
+
+```
+Successfully configured the backend "s3"!
+Error: Error refreshing state
+  operation error S3: HeadObject, https response error StatusCode: 403
+  api error Forbidden: Forbidden
+```
+
+**원인.** `design/50` §3의 2단 체인 그림은 *"configure-aws-credentials → 입구 Role →
+**provider의 `assume_role`** → 실행 Role"* 이다. 그런데 **S3 backend는 provider가 아니다.**
+OpenTofu 공식 문서가 backend 자격증명은 provider 설정과 **독립적으로** 해결된다고 명시한다.
+
+따라서 backend는 환경 자격증명(= 입구 Role)으로 S3에 붙는데, 입구 Role의 권한은 실측상
+`sts:AssumeRole` **하나뿐**이다(D27-1의 의도된 최소권한):
+
+```json
+{ "Effect": "Allow", "Action": "sts:AssumeRole",
+  "Resource": "arn:aws:iam::…:role/iamr-ref-dev-an2-gha-exec-01" }
+```
+
+→ S3를 읽을 권한이 없다. **설계대로 만들었기 때문에 실패했다.**
+
+**선택한 해법: backend에도 같은 실행 Role을 체인 assume 시킨다.**
+
+```hcl
+# CI 가 repo 변수로 조립하는 backend.hcl (gitignore 대상 이름이라 커밋될 수 없다)
+bucket       = "…"
+key          = "dev/networking.tfstate"
+region       = "ap-northeast-2"
+use_lockfile = true
+assume_role = {
+  role_arn     = "…/iamr-ref-dev-an2-gha-exec-01"
+  session_name = "tofu-backend-<run_id>"
+}
+```
+
+- 기각한 대안: **입구 Role에 S3 권한을 추가한다.** *"입구 Role의 권한은 실행 Role assume
+  하나뿐"* 이라는 D27-1의 신뢰 경계가 깨진다. 입구 Role은 OIDC로 직접 도달 가능한 지점이라
+  거기에 권한을 얹으면 2단 체인의 의미가 줄어든다.
+- ⚠️ **`-backend-config=KEY=VALUE`로는 표현할 수 없다** — 문자열 값만 받는데 `assume_role`은
+  객체다. 그래서 CI도 **HCL 파일**을 조립해 넘긴다(로컬 규약과 형태가 같아지는 부수 효과).
+
+**스키마 확인**(추정하지 않았다): 로컬에서 `assume_role` 블록을 넣고 `init`을 돌려 파싱 오류가
+아니라 `STS AssumeRole 403 AccessDenied`가 나는 것을 확인했다 — backend가 그 객체를 읽고 실제로
+assume을 시도했다는 뜻이다. 동시에 **개인 IAM user는 실행 Role을 assume할 수 없다**는
+`live/dev/networking/README.md` §2의 서술도 실증됐다.
+
+> ⏭️ **이것도 소비 규약의 문제다.** `design/50` §3의 2단 체인 그림에 **backend 경로가 빠져 있다.**
+> Phase 5에서 고친다 — 모든 소비 repo가 첫 CI run에서 똑같이 부딪힌다.
+
+### 5.5 ⚠️ repo 변수는 CI 로그에 **평문**으로 남는다
+
+같은 run의 로그에서 확인했다:
+
+```
+tofu init -backend-config="bucket=s3-ref-dev-an2-tfstate-733a8852498c" …
+```
+
+GitHub은 **secret만 마스킹**한다. repo 변수(`vars.*`)는 마스킹 대상이 아니다.
+§2에서 버킷명·Role ARN을 "🙈 비노출"로 분류하고 repo 변수에 둔 것은 **git 에 남기지 않기**
+위해서였고(코드가 고객사로 복사되므로), 그 목적 자체는 유지된다. 그러나
+**"어디에도 평문으로 없다"는 아니다** — repo read 권한자는 워크플로 로그에서 볼 수 있다.
+
+- 현재 판단: private repo이고 plan artifact(`retention-days: 1`)와 노출 대상이 같으므로 수용한다.
+- 완화하려면 첫 스텝에서 `::add-mask::`를 쓰거나 값을 secret으로 옮긴다. ⚠️ `add-mask` 스텝
+  **자신의** 명령·env echo에는 값이 찍히므로 완전하지 않다.
+- **열린 항목으로 등재한다** — `design/50` §5의 "plan artifact 암호화"와 같은 성격의 미해결이다.
+
+---
+
+## 6. apply 판정 결과 (Phase 4~5)
 
 모듈 repo `docs/design/10-vpc-module.md` §3의 apply 미검증 6항목.
 
-| # | 항목 | 판정 시점 | 결과 |
-|---|------|----------|------|
-| 1 | secondary CIDR `depends_on` 순서 | 후속 시나리오 | ⏸ |
-| 2 | primary/secondary 조합 제약 | 후속 시나리오 | ⏸ |
-| 3 | CIDR 겹침 | 후속 시나리오 | ⏸ |
-| 4 | Flow Logs 실제 배달 | 후속 시나리오 | ⏸ |
-| 5 | `prevent_destroy` 실동작 (D12) | 후속 시나리오 | ⏸ |
-| 6 | **`git tag` 소싱 경로** | **첫 CI `init`** | ⏸ |
-| — | 가짜 diff 없음 (`ignore_tags` 필요 여부) | **두 번째 apply = `No changes`** | ⏸ |
+**⚠️ enterprise 형상(§5.1)을 택한 결과로 판정 시점이 재산정됐다.** minimal 전제로 쓰인
+`CLAUDE.md` §7과 `design/50` §4의 *"첫 apply는 6번과 minimal 경로만 판정한다"* 는
+**이 배포 루트에는 더 이상 맞지 않는다** — secondary CIDR 2개와 isolated 라우팅이 실제로 만들어진다.
 
-⚠️ **첫 apply로 1~5가 판정되지 않는다.** 흐리면 과잉 주장이다.
+| # | 항목 | 판정 시점 | 왜 | 결과 |
+|---|------|----------|-----|------|
+| 1 | secondary CIDR `depends_on` 순서 | **첫 apply** | `secondary_cidr_blocks`에 2개를 넘긴다 | ⏸ |
+| 2 | primary/secondary 조합 제약 | **첫 apply** | `10.50.0.0/24` + `10.51.0.0/16` + `100.64.0.0/16` 조합을 API가 수락하는지 | ⏸ |
+| 3 | CIDR 겹침 | **첫 apply** | 20개 서브넷이 `cidrsubnet()` 파생이다. 겹치면 API가 거부한다 | ⏸ |
+| 4 | Flow Logs 실제 **배달** | **첫 apply 이후 별도 확인** | 로그 그룹 생성 ≠ 이벤트 도착. CWL에 실제로 쌓이는지 봐야 한다 | ⏸ |
+| 5 | `prevent_destroy` 실동작 (D12) | **teardown 시나리오** | `deletion_protection = true`로 두었으나, 파기를 시도해야 판정된다 | ⏸ |
+| 6 | **`git tag` 소싱 경로** | **첫 CI `init`** | 로컬은 이미 통과(F1·아래). CI 경로가 미검증분이다 | ⏸ |
+| — | 가짜 diff 없음 (`ignore_tags`) | **두 번째 apply = `No changes`** | §5.2 | ⏸ |
+
+⚠️ **여전히 4·5는 첫 apply가 판정하지 않는다.** 범위가 넓어진 것이지 전부가 된 것이 아니다.
+표에 ✅가 찍힌 것만 "실증했다"고 쓴다(`CLAUDE.md` §7).
+
+### 로컬 사전 통과 (2026-07-31, CI 이전)
+
+| 게이트 | 결과 |
+|--------|------|
+| `tofu init -backend=false` | ✅ 모듈 소싱 성공 — `Downloading git::...?ref=vpc-v1.0.0` · aws **6.57.1**(모듈 repo lock과 동일) |
+| `tofu validate` | ✅ Success |
+| `tofu fmt -recursive -check` | ✅ 0건 |
+| `tflint --recursive` | ✅ exit 0 |
+| `trivy config` | ✅ 0건 |
+
+> ⚠️ 이것은 **로컬 경로**다. 미검증 6번(CI git tag 소싱)은 로컬 `osxkeychain`이 자격증명을
+> 공급하므로(F1) 여기서 판정되지 않는다. **CI의 첫 `init`만이 6번을 판정한다.**
+
+⚠️ **로컬 `plan`은 성립하지 않는다.** 실행 Role의 신뢰가 입구 Role 하나뿐이라(D27-1) 개인 IAM
+user로는 assume되지 않는다. 결함이 아니라 신뢰 경계이며, `live/dev/networking/README.md` §2에 적혀 있다.
