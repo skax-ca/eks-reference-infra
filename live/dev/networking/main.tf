@@ -153,4 +153,9 @@ module "vpc" {
   # ⚠️ 이걸 켜면 teardown 이 **2단계**가 된다: deletion_protection = false 로 apply →
   #    vpc_enabled = false 로 apply. 결함이 아니라 보호의 정의다(모듈 변수 문서).
   deletion_protection = true
+
+  # 🔬 6-1 검증 — 보호를 켠 채 파기(vpc_enabled=false)를 시도한다. D12 교차변수 validation 이
+  #    CI plan 에서 이 조합을 거부해야 한다(변수 문서의 error_message). ⛔ merge 하지 않는다 —
+  #    plan 이 validation 에서 실패하므로 apply 는 도달하지 않고 66 개 자산은 그대로다.
+  vpc_enabled = false
 }
