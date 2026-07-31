@@ -169,9 +169,33 @@ CIDR은 계정 VPC 23개의 연결 대역을 전수 조회해 빈 곳을 골랐�
 D25를 지적하는 문장이 D25를 위반했다. → **발견을 서술할 때가 가장 위험하다.**
 현재 유출 0건(버킷명·VPC ID). 계정 ID만 2곳 남았고 정리 대상으로 §2에 등재.
 
-**⏭️ Phase 5 — 모듈 repo `design/50` 개정.** 위 1·3번은 **소비 규약의 문제**라 모든 소비 repo가
-똑같이 부딪힌다. `design/50` §3(체인 그림에 backend 추가) · D27-2(승인 게이트는 Team 이상 요구) ·
-§4(“첫 apply는 minimal만 판정” 문구는 형상 의존) 세 곳을 고친다.
+### ✅ Phase 5 완료 (2026-07-31) — 모듈 repo `design/50`·`design/10` 개정
+
+모듈 repo PR [#1](https://github.com/skax-ca/iac-module-library/pull/1) merge 완료(`dec37a9`).
+
+**🆕 D30 신설 — backend도 실행 Role을 체인 assume한다.**
+D-CONSUME 범위가 **D20~D30**으로 늘었다(범위 참조 4곳 함께 갱신).
+기각안 2개 기록: ① 입구 Role에 S3 권한 추가(D27-1 신뢰 경계가 깨진다)
+② role chaining으로 환경 자격증명을 실행 Role로(입구 Role이 "OIDC 유일 도달점"이라는 성질이 흐려진다 → 열린 항목 11).
+
+**F16~F19 추가** · **D27-2에 "승인 게이트는 GitHub Team 이상 요구" 전제 등재** ·
+**§4 판정 범위를 형상 의존으로 재서술**(minimal vs enterprise 표) ·
+**§0에 "넷째 구간(backend)이 있었다"** 기록 — 셋을 예상했고 넷째에 걸렸다.
+
+`design/10` §3: 미검증 6항목 중 **5개 판정 반영**. 열린 항목 7(Flow Logs confused deputy)의
+차단 조건 해소 — 도입 시 수용 기준은 "조건을 넣고 **로그 도착을 재확인**"이다(`apply` 성공은 증거가 아니다).
+
+**등재만 하고 안 고친 것 — 열린 항목 12**: `design/50` F6·F13이 **계정 ID를 노출**한다.
+D25 연장·D26 둘 다와 어긋나지만 단순 삭제하면 실측 provenance를 잃는다.
+`docs/consumer/*`의 12곳과 함께 판단할 사안이다.
+
+### ⏭️ 다음 (Phase 6 후보 — 미착수)
+
+1. **⏸ `prevent_destroy` 판정** — 유일하게 남은 미검증. teardown 2단계를 실제로 시도해야 한다.
+   ⚠️ **파기하면 NAT 월 ~$43이 멈춘다** — 리허설 자산을 계속 둘지가 선행 결정이다.
+2. **계정 ID 정리 결정** — 소비 repo 2곳(`bootstrap/config.sh` 안전장치 / `CLAUDE.md` 문서) +
+   모듈 repo 다수. 성격이 달라 한 판단으로 못 묶는다.
+3. **Flow Logs confused deputy 조건 도입** (모듈 repo 열린 항목 7, 차단 해소됨)
 
 ### ⚠️ 과잉 주장 금지
 

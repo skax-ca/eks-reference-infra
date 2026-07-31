@@ -13,13 +13,13 @@
 
 | repo | 역할 |
 |------|------|
-| `iac-module-library` | 모듈·**설계**의 SSOT. `docs/design/50-reference-consumer-repo.md` = **D-CONSUME**(D20~D29) |
+| `iac-module-library` | 모듈·**설계**의 SSOT. `docs/design/50-reference-consumer-repo.md` = **D-CONSUME**(D20~D30) |
 | **이 repo** | 그 설계의 **첫 이행 인스턴스**. 배포 루트와 배포 사실만 소유 |
 | `terraform-enterprise-poc` | 2026-07-28 **동결**. TFE 제안서 레퍼런스 전용 — 고치지 않는다 |
 
-- **D20~D29를 재논의하지 않는다.** 실측 근거와 기각 이유가 D-CONSUME에 다 있다.
-  특히 *"부트스트랩을 IaC로 하면 되지 않나"*(D21) · *"버킷명에 계정 ID를 넣으면 간단한데"*(D25)는
-  **이미 값을 매겨 결정한 안**이다.
+- **D20~D30을 재논의하지 않는다.** 실측 근거와 기각 이유가 D-CONSUME에 다 있다.
+  특히 *"부트스트랩을 IaC로 하면 되지 않나"*(D21) · *"버킷명에 계정 ID를 넣으면 간단한데"*(D25) ·
+  *"입구 Role에 S3 권한만 주면 되지 않나"*(**D30**)는 **이미 값을 매겨 결정한 안**이다.
 - 규약을 바꿔야 한다면 **모듈 repo의 D-CONSUME을 고치고** 여기로 내려온다. 역방향은 drift다.
 - 설계 변경 없이 구현을 시작하지 않는다: **설계(모듈 repo) → 검토 → 구현(여기) → 검증**.
 
@@ -33,14 +33,22 @@
 
 ---
 
-## 1. 🔑 backend는 부분 설정이다 (D25) — 잊으면 init이 실패한다
+## 1. 🔑 backend는 부분 설정이다 (D25·D30) — 잊으면 init이 실패한다
 
 `backend.tf`는 **`terraform { backend "s3" {} }` 뿐**이다. **버킷명이 git에 없다.**
 
 | 경로 | 주입 방법 |
 |------|----------|
-| CI | GitHub repo 변수 → `tofu init -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" ...` |
+| CI | repo 변수로 `backend.hcl`을 **runner에서 조립** → `tofu init -backend-config=backend.hcl` |
 | 로컬 | **gitignore된** `backend.hcl` → `tofu init -backend-config=backend.hcl` |
+
+- 🔴 **CI의 `backend.hcl`에는 `assume_role`이 들어간다** (D30). **backend는 provider와 독립적으로
+  자격증명을 해결**해서, provider의 `assume_role`이 backend에 적용되지 않는다. 입구 Role의 권한은
+  `sts:AssumeRole` 하나뿐이라(D27-1) 걸지 않으면 `init`이 **`HeadObject 403`**으로 죽는다.
+  ⚠️ **plan job·apply job 양쪽에 필요하다** — apply job이 `init`을 새로 하기 때문이다.
+- ⚠️ `-backend-config=KEY=VALUE` 플래그로는 안 된다. **문자열 값만** 받는데 `assume_role`은 객체다.
+- ℹ️ 로컬 `backend.hcl`에는 `assume_role`을 **넣지 않는다** — 개인 IAM user는 실행 Role을
+  assume할 수 없고(신뢰가 입구 Role뿐) 버킷은 그 user 권한으로 읽힌다.
 
 - ⛔ `backend.hcl`을 커밋하지 않는다. `.gitignore` + pre-commit 훅의 별도 검사가 이중으로 막는다.
 - 근거: AWS 공식이 **예측 불가능한 버킷명을 권장**하고, 이 repo의 `backend.tf`는
