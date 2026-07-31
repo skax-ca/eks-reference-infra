@@ -68,7 +68,11 @@ teardown 여부(6-1은 파기 "거부"만 확인했고 실제 파기는 안 했�
 | 권한 | `contents: read` + `metadata: read` (**metadata는 GitHub이 자동 부여** — 과다 권한 아님) |
 | 접근 가능 repo | **정확히 1개** `skax-ca/iac-module-library` |
 | 토큰 | `ghs_` 접두사 40자, **1시간 만료** |
-| repo 변수/시크릿 | `MODULE_READER_APP_ID`(변수) · `MODULE_READER_KEY`(secret) 등록됨 |
+| repo 변수/시크릿 | `MODULE_READER_CLIENT_ID`(변수, client-id=`Iv23…`) · `MODULE_READER_KEY`(secret) |
+
+> 🔁 **2026-07-31 전환**: `create-github-app-token@v3.2.0`이 `app-id`를 legacy 경고 → `client-id`로 옮김.
+> 낡은 `MODULE_READER_APP_ID`(숫자 `4432001`) 변수는 **삭제**했다. client-id는 App ID와 **다른 값**이고
+> public `/apps/{slug}`로 조회된다. plan+apply 두 job 모두 client-id로 토큰 발급 실증([PR#10](https://github.com/skax-ca/iac-reference-infra/pull/10)).
 
 **실험 설계 — 음성 대조군이 핵심이었다.** 로컬은 `osxkeychain`만으로 이미 clone된다(F1).
 helper를 그대로 두면 "App 토큰이 동작했다"를 증명할 수 없어, 걷어내고 **먼저 실패를 확인**했다.
