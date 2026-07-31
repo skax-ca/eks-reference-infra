@@ -268,6 +268,77 @@ PR 생성 → plan job 자동 실행 → PR 댓글에 destroy/replace 목록 + p
 > 따라서 **모듈 repo `design/50` 개정(Phase 5)에 D27-2의 전제 조건으로 등재**해야 한다:
 > *"승인 게이트는 GitHub Team 이상을 요구한다. Free private repo에서는 이행 불가."*
 
+### 5.4 🔴 **backend는 provider의 `assume_role`을 쓰지 않는다** — 설계 §3의 빈틈
+
+**첫 CI plan이 여기서 실패했다** (run [`30592702396`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30592702396), 2026-07-31).
+
+```
+Successfully configured the backend "s3"!
+Error: Error refreshing state
+  operation error S3: HeadObject, https response error StatusCode: 403
+  api error Forbidden: Forbidden
+```
+
+**원인.** `design/50` §3의 2단 체인 그림은 *"configure-aws-credentials → 입구 Role →
+**provider의 `assume_role`** → 실행 Role"* 이다. 그런데 **S3 backend는 provider가 아니다.**
+OpenTofu 공식 문서가 backend 자격증명은 provider 설정과 **독립적으로** 해결된다고 명시한다.
+
+따라서 backend는 환경 자격증명(= 입구 Role)으로 S3에 붙는데, 입구 Role의 권한은 실측상
+`sts:AssumeRole` **하나뿐**이다(D27-1의 의도된 최소권한):
+
+```json
+{ "Effect": "Allow", "Action": "sts:AssumeRole",
+  "Resource": "arn:aws:iam::…:role/iamr-ref-dev-an2-gha-exec-01" }
+```
+
+→ S3를 읽을 권한이 없다. **설계대로 만들었기 때문에 실패했다.**
+
+**선택한 해법: backend에도 같은 실행 Role을 체인 assume 시킨다.**
+
+```hcl
+# CI 가 repo 변수로 조립하는 backend.hcl (gitignore 대상 이름이라 커밋될 수 없다)
+bucket       = "…"
+key          = "dev/networking.tfstate"
+region       = "ap-northeast-2"
+use_lockfile = true
+assume_role = {
+  role_arn     = "…/iamr-ref-dev-an2-gha-exec-01"
+  session_name = "tofu-backend-<run_id>"
+}
+```
+
+- 기각한 대안: **입구 Role에 S3 권한을 추가한다.** *"입구 Role의 권한은 실행 Role assume
+  하나뿐"* 이라는 D27-1의 신뢰 경계가 깨진다. 입구 Role은 OIDC로 직접 도달 가능한 지점이라
+  거기에 권한을 얹으면 2단 체인의 의미가 줄어든다.
+- ⚠️ **`-backend-config=KEY=VALUE`로는 표현할 수 없다** — 문자열 값만 받는데 `assume_role`은
+  객체다. 그래서 CI도 **HCL 파일**을 조립해 넘긴다(로컬 규약과 형태가 같아지는 부수 효과).
+
+**스키마 확인**(추정하지 않았다): 로컬에서 `assume_role` 블록을 넣고 `init`을 돌려 파싱 오류가
+아니라 `STS AssumeRole 403 AccessDenied`가 나는 것을 확인했다 — backend가 그 객체를 읽고 실제로
+assume을 시도했다는 뜻이다. 동시에 **개인 IAM user는 실행 Role을 assume할 수 없다**는
+`live/dev/networking/README.md` §2의 서술도 실증됐다.
+
+> ⏭️ **이것도 소비 규약의 문제다.** `design/50` §3의 2단 체인 그림에 **backend 경로가 빠져 있다.**
+> Phase 5에서 고친다 — 모든 소비 repo가 첫 CI run에서 똑같이 부딪힌다.
+
+### 5.5 ⚠️ repo 변수는 CI 로그에 **평문**으로 남는다
+
+같은 run의 로그에서 확인했다:
+
+```
+tofu init -backend-config="bucket=s3-ref-dev-an2-tfstate-733a8852498c" …
+```
+
+GitHub은 **secret만 마스킹**한다. repo 변수(`vars.*`)는 마스킹 대상이 아니다.
+§2에서 버킷명·Role ARN을 "🙈 비노출"로 분류하고 repo 변수에 둔 것은 **git 에 남기지 않기**
+위해서였고(코드가 고객사로 복사되므로), 그 목적 자체는 유지된다. 그러나
+**"어디에도 평문으로 없다"는 아니다** — repo read 권한자는 워크플로 로그에서 볼 수 있다.
+
+- 현재 판단: private repo이고 plan artifact(`retention-days: 1`)와 노출 대상이 같으므로 수용한다.
+- 완화하려면 첫 스텝에서 `::add-mask::`를 쓰거나 값을 secret으로 옮긴다. ⚠️ `add-mask` 스텝
+  **자신의** 명령·env echo에는 값이 찍히므로 완전하지 않다.
+- **열린 항목으로 등재한다** — `design/50` §5의 "plan artifact 암호화"와 같은 성격의 미해결이다.
+
 ---
 
 ## 6. apply 판정 결과 (Phase 4~5)

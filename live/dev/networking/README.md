@@ -19,6 +19,23 @@ VPC 하나를 배포하는 루트다. 모듈은 `iac-module-library` 에서 **gi
 
 `backend.hcl` 은 **이 디렉토리에** 둔다. `.gitignore` 의 `backend.hcl` 패턴은 앵커가 없어 모든
 depth 에서 잡히고, pre-commit 훅 1단계가 staged 여부를 별도로 검사한다.
+**CI 도 같은 파일명을 runner 에 조립해 쓴다** — 이름이 gitignore 대상이라 커밋될 수 없다.
+
+### ⚠️ 로컬 backend.hcl 과 CI 의 것은 내용이 다르다
+
+| | 로컬 | CI |
+|---|---|---|
+| `bucket`·`key`·`region`·`use_lockfile` | 동일 | 동일 (repo 변수에서 조립) |
+| **`assume_role`** | **없다** | **있다** — 실행 Role |
+
+**backend 는 provider 의 `assume_role` 을 쓰지 않는다.** OpenTofu 공식이 backend 자격증명은
+provider 설정과 **독립적으로** 해결된다고 명시한다. CI 의 환경 자격증명은 입구 Role 인데
+그 권한은 `sts:AssumeRole` 하나뿐이라(D27-1), backend 에 따로 assume 을 걸지 않으면
+state 를 읽다가 **403** 이 난다. 실제로 첫 CI run 이 그렇게 실패했다
+(`docs/deployment-facts.md` §5.4).
+
+로컬에는 넣지 않는다 — 개인 IAM user 는 실행 Role 을 assume 할 수 없고(신뢰가 입구 Role 뿐),
+버킷 자체는 그 user 권한으로 읽힌다.
 
 > ⚠️ **왜 루트가 아니라 여기인가.** `tofu -chdir=live/dev/networking init -backend-config=backend.hcl`
 > 에서 `-chdir` 은 cwd 를 바꾸므로 상대 경로가 **이 디렉토리 기준**으로 풀린다. repo 루트에 두면

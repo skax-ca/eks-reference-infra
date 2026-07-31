@@ -86,14 +86,35 @@ jobs:
 
       # ── D25 · partial backend configuration ────────────────────────────────
       # 버킷명이 코드에 없다. 여기서 repo 변수로 조립한다.
-      - name: tofu init
+      #
+      # ⚠️ **backend 는 provider 와 독립적으로 자격증명을 해결한다**(OpenTofu 공식).
+      #    provider 의 assume_role 은 backend 에 적용되지 않는다. 입구 Role 의 권한은
+      #    `sts:AssumeRole` 하나뿐이라(D27-1) 그대로 두면 state 를 읽다가 403 이 난다 —
+      #    2026-07-31 run 30592702396 에서 실제로 그렇게 실패했다.
+      #    → backend 에도 **같은 실행 Role 을 체인 assume** 시킨다. 이렇게 해야
+      #      "입구 Role 의 권한은 assume 하나뿐"이라는 D27-1 의 신뢰 경계가 유지된다.
+      #
+      # ⚠️ 파일로 넘기는 이유: `-backend-config=KEY=VALUE` 는 **문자열 값만** 받는다.
+      #    assume_role 은 객체라 CLI 플래그로 표현할 수 없다.
+      #    파일명 backend.hcl 은 .gitignore 대상이라 runner 에 만들어도 커밋될 수 없다.
+      - name: backend 설정 조립
         working-directory: ${{ env.TF_ROOT }}
         run: |
-          tofu init \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=dev/networking.tfstate" \
-            -backend-config="region=ap-northeast-2" \
-            -backend-config="use_lockfile=true"
+          cat > backend.hcl <<EOF
+          bucket       = "${{ vars.TF_STATE_BUCKET }}"
+          key          = "dev/networking.tfstate"
+          region       = "ap-northeast-2"
+          use_lockfile = true
+
+          assume_role = {
+            role_arn     = "${{ vars.AWS_EXEC_ROLE_ARN }}"
+            session_name = "tofu-backend-${{ github.run_id }}"
+          }
+          EOF
+
+      - name: tofu init
+        working-directory: ${{ env.TF_ROOT }}
+        run: tofu init -backend-config=backend.hcl
 
       - name: tofu plan
         id: plan
@@ -212,14 +233,25 @@ jobs:
           aws-region: ap-northeast-2
           role-session-name: gha-apply-${{ github.run_id }}
 
-      - name: tofu init
+      # plan job 과 같은 이유로 backend 도 실행 Role 을 체인 assume 한다(위 주석 참조).
+      - name: backend 설정 조립
         working-directory: ${{ env.TF_ROOT }}
         run: |
-          tofu init \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=dev/networking.tfstate" \
-            -backend-config="region=ap-northeast-2" \
-            -backend-config="use_lockfile=true"
+          cat > backend.hcl <<EOF
+          bucket       = "${{ vars.TF_STATE_BUCKET }}"
+          key          = "dev/networking.tfstate"
+          region       = "ap-northeast-2"
+          use_lockfile = true
+
+          assume_role = {
+            role_arn     = "${{ vars.AWS_EXEC_ROLE_ARN }}"
+            session_name = "tofu-backend-${{ github.run_id }}"
+          }
+          EOF
+
+      - name: tofu init
+        working-directory: ${{ env.TF_ROOT }}
+        run: tofu init -backend-config=backend.hcl
 
       # **같은 run** 의 artifact 다. run 경계를 넘지 않는 것이 이 설계의 핵심이다.
       - name: plan artifact 내려받기
