@@ -15,6 +15,10 @@ teardown 여부(6-1은 파기 "거부"만 확인했고 실제 파기는 안 했�
 **🔁 2026-08-03: vpc-v1.2.0 승격 1사이클 실증**(아래 「vpc-v1.2.0 승격」). 핀 한 줄 → PR#11 →
 apply `0/20/0`(서브넷 태그 in-place). D20 소싱 규약의 정상 운영을 처음 한 바퀴 돌렸다.
 
+**🆕 2026-08-03: live/dev/eks 배포 루트 추가**(아래 「live/dev/eks」). eks-cluster-v1.0.0 컷 →
+PR#13(코드만, apply 안 함). **vpc·eks 독립 배포**(별도 state + 태그 data source). ⚠️ 미merge PR 3개:
+#12(networking D30-1) · #13(eks 루트). pre-apply 미결은 EKS README §4.
+
 ⚠️ **MCP 서버 3종이 `.mcp.json`에 있다**(opentofu·aws-docs·**aws-api**). aws-api는 2026-07-31
 추가분 — 재시작 후 첫 사용 시 승인 프롬프트. `mcp__opentofu__get-resource-docs`로 스키마 확인이
 `CLAUDE.md` §6 요구. 실계정 조회(로그·describe)는 aws-api(**read-only**)로 하되, 없으면 `aws --profile team` CLI.
@@ -344,6 +348,42 @@ PR은 merge 없이 닫음(자산 유지). run [`30605752914`](https://github.com
 ℹ️ **직전 승격(`v1.0.0→v1.1.0`)은 Flow Logs IAM in-place였다**(`deployment-facts.md:427`, `0/1/0`).
 이번이 **서브넷 20개**로 대상이 넓어진 두 번째 승격이다. 둘 다 destroy/replace 0 — 소싱 승격이
 정상 운영에서 어떤 모습인지의 표본이 둘 생겼다.
+
+---
+
+## 🆕 live/dev/eks 배포 루트 (2026-08-03) — vpc·eks 독립 배포, 코드만 추가
+
+**사용자 결정**: vpc·eks 독립 배포 · enterprise 프로파일 · public-restricted · **코드만 추가(apply 안 함)**.
+소비 [PR#13](https://github.com/skax-ca/iac-reference-infra/pull/13)(`feat/live-dev-eks`, 미merge).
+모듈 태그 **`eks-cluster-v1.0.0`** 컷(모듈 repo a530b74, annotated, push됨).
+
+### 독립 배포 메커니즘 (핵심)
+- **state 분리**: `dev/eks.tfstate`. networking state 를 읽지 않는다.
+- **결합은 태그 data source 로만**: `data.aws_vpc`(tag:Name+Workload) · `data.aws_subnets`
+  (tag:SubnetGroup=node-uniq/pod-dup, **vpc-v1.2.0 D13**). **remote_state 미사용**(03 §3.1).
+  → vpc 먼저 없으면 plan 이 빈 결과로 **명확히 실패**(조용한 오작동 아님). 파기는 역순.
+- 공유하는 것은 state 가 아니라 **클러스터명 상수** `eks-ref-dev-an2-main-01` — 결합이 아니라 규약.
+
+### 🔑 발견/판정 3건
+1. **latent 정합성 버그 수정**(PR#13 커밋 1 `fix(networking)`): networking 의 `eks_cluster_name` 이
+   `-main`(serial 없음)이었다. 모듈은 클러스터명에 **serial 을 항상 포함**(`eks-<mid>-<purpose>-<serial>`)
+   → 실제 `-main-01`. 어긋나면 서브넷 디스커버리 태그가 실제 클러스터명과 불일치 → ELB/Karpenter
+   selector 빈 결과 → **조용한 실패**. `-main-01` 로 고치고 node-uniq 에 karpenter.sh/discovery 태그 추가.
+   ⚠️ 다음 networking apply 시 pub/elb 서브넷 cluster 태그 키 변경 + node 서브넷 태그 추가(전부 in-place).
+2. **EKS 모듈 provider 요구는 aws>=6.0 하나뿐**(k8s/helm 은 GitOps 소관). 루트 providers.tf 가 단순.
+   init 소싱 확인: eks-cluster-v1.0.0 + terraform-aws-modules/eks 21.24.1 · kms · eks-pod-identity.
+3. **trivy findings 는 전부 업스트림 모듈**(AWS-0040 public access CRITICAL · 0038 로깅 · 0104 egress).
+   `--tf-exclude-downloaded-modules`(훅)로 제외 = 우리 루트 clean. .trivyignore 정책대로 배포 루트에서
+   안 덮는다 — public access 수락은 모듈 설계 판단이고 소비자가 CIDR 제한과 함께 opt-in 한 것.
+
+### ⏸ pre-apply 미결 (EKS README §4 — apply 전 반드시)
+- repo 변수 **`EKS_PUBLIC_ACCESS_CIDRS`** 설정(JSON 배열, 예 `["1.2.3.4/32"]`). 없으면 plan 실패(전면개방 방지).
+- `main.tf` **`ami_release_version` 핀**(현재 null → 매 plan 최신 해석 → 노드 롤링). SSM 파라미터로 값 조회.
+- **networking 선행 apply**(karpenter 태그·serial 클러스터명 태그가 먼저 있어야 조회·디스커버리 성립).
+- 워크플로 `deploy-eks.yml` = **D30-1 형태**(dispatch apply). networking D30-1 은 별도 PR#12.
+
+### 💰 apply 시 비용
+EKS 컨트롤플레인 ~$73/월 + system NG m6i.large×2 ~$170/월 + 컨트롤플레인 로그. 기존 NAT $43/월 위.
 
 ---
 
