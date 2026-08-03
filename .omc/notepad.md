@@ -15,9 +15,9 @@ teardown 여부(6-1은 파기 "거부"만 확인했고 실제 파기는 안 했�
 **🔁 2026-08-03: vpc-v1.2.0 승격 1사이클 실증**(아래 「vpc-v1.2.0 승격」). 핀 한 줄 → PR#11 →
 apply `0/20/0`(서브넷 태그 in-place). D20 소싱 규약의 정상 운영을 처음 한 바퀴 돌렸다.
 
-**🆕 2026-08-03: live/dev/eks 배포 루트 추가**(아래 「live/dev/eks」). eks-cluster-v1.0.0 컷 →
-PR#13(코드만, apply 안 함). **vpc·eks 독립 배포**(별도 state + 태그 data source). ⚠️ 미merge PR 3개:
-#12(networking D30-1) · #13(eks 루트). pre-apply 미결은 EKS README §4.
+**🆕 2026-08-03: live/dev/eks 배포 루트 추가·merge**(아래 「live/dev/eks」). eks-cluster-v1.0.0 컷 →
+PR#13 **merge**(`c09e6fc`). **vpc·eks 독립 배포**(별도 state + 태그 data source). EKS는 아직 **apply 안 함**
+(plan만: **71 to add** clean). 남은 미merge PR: **#12(networking D30-1)만**. pre-apply 남은 것은 ami 핀 하나.
 
 ⚠️ **MCP 서버 3종이 `.mcp.json`에 있다**(opentofu·aws-docs·**aws-api**). aws-api는 2026-07-31
 추가분 — 재시작 후 첫 사용 시 승인 프롬프트. `mcp__opentofu__get-resource-docs`로 스키마 확인이
@@ -353,9 +353,19 @@ PR은 merge 없이 닫음(자산 유지). run [`30605752914`](https://github.com
 
 ## 🆕 live/dev/eks 배포 루트 (2026-08-03) — vpc·eks 독립 배포, 코드만 추가
 
-**사용자 결정**: vpc·eks 독립 배포 · enterprise 프로파일 · public-restricted · **코드만 추가(apply 안 함)**.
-소비 [PR#13](https://github.com/skax-ca/iac-reference-infra/pull/13)(`feat/live-dev-eks`, 미merge).
+**사용자 결정**: vpc·eks 독립 배포 · enterprise 프로파일 · public-restricted · **코드만 추가(EKS apply 안 함)**.
+소비 [PR#13](https://github.com/skax-ca/iac-reference-infra/pull/13) **merge됨**(`c09e6fc`, 2026-08-03).
 모듈 태그 **`eks-cluster-v1.0.0`** 컷(모듈 repo a530b74, annotated, push됨).
+
+### merge 결과 (2026-08-03) — 두 워크플로 트리거
+- `deploy · live/dev/eks`(run 30862982175): plan **`71 to add, 0 change, 0 destroy`** clean · **apply skip**
+  (D30-1 dispatch 전용). EKS 리소스 **미생성 · 비용 없음**. 71 리소스가 실계정에서 계획됨 = data source
+  조회·모듈 조합·public_access_cidrs 주입 전부 실증(plan 수준).
+- `deploy · live/dev/networking`(run 30862982181): networking main.tf 변경이 **구 형태 워크플로로 자동 apply**
+  → **`0 added, 6 changed, 0 destroyed`**(pub/elb 서브넷 4개 cluster 태그 -main→-main-01 + node 서브넷 2개
+  karpenter 태그, 전부 in-place). ⚠️ 이 repo 기존 동작(networking merge=자동 apply, PR#12 전까지). **pre-apply
+  항목 3(networking 선행) 충족됨.**
+- repo 변수 **`EKS_PUBLIC_ACCESS_CIDRS = ["211.45.60.3/32"]`** 설정됨(사용자 IP, /32). **pre-apply 항목 1 충족.**
 
 ### 독립 배포 메커니즘 (핵심)
 - **state 분리**: `dev/eks.tfstate`. networking state 를 읽지 않는다.
@@ -376,11 +386,13 @@ PR은 merge 없이 닫음(자산 유지). run [`30605752914`](https://github.com
    `--tf-exclude-downloaded-modules`(훅)로 제외 = 우리 루트 clean. .trivyignore 정책대로 배포 루트에서
    안 덮는다 — public access 수락은 모듈 설계 판단이고 소비자가 CIDR 제한과 함께 opt-in 한 것.
 
-### ⏸ pre-apply 미결 (EKS README §4 — apply 전 반드시)
-- repo 변수 **`EKS_PUBLIC_ACCESS_CIDRS`** 설정(JSON 배열, 예 `["1.2.3.4/32"]`). 없으면 plan 실패(전면개방 방지).
-- `main.tf` **`ami_release_version` 핀**(현재 null → 매 plan 최신 해석 → 노드 롤링). SSM 파라미터로 값 조회.
-- **networking 선행 apply**(karpenter 태그·serial 클러스터명 태그가 먼저 있어야 조회·디스커버리 성립).
-- 워크플로 `deploy-eks.yml` = **D30-1 형태**(dispatch apply). networking D30-1 은 별도 PR#12.
+### pre-apply 상태 (EKS README §4)
+- ✅ repo 변수 `EKS_PUBLIC_ACCESS_CIDRS = ["211.45.60.3/32"]` 설정됨.
+- ✅ networking 선행 apply 완료(위 merge 결과 — 6 changed).
+- ⏸ **남은 것 하나: `main.tf` `ami_release_version` 핀**(현재 null → 매 plan 최신 해석 → 노드 롤링).
+  값: `aws ssm get-parameter --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/release_version --profile team`.
+- ▶️ **실제 EKS 생성은 `deploy-eks.yml` workflow_dispatch** 로만(D30-1). 누르면 71 리소스 생성 시작(비용 발생).
+- 워크플로 일관성: networking D30-1 전환은 별도 **PR#12**(미merge). deploy-eks.yml 은 이미 D30-1.
 
 ### 💰 apply 시 비용
 EKS 컨트롤플레인 ~$73/월 + system NG m6i.large×2 ~$170/월 + 컨트롤플레인 로그. 기존 NAT $43/월 위.
