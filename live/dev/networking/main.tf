@@ -41,6 +41,14 @@ locals {
   #   pod-dup    /18 × 2  100.64.0.0/18     100.64.64.0/18
   #   ep-uniq    /27 × 2  10.50.0.0/27      10.50.0.32/27    ┐ primary /24 안에서
   #   tgw-uniq   /28 × 3  10.50.0.192/28 …  10.50.0.224/28   ┘ 앞/뒤로 떨어뜨려 배치
+  # ── EKS 클러스터 이름 (live/dev/eks 루트와 공유하는 결정적 상수) ────────────
+  # 🔑 이 문자열은 live/dev/eks 루트가 모듈에 넘기는 purpose="main"·serial="01" 조합과
+  #    **정확히 같아야 한다** → eks-<workload>-<env>-<region>-main-01.
+  #    VPC 는 이 이름으로 서브넷 디스커버리 태그를 붙이고 EKS 모듈은 같은 이름으로 node SG 태그를
+  #    붙인다. 어긋나면 ELB·Karpenter selector 가 빈 결과를 내고 프로비저닝이 에러 없이 실패한다.
+  #    ⚠️ 이름은 state 를 공유하지 않는 두 루트가 각자 조합한다 — 결합이 아니라 네이밍 규약이다.
+  eks_cluster_name = "eks-${var.workload}-${var.env}-${var.region_code}-main-01"
+
   uniq_small_block = cidrsubnet(local.cidr_uniq, 4, 2)
 
   vm_cidrs   = [for i in [0, 1] : cidrsubnet(local.cidr_uniq, 4, i)]
@@ -104,6 +112,13 @@ module "vpc" {
     "node-uniq" = {
       type  = "private"
       cidrs = local.node_cidrs
+
+      # ⭐ Karpenter discovery 의 **subnet 절반**. SG 절반은 EKS 모듈(live/dev/eks)이 붙인다.
+      #    ⚠️ 한쪽만 붙으면 subnetSelectorTerms 가 빈 결과를 내고 프로비저닝이 조용히 실패한다
+      #       (모듈 주석의 "PoC 실제 사고"). 값은 위 local.eks_cluster_name — SG 쪽과 같아야 한다.
+      extra_tags = {
+        "karpenter.sh/discovery" = local.eks_cluster_name
+      }
     }
 
     # EKS Pod 전용(D9, ENIConfig). Pod 의 VPC 외부 egress 는 노드 primary ENI 로 SNAT 되어
@@ -141,9 +156,11 @@ module "vpc" {
   }
 
   # D4 — eks_role 이 지정된 그룹(pub-uniq · elb-uniq)에만 cluster 태그가 함께 붙는다.
-  # ⚠️ 이 이름의 EKS 클러스터는 **아직 없다.** 태그가 먼저 붙는 것은 무해하고 의도된 순서다 —
-  #    서브넷 디스커버리 태그는 클러스터 생성 시점에 이미 있어야 한다.
-  eks_cluster_name = "eks-${var.workload}-${var.env}-${var.region_code}-main"
+  # ⚠️ 이 이름의 EKS 클러스터는 아직 없다(live/dev/eks 가 apply 되면 생긴다). 태그가 먼저 붙는 것은
+  #    무해하고 의도된 순서다 — 서브넷 디스커버리 태그는 클러스터 생성 시점에 이미 있어야 한다.
+  # 🔑 값은 local.eks_cluster_name 하나로 통일한다(node-uniq karpenter 태그와 같은 출처) —
+  #    serial 을 빠뜨려 "-main" 으로 두면 실제 클러스터명 "-main-01" 과 어긋난다(latent 정합성 버그 수정).
+  eks_cluster_name = local.eks_cluster_name
 
   # dev 는 비용 우선 — NAT 1개를 전 AZ 가 공유한다. prd 는 false(AZ별 NAT)로 가용성을 택하며,
   # 그때는 pub 그룹의 AZ 수가 private 그룹 최대 AZ 수 이상이어야 한다(D6 precondition).
