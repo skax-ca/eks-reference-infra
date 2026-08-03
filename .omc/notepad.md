@@ -12,6 +12,9 @@
 남은 것은 정리성 미결 항목뿐(아래 「미결 항목」). **다음 방향은 사용자와 정한다** — 리허설 자산
 teardown 여부(6-1은 파기 "거부"만 확인했고 실제 파기는 안 했다. NAT 월 ~$43 계속), 또는 새 작업.
 
+**🔁 2026-08-03: vpc-v1.2.0 승격 1사이클 실증**(아래 「vpc-v1.2.0 승격」). 핀 한 줄 → PR#11 →
+apply `0/20/0`(서브넷 태그 in-place). D20 소싱 규약의 정상 운영을 처음 한 바퀴 돌렸다.
+
 ⚠️ **MCP 서버 3종이 `.mcp.json`에 있다**(opentofu·aws-docs·**aws-api**). aws-api는 2026-07-31
 추가분 — 재시작 후 첫 사용 시 승인 프롬프트. `mcp__opentofu__get-resource-docs`로 스키마 확인이
 `CLAUDE.md` §6 요구. 실계정 조회(로그·describe)는 aws-api(**read-only**)로 하되, 없으면 `aws --profile team` CLI.
@@ -312,6 +315,35 @@ PR은 merge 없이 닫음(자산 유지). run [`30605752914`](https://github.com
 
 ⚠️ **실제 파기는 하지 않았다.** teardown 2단계(`deletion_protection=false` apply → `vpc_enabled=false` apply)는
 자산을 없앨 때 밟는다. NAT 월 ~$43은 계속 과금 중.
+
+---
+
+## ✅ vpc-v1.2.0 승격 — 첫 마이너 버전 반영 사이클 실증 (2026-08-03)
+
+**미해결 항목 아님 — D20 소싱 규약의 정상 운영을 처음으로 한 바퀴 돌렸다.** 모듈 repo가
+`vpc-v1.2.0`(D13 SubnetGroup 태그, `feat 4f44dd8`)를 릴리스 → 소비 루트에 반영.
+
+소비 [PR#11](https://github.com/skax-ca/iac-reference-infra/pull/11)(merge `c1fa847`) · apply run [`30788555076`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30788555076).
+
+| 판정 | 실측 |
+|------|------|
+| 반영 = 핀 한 줄 | `live/dev/networking/main.tf:62` `vpc-v1.1.0` → `vpc-v1.2.0`. `variables.tf` diff **0** → 루트 인자 무변화 |
+| plan (PR 댓글) | `0 add / 20 change / 0 destroy` · destroy/replace 대상 **`(없음)`** |
+| apply | **`Apply complete! Resources: 0 added, 20 changed, 0 destroyed`** — 서브넷 20개 태그 in-place |
+
+**🔑 실측/판정 3건**
+1. **마이너 버전 반영의 정체는 "핀 한 줄 커밋"이다** — 변수 인터페이스가 안 바뀌면(diff 0) 루트는
+   호출 인자를 손대지 않는다. 인터페이스가 바뀌었다면 루트 호출도 함께 고쳐야 한다(이번엔 아니었다).
+2. **태그 추가 = in-place, replace 아님.** `main.tf` diff(태그 1줄 추가)를 미리 읽어 판정했고
+   실측이 확인(`0 destroyed`). 공용 계정(§4-1)에서 **예상과 실측 일치**가 안전의 판정 기준이다.
+3. **`ignore_tags`와 무충돌.** `SubnetGroup`은 모듈이 state에 넣는 관리 태그라 자동 태거 `cz-*`처럼
+   무시되지 않는다 → 정상 diff로 잡혀 적용됐다.
+4. **"승인=적용"이 로그로 증명됐다.** PR 댓글 `0/20/0` = apply `0/20/0`. apply job이 저장된
+   plan artifact를 `tofu apply tfplan`으로 그대로 먹어(재-plan 없음) 검토 대상과 적용 대상이 동일.
+
+ℹ️ **직전 승격(`v1.0.0→v1.1.0`)은 Flow Logs IAM in-place였다**(`deployment-facts.md:427`, `0/1/0`).
+이번이 **서브넷 20개**로 대상이 넓어진 두 번째 승격이다. 둘 다 destroy/replace 0 — 소싱 승격이
+정상 운영에서 어떤 모습인지의 표본이 둘 생겼다.
 
 ---
 
