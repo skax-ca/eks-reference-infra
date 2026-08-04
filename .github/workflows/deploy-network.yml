@@ -41,7 +41,7 @@ on:
     branches: [main]
     paths:
       - live/dev/networking/**
-      - .github/workflows/deploy.yml
+      - .github/workflows/deploy-network.yml
   # merge 후 **plan 까지만** 자동으로 돈다. 요약은 run 의 Summary 탭에 남는다.
   #
   # apply 는 아래 dispatch 로만 일어난다. 그 외에 dispatch 가 필요한 경우도 그대로다:

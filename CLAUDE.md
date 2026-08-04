@@ -104,13 +104,22 @@ module "vpc" {
 **한 워크플로 두 job**으로 만족시킨다. 별도 워크플로로 쪼개면 artifact를 run 경계 밖에서 찾아야 하고
 **그 조회 지점이 곧 구멍**이다.
 
+**배포 루트마다 워크플로 하나**다 — `deploy-network.yml`(networking) · `deploy-eks.yml`(eks).
+경로 필터·state 키·`concurrency` 그룹을 분리해 **두 루트가 서로를 트리거하거나 취소하지 않게** 한다.
+
 | 항목 | 규칙 |
 |------|------|
 | plan → apply | plan을 **artifact로 저장**해 승인 후 **그 파일을 apply**한다. `tofu apply tfplan` — 재-plan 금지 |
-| 승인 게이트 | apply job만 `environment: dev`를 선언한다. ⚠️ **required reviewers는 이 org(GitHub Free)에서 걸 수 없다** — `docs/deployment-facts.md` §5.3 |
-| 동시 실행 | `concurrency: {group: live-dev-networking, cancel-in-progress: false}` |
+| **트리거** (D30-1) | `push`(main) → **plan 까지만** · `workflow_dispatch` → plan + apply. ⛔ `pull_request` 트리거는 **제거됐다** |
+| 승인 게이트 | ⚠️ **required reviewers는 이 org(GitHub Free)에서 걸 수 없다**(`docs/deployment-facts.md` §5.3) → **dispatch 를 누르는 행위가 승인**이다. apply job만 `environment: dev`를 선언한다 |
+| 동시 실행 | 루트별로 분리: `live-dev-networking` · `live-dev-eks`. 둘 다 `cancel-in-progress: false` |
 | 자격증명 | GitHub OIDC → 입구 Role → 실행 Role(**2단 체인**). 정적 키 금지 |
-| state | S3 + `use_lockfile = true` (DynamoDB 불필요) |
+| state | S3 + `use_lockfile = true` (DynamoDB 불필요). 키는 루트별(`dev/networking.tfstate` · `dev/eks.tfstate`) |
+
+- ⚠️ **잔여 간극**: push run 의 plan 을 읽고 dispatch 하면 dispatch run 은 **자기 plan 을 새로 만들어**
+  적용한다. 그 사이 state 가 바뀌면 읽은 것과 적용되는 것이 달라질 수 있다 — run 경계를 넘어 artifact 를
+  가져오는 것이 더 나쁘므로 이 구조를 택했다. 상위 요금제로 올리면 `if:` 를 되돌리고 required reviewers 로
+  승인을 **같은 run 안**에 넣어 이 간극도 사라진다.
 
 - ⚠️ **plan job과 apply job의 `sub`가 다르다**(D28) — `environment:`를 선언한 job만
   `:environment:<name>`을 받는다. 신뢰 정책은 **3패턴**이다.
@@ -141,10 +150,11 @@ module "vpc" {
 
 - ⚠️ **`AdministratorAccess`가 자동 트리거에 연결된다.** PoC에서는 사람이 TFC에서 돌렸지만
   이제 `pull_request`가 `plan`을 자동 실행한다 — 이것이 PoC 대비 **실질적으로 달라진 위험**이다.
-- ⚠️ **"사람이 검토"의 이행 지점은 Environment 승인이 아니라 `PR merge`다.** GitHub Free에서는
-  required reviewers를 걸 수 없어(`docs/deployment-facts.md` §5.3) apply가 대기 없이 진행된다.
-  `deploy.yml`이 destroy/replace 목록을 PR 댓글로 끌어올리지만 **강제력은 없다** — merge 전에
-  그 댓글을 읽는 것이 규율이다.
+- ⚠️ **"사람이 검토"의 이행 지점은 `workflow_dispatch` 를 누르는 행위다**(D30-1, 2026-08-03 개정).
+  GitHub Free에서는 required reviewers를 걸 수 없어(`docs/deployment-facts.md` §5.3) 승인 게이트가
+  존재하지 않는다. 그래서 **merge 만으로는 apply 되지 않게** 바꿨다 — push 는 plan 까지만 돌고,
+  그 요약(run Summary 탭의 destroy/replace 목록)을 읽은 사람이 **Run workflow 를 눌러야** apply 된다.
+  ⛔ 구 형태("PR plan 댓글을 읽고 merge = 검토")는 **폐기됐다** — PR plan 트리거 자체가 없다.
 - ⚠️ **다른 사람 리소스는 우리 plan에 나타나지 않는다**(우리 state에 없으므로).
   위험은 plan에 잡히는 범위가 아니라 **실행 Role이 손댈 수 있는 범위 전체**다.
 - 근거: 모듈 repo `design/50` F13·D27-2. PoC repo `05` §7.1이 원문이다.
