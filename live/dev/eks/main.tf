@@ -113,26 +113,64 @@ module "eks" {
     # ⚠️ Karpenter 자신도 여기 떠야 한다 — chart affinity 가 karpenter.sh/nodepool DoesNotExist 를
     #    요구해 Karpenter 가 만든 노드에는 못 뜬다(자기 자신을 부트스트랩할 수 없다).
     system = {
-      instance_types = ["m6i.large"]
+      # graviton(arm64). dev 비용 우선이라 system 계층이 감당 가능한 가장 작은 크기를 쓴다 —
+      # 이 노드가 Karpenter + core addon + 컨트롤러(cert-manager·external-dns·ALBC·ebs-csi)를 얹는다.
+      # ⚠️ 더 줄이면(t4g.small = 2 GiB) kubelet+daemonset 몫을 빼고 남는 여유가 거의 없다.
+      instance_types = ["t4g.medium"]
       min_size       = 2
       max_size       = 4
       desired_size   = 2
 
-      # ⏸ D-NODE-AMI-PIN — **apply 전 concrete 버전으로 핀한다**(README 의 pre-apply 체크리스트).
-      #    null 이면 upstream 이 매 plan 마다 최신을 해석해 apply 시 노드 롤링 교체를 유발한다.
-      #    계정에 붙어 유효한 버전 문자열을 확인해야 값을 넣을 수 있어 지금은 null 로 둔다.
-      ami_release_version = null
+      # ⭐ D-NODE-ARCH — **instance_types 와 짝이다.** t4g(arm64)를 쓰면서 이 줄을 빼면 기본값이
+      #    x86 이라 AMI 와 CPU 가 어긋나 **노드가 부팅되지 않는다.** 이 불일치는 plan 에서 잡히지
+      #    않는다(AWS 도 노드그룹 생성 시점에야 거부한다) — 둘을 항상 함께 고친다.
+      ami_type = "AL2023_ARM_64_STANDARD"
+
+      # D-NODE-AMI-PIN — null 이면 upstream 이 매 plan 마다 최신을 해석해 apply 마다 노드 롤링
+      # 교체를 유발한다. 업그레이드는 이 값을 올리는 명시적 커밋이어야 plan diff 로 리뷰된다.
+      # ⚠️ **아키텍처별로 값이 다르다.** arm SSM 경로에서 얻은 값이다(2026-08-04 실측):
+      #   aws ssm get-parameter --profile team --region ap-northeast-2 \
+      #     --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/arm64/standard/recommended/release_version
+      # ⚠️ kubernetes_version 을 올리면 이 값도 함께 갱신한다.
+      ami_release_version = "1.35.6-20260728"
     }
   }
 
-  # ── addon — baseline 6종에 community tier 를 opt-in 으로 **merge**(누락 != 삭제) ──
-  # ⭐ 버전을 안 주면 AWS 기본 버전이 해석된다(D-ADDON-VERSION-PIN-1). 완전 고정은 addon_version 을
-  #    여기 박는다(README "addon 버전 고정"). kubernetes_version 을 올릴 때 함께 갱신한다.
+  # ── addon — baseline 6종 버전 override + community tier 2종 opt-in(누락 != 삭제) ──
+  #
+  # ⭐ **버전 값은 이 배포 루트가 소유한다**(D-ADDON-VERSION-PIN-1). 모듈은 버전을 들지 않는다 —
+  #    addon 상향은 워크로드 운영 주기에 속하고, 공통 모듈이 값을 들면 우리 kube-proxy 상향이
+  #    모듈 릴리스를 요구해 다른 고객사에게도 배송된다.
+  # ℹ️ addon_version 만 적어도 **모듈 소유 필드는 살아남는다** — vpc-cni 의 custom networking 구성과
+  #    ebs-csi 의 pod identity association 은 merge **뒤에** 재주입된다(모듈 addons.tf §4).
+  # ⚠️ 여기 안 적은 addon 도 사라지지 않는다(누락 != 삭제). 제거는 enabled = false 명시로만 하고,
+  #    core 4종(vpc-cni·coredns·kube-proxy·eks-pod-identity-agent)은 그것마저 차단된다.
+  #
+  # 🔴 값의 정의역: **f(kubernetes_version, region)**. 아래는 **k8s 1.35 · ap-northeast-2 기준**
+  #    (2026-08-04 실측). kubernetes_version 을 올리면 **이 표도 함께 갱신**한다 — 안 하면
+  #    "그 버전 없음"으로 apply 가 죽는다(kube-proxy 는 정의상 k8s 마이너를 따라간다).
+  #    조회: aws eks describe-addon-versions --kubernetes-version 1.35 --region ap-northeast-2 \
+  #            --addon-name <name> --profile team \
+  #            --query 'addons[0].addonVersions[?compatibilities[0].defaultVersion==`true`].addonVersion | [0]'
+  #
+  # 🔑 **최신이 아니라 AWS 기본(default) 버전을 박았다.** 기본을 박으면 핀 전후 동작이 같다 —
+  #    핀은 "지금 상태를 고정"하는 일이다. 최신을 박으면 이 커밋에 **업그레이드 결정이 섞인다.**
+  #    상향은 값을 올리는 별도 커밋이어야 plan diff 로 리뷰된다.
+  #    (실측 차이: coredns 기본 v1.13.2-eksbuild.11 ≠ 최신 v1.14.3-eksbuild.3)
   cluster_addons = {
+    # ── baseline 6종 (버전만 override) ──────────────────────────────────────
+    "vpc-cni"                = { addon_version = "v1.22.3-eksbuild.1" }
+    "coredns"                = { addon_version = "v1.13.2-eksbuild.11" }
+    "kube-proxy"             = { addon_version = "v1.35.3-eksbuild.17" }
+    "eks-pod-identity-agent" = { addon_version = "v1.3.10-eksbuild.3" }
+    "aws-ebs-csi-driver"     = { addon_version = "v1.63.1-eksbuild.1" }
+    "metrics-server"         = { addon_version = "v0.9.0-eksbuild.5" }
+
+    # ── community tier (opt-in 추가) ────────────────────────────────────────
     # 컨트롤러+CRD 는 IaC addon, Issuer/Certificate CR 은 GitOps 소관이다(§1 경계).
-    "cert-manager" = {}
+    "cert-manager" = { addon_version = "v1.21.0-eksbuild.3" }
     # 관리형 Route53. 애노테이션은 GitOps, IAM 은 아래 enable_external_dns_iam 이 만든다.
-    "external-dns" = {}
+    "external-dns" = { addon_version = "v0.21.0-eksbuild.6" }
   }
 
   # ── Karpenter · 컨트롤러 IAM ────────────────────────────────────────────────

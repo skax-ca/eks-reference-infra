@@ -303,8 +303,13 @@ PR 생성 → plan job 자동 실행 → PR 댓글에 destroy/replace 목록 + p
 - ✅ 유지되는 것: `environment: dev` 선언(→ `sub` 패턴 ③ 일치) · branch policy(`main`만)
 - ❌ 잃는 것: **"읽어야 진행된다"는 강제력.** merge 권한자와 apply 승인자가 분리되지 않고,
   자기 PR을 자기가 merge할 수 있다.
-- 완화: `deploy.yml`의 plan job이 `will be destroyed`·`must be replaced`를 **전문 위로 끌어올려**
-  PR 댓글과 job summary에 남긴다. 이는 *"읽을 수 있게 한다"* 이지 *"읽어야 진행된다"* 가 아니다.
+- 완화: plan job이 `will be destroyed`·`must be replaced`를 **전문 위로 끌어올려** 남긴다.
+  이는 *"읽을 수 있게 한다"* 이지 *"읽어야 진행된다"* 가 아니다.
+  > 🔄 **2026-08-03 갱신(D30-1)**: 위 문장의 "PR 댓글"은 더 이상 없다 — `pull_request` 트리거를
+  > 제거하면서 댓글 step 도 함께 사라졌다. 요약은 **run 의 Summary 탭**에만 남는다. 대신 **apply 가
+  > `workflow_dispatch` 전용**이 되어, 그 요약을 읽고 **버튼을 누르는 행위**가 승인 자리를 대신한다 —
+  > "읽을 수 있게 한다"에서 **"누군가 의도적으로 실행해야 한다"**로 한 칸 올라갔다(강제력은 여전히 없다).
+  > 파일명도 배포 루트별로 갈렸다: `deploy-network.yml` · `deploy-eks.yml`.
 
 > ℹ️ **뜻밖의 소득**: 걸린 하나(branch policy)가 하필 §3의 미해결 제약을 메운다.
 > `environment`가 `sub`의 `ref`를 덮어써서 **apply job의 브랜치 제한을 `sub`로 걸 수 없었는데**,

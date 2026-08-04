@@ -104,13 +104,22 @@ module "vpc" {
 **한 워크플로 두 job**으로 만족시킨다. 별도 워크플로로 쪼개면 artifact를 run 경계 밖에서 찾아야 하고
 **그 조회 지점이 곧 구멍**이다.
 
+**배포 루트마다 워크플로 하나**다 — `deploy-network.yml`(networking) · `deploy-eks.yml`(eks).
+경로 필터·state 키·`concurrency` 그룹을 분리해 **두 루트가 서로를 트리거하거나 취소하지 않게** 한다.
+
 | 항목 | 규칙 |
 |------|------|
 | plan → apply | plan을 **artifact로 저장**해 승인 후 **그 파일을 apply**한다. `tofu apply tfplan` — 재-plan 금지 |
-| 승인 게이트 | apply job만 `environment: dev`를 선언한다. ⚠️ **required reviewers는 이 org(GitHub Free)에서 걸 수 없다** — `docs/deployment-facts.md` §5.3 |
-| 동시 실행 | `concurrency: {group: live-dev-networking, cancel-in-progress: false}` |
+| **트리거** (D30-1) | `push`(main) → **plan 까지만** · `workflow_dispatch` → plan + apply. ⛔ `pull_request` 트리거는 **제거됐다** |
+| 승인 게이트 | ⚠️ **required reviewers는 이 org(GitHub Free)에서 걸 수 없다**(`docs/deployment-facts.md` §5.3) → **dispatch 를 누르는 행위가 승인**이다. apply job만 `environment: dev`를 선언한다 |
+| 동시 실행 | 루트별로 분리: `live-dev-networking` · `live-dev-eks`. 둘 다 `cancel-in-progress: false` |
 | 자격증명 | GitHub OIDC → 입구 Role → 실행 Role(**2단 체인**). 정적 키 금지 |
-| state | S3 + `use_lockfile = true` (DynamoDB 불필요) |
+| state | S3 + `use_lockfile = true` (DynamoDB 불필요). 키는 루트별(`dev/networking.tfstate` · `dev/eks.tfstate`) |
+
+- ⚠️ **잔여 간극**: push run 의 plan 을 읽고 dispatch 하면 dispatch run 은 **자기 plan 을 새로 만들어**
+  적용한다. 그 사이 state 가 바뀌면 읽은 것과 적용되는 것이 달라질 수 있다 — run 경계를 넘어 artifact 를
+  가져오는 것이 더 나쁘므로 이 구조를 택했다. 상위 요금제로 올리면 `if:` 를 되돌리고 required reviewers 로
+  승인을 **같은 run 안**에 넣어 이 간극도 사라진다.
 
 - ⚠️ **plan job과 apply job의 `sub`가 다르다**(D28) — `environment:`를 선언한 job만
   `:environment:<name>`을 받는다. 신뢰 정책은 **3패턴**이다.
@@ -141,10 +150,11 @@ module "vpc" {
 
 - ⚠️ **`AdministratorAccess`가 자동 트리거에 연결된다.** PoC에서는 사람이 TFC에서 돌렸지만
   이제 `pull_request`가 `plan`을 자동 실행한다 — 이것이 PoC 대비 **실질적으로 달라진 위험**이다.
-- ⚠️ **"사람이 검토"의 이행 지점은 Environment 승인이 아니라 `PR merge`다.** GitHub Free에서는
-  required reviewers를 걸 수 없어(`docs/deployment-facts.md` §5.3) apply가 대기 없이 진행된다.
-  `deploy.yml`이 destroy/replace 목록을 PR 댓글로 끌어올리지만 **강제력은 없다** — merge 전에
-  그 댓글을 읽는 것이 규율이다.
+- ⚠️ **"사람이 검토"의 이행 지점은 `workflow_dispatch` 를 누르는 행위다**(D30-1, 2026-08-03 개정).
+  GitHub Free에서는 required reviewers를 걸 수 없어(`docs/deployment-facts.md` §5.3) 승인 게이트가
+  존재하지 않는다. 그래서 **merge 만으로는 apply 되지 않게** 바꿨다 — push 는 plan 까지만 돌고,
+  그 요약(run Summary 탭의 destroy/replace 목록)을 읽은 사람이 **Run workflow 를 눌러야** apply 된다.
+  ⛔ 구 형태("PR plan 댓글을 읽고 merge = 검토")는 **폐기됐다** — PR plan 트리거 자체가 없다.
 - ⚠️ **다른 사람 리소스는 우리 plan에 나타나지 않는다**(우리 state에 없으므로).
   위험은 plan에 잡히는 범위가 아니라 **실행 Role이 손댈 수 있는 범위 전체**다.
 - 근거: 모듈 repo `design/50` F13·D27-2. PoC repo `05` §7.1이 원문이다.
@@ -212,3 +222,54 @@ tofu fmt -recursive -check → tflint --recursive → trivy config . → tofu va
 
 이 구분을 흐리면 "apply로 검증했다"는 과잉 주장이 되고, 그것이 모듈 repo
 `docs/reference/poc-findings.md`가 경계하는 바로 그 실수다. **실증한 것만 실증했다고 쓴다.**
+
+---
+
+## 8. 작업 원칙 (2026-08-04 채택)
+
+대부분 이미 실천하던 것을 규칙으로 승격한 것이다. **이 프로젝트에서 뜻이 달라지는 것은 번역해 뒀다** —
+일반 애플리케이션 규칙을 IaC에 그대로 적용하면 틀리는 지점이 있다.
+
+> ℹ️ **"관심사 분리"·"검증된 라이브러리를 쓴다"는 여기 적지 않는다.** 모듈 repo가 이미 소유한다
+> (facade 원칙·계층형 하이브리드·semver 거버넌스). 두 곳에 적으면 갈라진다 — §7과 같은 이유다.
+
+### 8-1. 발명하기 전에 찾는다
+
+- 해결책을 설계하기 전에 **upstream 모듈·AWS 공식이 그 문제를 이미 어떻게 푸는지** 본다.
+  §6의 "스키마 추정 금지"는 이 원칙의 한 사례다.
+- ⚠️ **"그 기능은 없다"고 단정하지 않는다 — 소스를 열어 확인한다.**
+  실측(2026-08-04): graviton이 막혔을 때 원인은 "upstream이 arm을 지원하지 않아서"가 아니라
+  **facade가 `ami_type`을 안 넘기고 있어서**였다. upstream엔 처음부터 있었다(v21.24.1).
+  소스를 안 열고 단정했다면 launch template 우회를 짰을 것이고, **그 우회가 곧 drift다.**
+  → 확인 경로: `.terraform/modules/` 실물 · `mcp__opentofu__*` · AWS 공식 문서.
+
+### 8-2. 죽은 경로를 남기지 않는다
+
+- 쓰이지 않게 된 코드·스텝·폴백은 **삭제한다.** 호환 레이어를 덧대 두 경로를 유지하지 않는다.
+  실측: D30-1이 `pull_request` 트리거를 지울 때 **PR 댓글 step도 함께 지웠다**(죽은 채 남기지 않았다).
+  D27 철회 때도 `update-assume-role-policy`를 남기지 않았다.
+- 🔴 **번역 주의 — "하위 호환을 유지하지 마라"를 계약에 적용하지 않는다.**
+  모듈은 **고객사에 배송된다.** 계약 파괴는 숨기는 게 아니라 **semver로 드러내는 것**이 규약이다
+  (모듈 repo). 즉 *호환 레이어는 덧대지 않되, 깨는 변경은 메이저로 표시한다.*
+- 🔴 **배포된 자산에는 적용되지 않는다.** 태그 이동 같은 "과거를 덮어쓰는" 정리는
+  **소비자가 0일 때만** 허용된다(2026-08-04 `eks-cluster-v1.0.0`: apply된 인프라가 없어 비용 0).
+  한 번이라도 apply된 뒤에는 **마이너를 컷한다.**
+
+### 8-3. 지금 요구를 채우는 가장 단순한 형태로 만든다
+
+- 추측에 근거한 추상화·설정값·간접 계층을 만들지 않는다. 필요해지면 그때 연다.
+  실측: 모듈 `addons.tf`가 vpc-cni SG를 변수로 열지 않고 *"별도 SG 요구가 생기면 그때 변수를 연다"* 로 남겼다.
+- ⚠️ **안전장치는 "추측 대비"가 아니다.** `prevent_destroy`·`deletion_protection`·교차변수 validation은
+  공용 개발 계정(§4-1)이라는 **현재 요구사항**이다. 단순화의 이름으로 걷어내지 않는다.
+
+### 8-4. 레이어로 키운다
+
+- 엔드투엔드로 **동작하는 최소**에서 시작해 그 위에 하나씩 얹는다. 이 repo의 Phase 1~6이 그 이행이다.
+- ⚠️ **IaC에서 "동작한다"의 기준은 `apply`가 통과한 형상이다** — `plan` 통과는 아직 아니다.
+  실측: networking을 먼저 apply해 66개를 세운 뒤에야 eks를 독립 루트로 얹었다.
+- ⛔ 검증되지 않은 층 위에 다음 층을 얹지 않는다. §7(과잉 주장 금지)의 다른 얼굴이다.
+
+### 8-5. 임시방편으로 넘기지 않는다
+
+지금만 넘기고 나중에 교체할 우회를 받아들이지 않는다. 규약을 바꿔야 하면
+**모듈 repo의 설계를 먼저 고치고 여기로 내려온다** — §0의 규칙이 이 원칙의 이행 장치다.

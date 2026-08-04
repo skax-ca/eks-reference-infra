@@ -35,8 +35,13 @@ bootstrap/            # state 버킷 · OIDC provider · Role  — IaC 밖(D21)
 ├── bootstrap.sh      #   멱등. 재실행이 안전해야 한다
 ├── verify.sh         #   read-only drift 검사 (plan 의 대체물)
 └── README.md         #   기대 상태 표 + IaC 승격용 import 초안
-live/dev/networking/  # VPC 하나 (D22 — 목표 토폴로지 유지)
-.github/workflows/    # deploy.yml — plan → 승인 → apply 를 한 run 안에서
+live/dev/networking/  # VPC 하나 (D22 — 목표 토폴로지 유지) · state: dev/networking.tfstate
+live/dev/eks/         # EKS 하나 — **networking 과 독립 state**(dev/eks.tfstate).
+                      #   결합은 Name·SubnetGroup 태그 data source 조회로만(remote_state 아님)
+.github/workflows/    # 배포 루트마다 워크플로 하나 — 경로·state키·concurrency 를 분리한다
+├── deploy-network.yml  #   live/dev/networking
+└── deploy-eks.yml      #   live/dev/eks
+                      #   둘 다 D30-1: push 는 plan 까지, **apply 는 workflow_dispatch 로만**
 ```
 
 ## 로컬에서 쓰기
