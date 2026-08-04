@@ -15,9 +15,10 @@ teardown 여부(6-1은 파기 "거부"만 확인했고 실제 파기는 안 했�
 **🔁 2026-08-03: vpc-v1.2.0 승격 1사이클 실증**(아래 「vpc-v1.2.0 승격」). 핀 한 줄 → PR#11 →
 apply `0/20/0`(서브넷 태그 in-place). D20 소싱 규약의 정상 운영을 처음 한 바퀴 돌렸다.
 
-**🆕 2026-08-03: live/dev/eks 배포 루트 추가·merge**(아래 「live/dev/eks」). eks-cluster-v1.0.0 컷 →
-PR#13 **merge**(`c09e6fc`). **vpc·eks 독립 배포**(별도 state + 태그 data source). EKS는 아직 **apply 안 함**
-(plan만: **71 to add** clean). 남은 미merge PR: **#12(networking D30-1)만**. pre-apply 남은 것은 ami 핀 하나.
+**🆕 2026-08-03~04: live/dev/eks 배포 루트 + graviton·버전 핀**(아래 「live/dev/eks」).
+PR#13(루트 신설) · **PR#12(D30-1)** · **PR#14**(graviton+핀+rename+§8) 전부 **merge**.
+**vpc·eks 독립 배포**(별도 state + 태그 data source). EKS는 여전히 **apply 안 함** — plan만 `71 to add` clean.
+⏸ **실제 생성은 `deploy-eks.yml` workflow_dispatch 를 눌러야** 시작된다(비용 발생).
 
 ⚠️ **MCP 서버 3종이 `.mcp.json`에 있다**(opentofu·aws-docs·**aws-api**). aws-api는 2026-07-31
 추가분 — 재시작 후 첫 사용 시 승인 프롬프트. `mcp__opentofu__get-resource-docs`로 스키마 확인이
@@ -386,13 +387,38 @@ PR은 merge 없이 닫음(자산 유지). run [`30605752914`](https://github.com
    `--tf-exclude-downloaded-modules`(훅)로 제외 = 우리 루트 clean. .trivyignore 정책대로 배포 루트에서
    안 덮는다 — public access 수락은 모듈 설계 판단이고 소비자가 CIDR 제한과 함께 opt-in 한 것.
 
-### pre-apply 상태 (EKS README §4)
-- ✅ repo 변수 `EKS_PUBLIC_ACCESS_CIDRS = ["211.45.60.3/32"]` 설정됨.
-- ✅ networking 선행 apply 완료(위 merge 결과 — 6 changed).
-- ⏸ **남은 것 하나: `main.tf` `ami_release_version` 핀**(현재 null → 매 plan 최신 해석 → 노드 롤링).
-  값: `aws ssm get-parameter --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/release_version --profile team`.
-- ▶️ **실제 EKS 생성은 `deploy-eks.yml` workflow_dispatch** 로만(D30-1). 누르면 71 리소스 생성 시작(비용 발생).
-- 워크플로 일관성: networking D30-1 전환은 별도 **PR#12**(미merge). deploy-eks.yml 은 이미 D30-1.
+### pre-apply 상태 (EKS README §4) — **전부 충족, dispatch 만 남음**
+- ✅ repo 변수 `EKS_PUBLIC_ACCESS_CIDRS = ["211.45.60.3/32"]`.
+- ✅ networking 선행 apply 완료(6 changed — 태그 in-place).
+- ✅ `ami_release_version = 1.35.6-20260728` 핀(**arm64** SSM 경로. 아키텍처별로 값이 다르다).
+- ▶️ **실제 EKS 생성은 `deploy-eks.yml` workflow_dispatch** 로만(D30-1). 누르면 71 리소스 생성(비용 발생).
+
+### ✅ 2026-08-04 추가분 — graviton · 버전 핀 · 워크플로 rename · 작업 원칙
+
+소비 [PR#14](https://github.com/skax-ca/iac-reference-infra/pull/14)(`47e1a23`) · 모듈 [PR#10](https://github.com/skax-ca/iac-module-library/pull/10)(`74bbf51`) · 모듈 `401b920`.
+
+1. **graviton — 🔴 모듈 변경이 필요했다(D-NODE-ARCH 신설)**. `t4g.medium` + `ami_type = AL2023_ARM_64_STANDARD`.
+   **facade 에 `ami_type` 이 없어 소비 루트만으로는 불가능**했다 — upstream 기본이 x86 고정이라
+   arm 인스턴스만 넣으면 **노드가 부팅되지 않는다**(plan 은 통과). 비용 $170→$48/월.
+   🔑 **실패 유형**: "upstream 미지원"이 아니라 **wrapper 가 안 넘기고 있었을 뿐**. upstream v21.24.1 엔
+   처음부터 있었다. 소스를 안 열고 단정했으면 launch template 우회를 짰을 것이고 그게 drift다.
+2. **addon 8종 + AMI 버전 핀** — D-ADDON-VERSION-PIN-1 을 코드가 이행하지 않고 있었다.
+   🔑 **최신이 아니라 AWS 기본(default) 버전을 박는다** — 기본을 박으면 핀 전후 동작이 같다.
+   최신을 박으면 "핀 추가"에 업그레이드 결정이 섞인다(실측: coredns 기본 `v1.13.2-eksbuild.11` ≠ 최신 `v1.14.3-eksbuild.3`).
+   ⚠️ k8s 버전을 올리면 **addon 8종 + ami_release_version 을 한 커밋에서 함께** 갱신한다.
+3. **`deploy.yml` → `deploy-network.yml`**(git mv). ⚠️ 함께 정정: PR#12 merge 로 **CLAUDE.md 가 거짓이
+   됐었다** — "PR 댓글을 읽고 merge = 검토 지점"인데 PR plan 트리거가 사라져 **댓글 자체가 없다.**
+   → 검토 지점은 **workflow_dispatch 를 누르는 행위**.
+4. **§8 작업 원칙 채택**(두 repo). 🔴 그대로 옮기면 틀리는 2개를 번역: *"하위호환 유지 마라"* → 죽은
+   **코드**는 삭제하되 **계약** 파괴는 semver 로 드러낸다(태그 덮어쓰기는 **소비자 0일 때만**) ·
+   *"가장 단순한 구현"* → 안전장치(prevent_destroy·validation)는 추측 대비가 아니라 현재 요구사항.
+
+**🔑 태그 이동 선례**: `eks-cluster-v1.0.0` 을 D-NODE-ARCH 포함 커밋으로 **force 이동**했다(사용자 결정).
+apply 된 인프라가 0 이라 비용이 없었다. ⛔ **한 번이라도 apply 된 뒤에는 마이너를 컷한다.**
+
+**ℹ️ 워크플로 트리거는 이미 선택적이다**(2026-08-04 실측): PR#12(워크플로 1개만 변경) → **networking 만**
+돌고 eks 는 안 돌았다. PR#14 에서 둘 다 돈 것은 **rename 이 자기 참조 경로에 걸린 일회성**이고,
+networking plan 결과가 `No changes` 였다. → 경로 필터를 더 좁히지 않기로 결정(§8-3).
 
 ### 💰 apply 시 비용
 EKS 컨트롤플레인 ~$73/월 + system NG m6i.large×2 ~$170/월 + 컨트롤플레인 로그. 기존 NAT $43/월 위.
