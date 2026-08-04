@@ -1,4 +1,26 @@
-# live/dev/networking — plan → 승인 → apply
+# live/dev/networking — plan → (사람이 실행) → plan → apply
+#
+# ── 2026-08-03 개정: PR plan 제거 + apply 는 수동 트리거 ──────────────────────
+#
+# **왜 PR plan 을 뺐나**: PR 에서 plan, merge 에서 다시 plan→apply 로 같은 계산을 두 번 하고
+# 그만큼 배포가 느렸다. 사용자 결정으로 PR 단계를 걷어냈다.
+#
+# ⚠️ **그래서 apply 를 자동에서 수동으로 바꿨다.** 뺀 것이 PR plan **댓글**만이 아니기 때문이다 —
+#    이 org 는 **free 플랜**이라 private repo 의 environment 에 required reviewers 를 걸 수 없다
+#    (실측 2026-08-03: dev environment 의 protection_rules 는 `branch_policy` 뿐).
+#    즉 승인 게이트가 **아직 존재하지 않고**, PR 의 plan 댓글이 사람이 계획을 보는 유일한
+#    지점이었다. 그것만 없애면 **아무도 읽지 않은 계획이 AdministratorAccess(D27-1)로 공용
+#    개발 계정(F13)에 적용된다** — D27-2 의 "destroy/replace 를 사람이 읽는다(예외 없음)" 위반.
+#    → `workflow_dispatch` 를 누르는 행위가 무료 플랜에서 승인을 대신한다.
+#
+# 🔑 **상위 요금제 구독 시 되돌릴 것**: apply 의 `if:` 에서 `workflow_dispatch` 제약을 풀고
+#    `push` 를 복원한 뒤, environment `dev` 에 required reviewers 를 건다. 그러면 승인이
+#    **같은 run 안**으로 들어와 아래 ⚠️ 의 잔여 간극도 함께 사라진다.
+#
+# ⚠️ **잔여 간극(수동 트리거 방식의 한계)**: merge 시 push run 이 만든 plan 을 사람이 읽고,
+#    dispatch run 은 **자기 plan 을 새로 만들어** 적용한다. 그 사이 state 가 바뀌면 읽은 것과
+#    적용되는 것이 달라질 수 있다. run 경계를 넘어 artifact 를 가져오는 것이 더 나쁘므로
+#    (아래 ⛔ 첫 항목) 이 구조를 택했고, dispatch run 도 자기 요약을 남겨 사후 확인은 된다.
 #
 # ⛔ **한 워크플로 두 job 을 유지한다**(design/50 §3). 별도 워크플로로 쪼개면 plan artifact 를
 #    run 경계 **밖에서** 찾아야 하고, 그 조회 지점이 곧 "승인한 계획 ≠ 적용된 계획" 구멍이다.
@@ -13,19 +35,19 @@
 name: deploy · live/dev/networking
 
 on:
-  pull_request:
-    paths:
-      - live/dev/networking/**
-      - .github/workflows/deploy.yml
+  # ⛔ pull_request 트리거는 2026-08-03 제거됐다(맨 위 개정 주석). 되살리려면 그 이유부터 읽을 것 —
+  #    "PR 에서도 미리 보면 좋지 않나"는 이미 값을 매겨 뺀 안이다(배포 지연).
   push:
     branches: [main]
     paths:
       - live/dev/networking/**
       - .github/workflows/deploy.yml
-  # 코드 변경 없이 재-plan 이 필요한 경우가 실제로 있다:
-  #   ① 승인 대기 중 state 가 바뀌어 apply 가 거부됐을 때(정상 동작이다)
+  # merge 후 **plan 까지만** 자동으로 돈다. 요약은 run 의 Summary 탭에 남는다.
+  #
+  # apply 는 아래 dispatch 로만 일어난다. 그 외에 dispatch 가 필요한 경우도 그대로다:
+  #   ① 승인(=dispatch) 대기 중 state 가 바뀌어 apply 가 거부됐을 때(정상 동작이다)
   #   ② drift 확인 — 계정 자동 태거처럼 우리 밖에서 리소스를 만지는 주체가 있다(§5.2)
-  # ⚠️ 이때도 **같은 run 안에서** plan → apply 가 이어진다. 별도 apply 워크플로를 만들지 않는다.
+  # ⚠️ 어느 경우든 **같은 run 안에서** plan → apply 가 이어진다. 별도 apply 워크플로를 만들지 않는다.
   workflow_dispatch:
 
 # state 는 단일 자원이다. 두 run 이 겹치면 lock 경합이거나, 더 나쁘게는 뒤늦은 run 이
@@ -42,7 +64,9 @@ env:
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
-  # plan — PR 과 push 양쪽에서 돈다. environment 를 **선언하지 않는다**(D28).
+  # plan — main push 와 dispatch 양쪽에서 돈다. environment 를 **선언하지 않는다**(D28).
+  # ⚠️ push run 의 plan 은 **사람이 읽으라고** 도는 것이다(적용은 하지 않는다).
+  #    적용은 그 요약을 읽은 사람이 dispatch 를 눌렀을 때 그 run 안에서 일어난다.
   # ────────────────────────────────────────────────────────────────────────────
   plan:
     name: plan
@@ -50,7 +74,8 @@ jobs:
     permissions:
       id-token: write # OIDC JWT 발급 — 이게 없으면 1단 인증 자체가 안 된다
       contents: read
-      pull-requests: write # plan 요약을 PR 에 댓글로 남긴다
+      # ⚠️ pull-requests: write 는 제거됐다 — PR 댓글 step 과 함께 사라졌다.
+      #    필요 없는 쓰기 권한을 남겨 두지 않는다.
 
     steps:
       - uses: actions/checkout@v7.0.1
@@ -171,12 +196,9 @@ jobs:
           } > summary.md
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: PR 에 plan 댓글
-        if: github.event_name == 'pull_request'
-        working-directory: ${{ env.TF_ROOT }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file summary.md
+      # ⚠️ **"PR 에 plan 댓글" step 은 2026-08-03 제거됐다** — pull_request 트리거가 없어져
+      #    죽은 코드가 됐다. 요약은 위 step 이 $GITHUB_STEP_SUMMARY 에 무조건 쓰므로
+      #    push run · dispatch run 어느 쪽에서도 run 의 Summary 탭에서 읽을 수 있다.
 
       # ⚠️ plan 파일에는 리소스 속성이 평문으로 들어간다. repo read 권한자가 받을 수 있으므로
       #    보관을 하루로 제한한다(design/50 §3). 이는 완화이지 해결이 아니다 — 열린 항목 6.
@@ -189,17 +211,22 @@ jobs:
           if-no-files-found: error
 
   # ────────────────────────────────────────────────────────────────────────────
-  # apply — main push 에서만. environment: dev 가 승인 게이트이자 sub 패턴 ③의 근원이다.
+  # apply — **workflow_dispatch 에서만**(2026-08-03 개정). main push 에서는 skip 된다.
+  # environment: dev 는 sub 패턴 ③의 근원이며, 승인 게이트 역할은 free 플랜에서 아직 못 한다.
   # ────────────────────────────────────────────────────────────────────────────
   apply:
     name: apply
     needs: plan
-    # PR 에서는 apply 하지 않는다. main 에 들어온 것만 적용한다.
+    # ⭐ **dispatch 를 누르는 행위가 승인이다**(맨 위 개정 주석). free 플랜이라 environment 에
+    #    required reviewers 를 걸 수 없어, 사람의 명시적 실행이 그 자리를 대신한다.
+    #    → main 에 merge 해도 apply 는 돌지 않는다. plan 요약을 읽고 Run workflow 를 누른다.
+    # 🔑 상위 요금제 구독 시: 아래 조건을 `(push || workflow_dispatch)` 로 되돌리고
+    #    environment dev 에 required reviewers 를 건다(맨 위 "되돌릴 것").
     # ⚠️ 브랜치 조건을 여기 한 번 더 쓰는 이유: workflow_dispatch 는 임의 브랜치에서 눌릴 수 있다.
     #    Environment 의 deployment branch policy(main 하나)가 최종 방어선이지만,
     #    job 조건으로도 막아 두면 실패가 아니라 skip 으로 끝난다.
     if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      github.event_name == 'workflow_dispatch'
       && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # ⚠️ 이 한 줄이 두 가지를 동시에 한다:
