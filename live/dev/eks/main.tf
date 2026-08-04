@@ -182,8 +182,10 @@ module "eks" {
   # ALBC 는 community addon 이 없어 GitOps helm 으로 설치되지만 IAM 전제는 IaC 소관이다(§2.6a).
   enable_alb_controller_iam = true
 
-  enable_external_dns_iam = true
-  # ⚠️ **prd 에서는 반드시 zone ARN 을 좁힌다.** 비우면 커뮤니티 정책이 전체 zone(*)을 허용한다.
-  #    dev 는 아직 hosted zone 을 이 루트가 소유하지 않아 비워 둔다 — 이 줄을 지우고 넘어가지 않는다.
-  external_dns_hosted_zone_arns = []
+  # ⚠️ **임시 끄기(2026-08-04).** external_dns_hosted_zone_arns=[] 빈 배열을 넘기면
+  #    upstream 이 Resource="*" 인 IAM 정책을 만들지만 route53:ChangeResourceRecordSets 은
+  #    리소스 수준 권한이라 AWS 가 400 MalformedPolicyDocument 로 거부한다.
+  #    재개 조건: (1) dev hosted zone 을 bootstrap 하거나 (2) upstream fix 후 module 승격.
+  #    IAM 미생성은 GitOps helm 설치 시 별도 처리한다.
+  enable_external_dns_iam = false
 }
