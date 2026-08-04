@@ -10,6 +10,13 @@
 > **"값이 무엇인가"가 아니라 "어디에 있는가"를 적는다.**
 > 그렇지 않으면 `backend.tf`에서 뺀 정보가 `docs/`로 새어 나가 D25가 무의미해진다.
 
+> ⚠️ **2026-08-05 모듈 태그 재매핑(D-VERSION)** — `vpc-v1.0.0/1.1.0/1.2.0` → **같은 커밋의**
+> `v0.1.0/v0.2.0/v0.3.0`, `eks-cluster-v1.0.0` → `v0.1.0`. 구 태그는 삭제됐다.
+> **아래 실측 로그·run 기록에 남은 `v1.x` 번호는 그때의 사실이라 그대로 둔다** —
+> 이 문서는 **일어난 일**을 기록하지 안내를 하지 않는다(§"현재 핀"만 갱신했다).
+> 커밋이 같으므로 **모듈 내용은 바뀌지 않았고, 과거 판정은 전부 유효하다.**
+> 규약 SSOT는 모듈 repo [`docs/architecture/05-versioning-policy.md`].
+
 ---
 
 ## 1. git에 적어도 되는 값
@@ -588,7 +595,9 @@ OpenTofu 문서(`opentofu.org/docs/language/modules/sources/#shallow-clone`)에�
 - OpenTofu는 shallow clone에서 모듈 소스 디렉토리만 추출하므로 전체 히스토리가 불필요
 
 **우리 상황:**
-- 현재 핀: `vpc-v1.2.0` (태그) ✅, `eks-cluster-v1.0.0` (태그) ✅
+- 현재 핀: `vpc-v0.3.0` (태그) ✅, `eks-cluster-v0.1.0` (태그) ✅
+  ⚠️ 2026-08-05 D-VERSION 재매핑 전에는 `vpc-v1.2.0`·`eks-cluster-v1.0.0`이었다 —
+  **같은 커밋**이므로 shallow clone 검증 결과는 그대로 유효하다.
 - 둘 다 태그 기반이므로 shallow clone이 정상 동작
 
 ### 왜 지금 하는가
@@ -606,7 +615,7 @@ OpenTofu 문서(`opentofu.org/docs/language/modules/sources/#shallow-clone`)에�
 
 ### ⚠️ 업그레이드 시 주의
 
-모듈 태그를 올릴 때(승격) `ref=vpc-v1.X.X`의 태그가 유효한지 확인해야 한다.
+모듈 태그를 올릴 때(승격) `ref=vpc-v0.X.X`의 태그가 유효한지 확인해야 한다.
 이것은 이미 정확 핀 규약의 일부다 — 태그를 올리는 것이 곧 승격 커밋이고,
 그 커밋이 유효한지는 CI의 `tofu init`이 검증한다.
 

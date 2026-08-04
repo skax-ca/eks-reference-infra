@@ -1,7 +1,7 @@
 # live/dev/eks
 
 EKS 클러스터 하나를 배포하는 루트다. 모듈은 `iac-module-library` 에서 **git tag 로 소싱**한다
-(`eks-cluster-v1.0.0`, D20). **networking 루트와 독립된 state**(`dev/eks.tfstate`)를 쓴다.
+(`eks-cluster-v0.1.0`, D20). **networking 루트와 독립된 state**(`dev/eks.tfstate`)를 쓴다.
 
 > ⚠️ 이 디렉토리도 코드만 보고는 어느 버킷·어느 계정을 가리키는지 알 수 없다(D25). 그 대가로
 > 이 README 가 **주입 변수명을 명시할 의무**를 진다(§1). networking 의 README 와 같은 규약이다.
@@ -15,7 +15,7 @@ EKS 클러스터 하나를 배포하는 루트다. 모듈은 `iac-module-library
 | 무엇 | 방법 |
 |------|------|
 | VPC 찾기 | `data.aws_vpc` — `tag:Name = vpc-ref-dev-an2-main` + `tag:Workload = ref` (공용 계정이라 2중 필터) |
-| 노드 서브넷 | `data.aws_subnets` — `vpc-id` + `tag:SubnetGroup = node-uniq` (vpc-v1.2.0 D13) |
+| 노드 서브넷 | `data.aws_subnets` — `vpc-id` + `tag:SubnetGroup = node-uniq` (vpc-v0.3.0 D13) |
 | Pod 서브넷 | `data.aws_subnets` — `vpc-id` + `tag:SubnetGroup = pod-dup` |
 
 - **remote_state 를 쓰지 않는다.** 네이밍이 결정적이라 태그 조회가 예측 가능하다(모듈 repo 03 §3.1,

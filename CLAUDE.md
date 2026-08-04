@@ -87,7 +87,7 @@
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v1.0.0"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v0.3.0"
 }
 ```
 
@@ -95,6 +95,12 @@ module "vpc" {
   코드는 인증 방식을 모른다. SSH URL로 바꾸지 않는다.
 - 태그는 **컴포넌트별 semver 정확 핀**. git 소싱에는 `~>`가 동작하지 않는다 —
   업그레이드는 **태그를 올리는 명시적 커밋**이고, 그것이 승격 게이트다.
+- ⚠️ **모듈은 전부 `0.y.z`(개발 단계)다** — 모듈 repo `docs/architecture/05-versioning-policy.md`
+  (**D-VERSION**, 2026-08-05)가 SSOT다. **이 구간에서는 마이너 업그레이드도 계약을 바꿀 수 있다.**
+  태그를 올릴 때 `git show <tag>` 로 릴리스 메시지를 읽는다 — 마이너라고 안전을 가정하지 않는다.
+  - 현행: **`vpc-v0.3.0`** · **`eks-cluster-v0.1.0`**.
+  - 구 `v1.x` 태그는 **같은 커밋의 `v0.x`로 재매핑**되고 삭제됐다(`vpc-v1.0.0/1.1.0/1.2.0` →
+    `v0.1.0/v0.2.0/v0.3.0`, `eks-cluster-v1.0.0` → `v0.1.0`). **모듈 내용은 바뀌지 않았다.**
 - ⚠️ `//modules/vpc`는 clone **후** 경로 선택이다. CI는 **repo 전체**를 받는다(실측).
 
 ---

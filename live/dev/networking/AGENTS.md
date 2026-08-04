@@ -11,7 +11,7 @@ VPC 배포 루트. Enterprise급 네트워킹 생성: 9개 서브넷 그룹, 20�
 | 파일 | 설명 |
 |------|------|
 | `backend.tf` | **`terraform { backend "s3" {} }` 만** — 버킷 명은 init 시 주입됨 |
-| `main.tf` | VPC 모듈 호출 (`vpc-v1.2.0` 태그). naming + env + region_code를 `naming` 객체로 전달 |
+| `main.tf` | VPC 모듈 호출 (`vpc-v0.3.0` 태그). naming + env + region_code를 `naming` 객체로 전달 |
 | `outputs.tf` | 서브넷 ID, VPC ID, IGW ID — `eks/` 루트가 태그 조회를 통해 소비 |
 | `providers.tf` | AWS provider 블록 (alias `aws`). `assume_role` 없음 — CI의 backend.hcl에서 제공 |
 | `variables.tf` | 입력 계약: `vpc_enabled`, `deletion_protection`, `flow_logs_enabled`, `naming` |
@@ -21,7 +21,7 @@ VPC 배포 루트. Enterprise급 네트워킹 생성: 9개 서브넷 그룹, 20�
 ## 모듈 소싱
 
 ```hcl
-source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v1.2.0"
+source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v0.3.0"
 ```
 
 태그 핀이 **승격 게이트**다. 업그레이드 = `iac-module-library`에 새 태그를 커밋하는 것.
@@ -68,7 +68,7 @@ sng-ref-dev-an2-main-*
 - `live/dev/eks/`가 태그 조회를 통해 VPC를 읽음 (remote_state 의존성 없음)
 
 ### 외부
-- `iac-module-library` vpc 모듈 (`vpc-v1.2.0`)
+- `iac-module-library` vpc 모듈 (`vpc-v0.3.0`)
 - S3 backend 버킷 (`bootstrap/`이 생성)
 - OIDC provider + 2단 Role 체인 (`bootstrap/`이 생성)
 

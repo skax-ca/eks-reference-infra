@@ -9,8 +9,11 @@
 #      네이밍이 결정적이라 조회가 예측 가능하다. 이 방식이면 vpc 를 먼저 파기해도 eks plan 이
 #      "VPC 없음"으로 **명확히** 실패하고(조용한 오작동이 아니다), 순서만 지키면 각자 배포·파기된다.
 #
-# ⚠️ 소싱 핀은 정확 태그다(D20). eks-cluster-v1.0.0 = 모듈 repo a530b74. 업그레이드는 이 줄을 올리는
+# ⚠️ 소싱 핀은 정확 태그다(D20). eks-cluster-v0.1.0 = 모듈 repo 74bbf51. 업그레이드는 이 줄을 올리는
 #    명시적 커밋이고 그것이 승격 게이트다. git 소싱에 ~> 는 동작하지 않는다.
+# ⚠️ 0.y.z 는 개발 단계다(모듈 repo architecture/05 = D-VERSION) — 마이너 업그레이드도 계약을
+#    바꿀 수 있으니 태그를 올릴 때 릴리스 메시지를 읽는다. 구 eks-cluster-v1.0.0 은 2026-08-05
+#    재매핑으로 사라졌다(같은 커밋의 v0.1.0 이 대체).
 
 locals {
   # 클러스터 이름 토큰. 모듈이 "eks-<workload>-<env>-<region>-<purpose>-<serial>" 로 조합한다
@@ -42,7 +45,7 @@ data "aws_vpc" "this" {
   }
 }
 
-# 노드 서브넷 — SubnetGroup 태그(vpc-v1.2.0 D13)로 그룹 단위 조회한다. vpc-id 로 우리 VPC 안으로
+# 노드 서브넷 — SubnetGroup 태그(vpc-v0.3.0 D13)로 그룹 단위 조회한다. vpc-id 로 우리 VPC 안으로
 # 한정하지 않으면 같은 태그 키를 쓰는 남의 서브넷을 잡을 수 있다(공용 계정).
 data "aws_subnets" "node" {
   filter {
@@ -69,7 +72,7 @@ data "aws_subnets" "pod" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v1.0.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.1.0&depth=1"
 
   # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(02 §1.4(b)).
   naming = {
