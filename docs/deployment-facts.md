@@ -554,12 +554,67 @@ This entry resolves 미결 항목 #1 as documented in `.omc/notepad.md`:
 
 ---
 
-## 8. Future Work
+## 8. ✅ 미결 항목 #4 해결 — CI `init` shallow clone (`&depth=1`)
 
-미결 항목 #2~#4는 해결되지 않은 채로 남아 있다.
+### 결론: `&depth=1` 파라미터 추가
+
+모듈 소싱 URL에 `&depth=1`을 붙여 불필요한 히스토리 전송을 제거했다.
+
+```hcl
+# 변경 전 (전체 히스토리 clone)
+source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v1.2.0"
+
+# 변경 후 (shallow clone, 태그 기반 핀만 가능)
+source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v1.2.0&depth=1"
+```
+
+### 변경 파일
+
+```
+live/dev/networking/main.tf  — vpc 소싱 URL에 &depth=1 추가
+live/dev/eks/main.tf         — eks-cluster 소싱 URL에 &depth=1 추가
+```
+
+### 왜 되는가 (OpenTofu 공식 문서 실측)
+
+OpenTofu 문서(`opentofu.org/docs/language/modules/sources/#shallow-clone`)에서 확인:
+
+> "The `depth` URL argument corresponds to the `--depth` argument to `git clone`, telling Git to
+> create a shallow clone with the history truncated to only the specified number of commits."
+
+**동작 조건:**
+- `ref`에 **태그 이름**을 지정해야 함 — 커밋 ID만으로는 동작하지 않음
+- 깊이 1이면 가장 최근 커밋만 가져온다
+- OpenTofu는 shallow clone에서 모듈 소스 디렉토리만 추출하므로 전체 히스토리가 불필요
+
+**우리 상황:**
+- 현재 핀: `vpc-v1.2.0` (태그) ✅, `eks-cluster-v1.0.0` (태그) ✅
+- 둘 다 태그 기반이므로 shallow clone이 정상 동작
+
+### 왜 지금 하는가
+
+| 상황 | 이전 | 지금 |
+|------|------|------|
+| 모듈 repo 크기 | 수십 MB | 수용 가능 |
+| 커밋 수 | 수백 개 | 수용 가능 |
+| **이후** | 태그/히스토리 증가 | CI 속도 ↑ + 네트워크 비용 + runner 디스크 초과 |
+| 해법 비용 | — | URL에 `&depth=1` 한 줄 추가 |
+
+규칙: **불필요한 최적화보다 필요할 때 하는 최적화가 낫다** (§8-3). 지금 모듈 repo 크기가 작을 때
+미리 해두면 해법의 동작 여부를 검증할 수 있다 — 이미 있는 태그 기반 핀으로 shallow clone이
+정상 동작하는지 **첫 CI run으로 확인할 수 있다.**
+
+### ⚠️ 업그레이드 시 주의
+
+모듈 태그를 올릴 때(승격) `ref=vpc-v1.X.X`의 태그가 유효한지 확인해야 한다.
+이것은 이미 정확 핀 규약의 일부다 — 태그를 올리는 것이 곧 승격 커밋이고,
+그 커밋이 유효한지는 CI의 `tofu init`이 검증한다.
+
+---
+
+## 9. Future Work
 
 | # | 항목 | 상태 | 참고 |
 |---|------|------|------|
-| 2 | CI `init`이 모듈 repo 전체를 clone — 태그/히스토리 증가 시 `?depth=1` 검토 필요 | 미해결 | `git clone --filter=blob:limit=1m --filter=tree:0` 등 옵션 확인 필요 |
-| 3 | plan artifact 암호화 (`retention-days: 1`은 완화책) | 미해결 | `GITHUB_ENV` 마스킹 불완전 · repo 변수 평문 로그 문제와 같은 계열 |
-| 4 | deepinit은 Phase 4 이후에 돌린다 | 미해결 | 현재 `.tf`가 생성됐고 분석 대상이 존재함 |
+| 2 | plan artifact 암호화 | 미해결 | `retention-days: 1`은 완화책 · repo 변수 평문 로그와 같은 계열 |
+| 3 | deepinit 실행 | 미해결 | `.tf` 분석 대상이 이제 존재함 — 실행 시점 결정 필요 |

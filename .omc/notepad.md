@@ -439,6 +439,6 @@ EKS 컨트롤플레인 ~$73/월 + system NG m6i.large×2 ~$170/월 + 컨트롤�
 ## 미결 항목
 
 - ✅ **#1 해결** — plan/apply 권한 분리 → C안(현재 구조 유지 + 문서화). `deployment-facts.md` §7
+- ✅ **#4 해결** — CI `init` shallow clone → `&depth=1` 추가. `deployment-facts.md` §8
 - plan artifact 암호화 — `retention-days: 1`은 완화이지 해결이 아니다
 - deepinit 실행 — `.tf` 분석 대상이 존재함
-- CI `init`이 모듈 repo **전체를 clone**한다. 태그/히스토리 증가 시 `?depth=1` 검토
