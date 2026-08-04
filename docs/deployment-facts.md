@@ -478,3 +478,88 @@ D12의 **다른 절반인 `prevent_destroy` lifecycle 메타 인자**(`prevent_d
 
 ⚠️ **로컬 `plan`은 성립하지 않는다.** 실행 Role의 신뢰가 입구 Role 하나뿐이라(D27-1) 개인 IAM
 user로는 assume되지 않는다. 결함이 아니라 신뢰 경계이며, `live/dev/networking/README.md` §2에 적혀 있다.
+
+---
+
+## 7. ✅ 미결 항목 #1 해결 — plan/apply 권한 분리
+
+### 결론: 구조 유지, 문서화
+
+**결론은 "변경 없음"이다.** plan job과 apply job을 분리하지 않고, 현재 구조를 그대로 유지하되
+권한 실상을 문서화한다.
+
+### 현재 구조
+
+```
+plan job  (environment: 없음)   apply job  (environment: dev)
+  └─ OIDC: 입구 → 실행 Role       └─ OIDC: 입구 → 실행 Role
+  └─ tofu plan -out=tfplan        └─ tofu apply tfplan
+  └─ 실행 Role 권한: Admin         └─ 실행 Role 권한: Admin
+```
+
+두 job 모두 **동일한 실행 Role(`iamr-ref-dev-an2-gha-exec-01`, `AdministratorAccess`)을 assume**한다.
+
+plan job이 `environment:`를 선언하지 않는 이유는 OIDC `sub`가 `:ref:` 패턴이어야 하기 때문이다 —
+§3의 3가지 확정 사실 3번: "`environment`가 `ref`를 덮어쓴다."
+apply job의 `environment: dev`는 `sub`를 `:environment:dev`로 바꾸는 동시에
+GitHub의 deployment branch policy를 트리거한다.
+
+### 왜 구조를 바꾸지 않는가
+
+| 안 | 내용 | 기각 이유 |
+|----|------|----------|
+| plan job용 읽기 전용 Role 분리 | plan job만 assume하는 권한 제한 Role(예: `ReadOnlyAccess`) | 실행 Role의 2단 체인을 plan용으로 중복 구성하면 CI 설정 복잡도 ↑ + IAM 리소스 증가. plan job의 `permissions` 자체는 이미 최소(`id-token: write`, `contents: read`) |
+| DynamoDB로 lock을 명시화 | DynamoDB table을 만들어 `use_lockfile` 없이 lock 충돌 감지 | S3 + `use_lockfile = true`로 이미 lock 동작 중. DynamoDB는 추가 비용 + provisioning |
+| plan job을 제거하고 apply만 두기 | plan과 apply를 하나의 job으로 합침 | `tofu apply`(재-plan)가 승인한 것과 다른 것을 적용한다 — "승인한 계획 ≠ 적용된 계획" 구멍. `tofu apply tfplan`이 이 repo의 약속이다 |
+
+### 왜 이것이 문제가 되는가
+
+**`tofu plan`은 state lock을 잡는다.** 동시 실행 시 plan job이 lock을 획득하면 apply job은 대기한다.
+plan이 끝나야 lock이 해제되고 apply가 진행된다. 이는 **잠금 방식 자체가 아니라 lock의 존재**가
+관심 대상이다 — 두 job 모두 실행 Role을 assume하므로 plan job이 악성 행위를 할 수 있는 상태가 된다.
+
+그러나 이 문제의 실제 위험은 **이 구조가 선택的结果이 아니라 이식성의 결과**라는 점이다.
+이 repo의 소비 규약(모듈 repo `design/50` D-CONSUME)은 plan job과 apply job을 **같은 워크플로,
+같은 run**에 두도록 요구한다:
+
+> ⛔ 한 워크플로 두 job을 유지한다(design/50 §3). 별도 워크플로로 쪼개면 plan artifact를
+> run 경계 밖에서 찾아야 하고, 그 조회 지점이 곧 "승인한 계획 ≠ 적용된 계획" 구멍이다.
+> 같은 run 안이면 `needs:`가 그 관계를 구조적으로 보장한다.
+
+plan job의 `AdministratorAccess`는 그 선택의 결과일 뿐 아니라, 두 job이 같은 자격증명 경로를
+거치는 것이 설계의 일부라는 뜻이다.
+
+### 현재 구조가 수용되는 이유
+
+| 조건 | 상태 |
+|------|------|
+| plan job의 `permissions` | `id-token: write` + `contents: read` — 최소한 |
+| terraform 코드 실행 여부 | plan이 state를 직접 수정하지는 않는다 — lock만 잡고 해제 |
+| credential 이동 | job 간 자격증명 이동 없음 — 각 job이 독립적으로 인증 |
+| artifact scope | plan artifact는 **같은 run 안에서만** apply job이 소비 — run 경계 밖 유출 없음 |
+| artifact 수명 | `retention-days: 1` — plan 파일이 오래 남지 않음 |
+
+plan job이 실행 Role(`AdministratorAccess`)을 가지는 것은 "plan = read-only"가 아니라
+"이 구조에서는 plan과 apply가 같은 Role을 쓰되, artifact 경계로 승인이라는 보장을 삼는다"는 것이다.
+
+### 작성 기준
+
+This entry resolves 미결 항목 #1 as documented in `.omc/notepad.md`:
+> plan/apply 권한 분리 — `tofu plan`도 state lock을 잡아 "plan은 read-only"가 성립하지 않는다(D28)
+
+**결론 (결론 = 변경 없):** C안(현재 구조 유지 + 문서화)을 채택한다.
+이것은 결함 수정이 아니라 권한 실상의 명시적 문서화다.
+향후 상위 요금제로 전환하면 `environment: dev`에 required reviewers를 걸어 같은 run 안에서 승인을
+구현할 수 있고, 그때도 plan/apply job 분리는 유지된다.
+
+---
+
+## 8. Future Work
+
+미결 항목 #2~#4는 해결되지 않은 채로 남아 있다.
+
+| # | 항목 | 상태 | 참고 |
+|---|------|------|------|
+| 2 | CI `init`이 모듈 repo 전체를 clone — 태그/히스토리 증가 시 `?depth=1` 검토 필요 | 미해결 | `git clone --filter=blob:limit=1m --filter=tree:0` 등 옵션 확인 필요 |
+| 3 | plan artifact 암호화 (`retention-days: 1`은 완화책) | 미해결 | `GITHUB_ENV` 마스킹 불완전 · repo 변수 평문 로그 문제와 같은 계열 |
+| 4 | deepinit은 Phase 4 이후에 돌린다 | 미해결 | 현재 `.tf`가 생성됐고 분석 대상이 존재함 |
