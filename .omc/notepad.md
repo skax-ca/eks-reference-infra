@@ -1,5 +1,23 @@
 # Notepad — iac-reference-infra
 
+## 🔢 현행 모듈 핀 (2026-08-05 D-VERSION 이후) — **먼저 읽을 것**
+
+**`vpc-v0.3.0` · `eks-cluster-v0.1.0`.** 모듈 repo 가 전 모듈을 **`0.y.z`(개발 단계)** 로 전환했다
+(SSOT = 모듈 repo `docs/architecture/05-versioning-policy.md` = **D-VERSION**). 커밋 `81d6349`.
+
+- **재매핑이지 업그레이드가 아니다** — 구 태그와 **같은 커밋**이라 모듈 내용은 그대로다.
+  `vpc-v1.0.0/1.1.0/1.2.0` → `v0.1.0/v0.2.0/v0.3.0` · `eks-cluster-v1.0.0` → `v0.1.0`.
+  **구 `1.x` 태그는 원격까지 삭제됐다** — 그 핀으로 되돌리면 `init` 이 실패한다.
+- ✅ **판정**: 재핀 push 의 plan run 2개가 **`No changes.`**
+  ([`30961419570`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30961419570) networking ·
+  [`30961419575`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30961419575) eks).
+  🔑 워크플로 `success` 가 아니라 **로그 본문**으로 판정했다 — 변경이 있어도 plan job 은 성공한다.
+- ⚠️ **`0.y.z` 에서는 마이너 업그레이드도 계약을 바꿀 수 있다.** 태그를 올릴 때
+  `git show <tag>` 로 릴리스 메시지를 읽는다 — 마이너라고 안전을 가정하지 않는다.
+- ⛔ 아래 본문·`docs/deployment-facts.md` 에 남은 `v1.x` 번호는 **그때의 사실 기록**이다.
+- 다음 모듈 릴리스 예정: **`eks-cluster-v0.2.0`**(D-EXTDNS-ZONE validation, 모듈 repo 작업).
+- ⚠️ 이 repo 로컬 경로가 **`/Users/born2k/silverte/ai/iac-reference-infra`** 다(구 기록의 `/Users/a07326/…` 아님).
+
 ## 📍 지금 어디인가 (2026-07-31 기준)
 
 ```
