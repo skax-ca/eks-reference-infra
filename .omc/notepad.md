@@ -5,7 +5,7 @@
 ```
 ✅1 골격+App소싱  ✅2 OIDC sub  ✅3 bootstrap  ✅4 apply(66개 생성)  ✅5 design/50 개정
    ✅6-2 계정정보 정리  ✅MCP(opentofu·aws-docs·aws-api)  ✅6-3 confused deputy  ✅6-1 prevent_destroy
-                        🎉 미검증 6항목 전부 판정 · Phase 6 완결
+🎉 미검증 6항목 전부 판정 · Phase 6 완결  ✅eks apply 완료(2026-08-04)
 ```
 
 **🎉 Phase 6 완결(2026-07-31).** 미검증 6항목이 모두 판정됐다(판정표 SSOT = `docs/deployment-facts.md` §6).
@@ -17,8 +17,8 @@ apply `0/20/0`(서브넷 태그 in-place). D20 소싱 규약의 정상 운영을
 
 **🆕 2026-08-03~04: live/dev/eks 배포 루트 + graviton·버전 핀**(아래 「live/dev/eks」).
 PR#13(루트 신설) · **PR#12(D30-1)** · **PR#14**(graviton+핀+rename+§8) 전부 **merge**.
-**vpc·eks 독립 배포**(별도 state + 태그 data source). EKS는 여전히 **apply 안 함** — plan만 `71 to add` clean.
-⏸ **실제 생성은 `deploy-eks.yml` workflow_dispatch 를 눌러야** 시작된다(비용 발생).
+**✅ 2026-08-04: EKS apply 완료(2회 dispatch)** — 클러스터 ACTIVE, graviton 노드그룹 running, 8종 addon 등록.
+비용 발생: ~$165/월 + Flow Logs. `external_dns_iam` 일시 중단(upstream 버그, 재개 조건 문서化).
 
 ⚠️ **MCP 서버 3종이 `.mcp.json`에 있다**(opentofu·aws-docs·**aws-api**). aws-api는 2026-07-31
 추가분 — 재시작 후 첫 사용 시 승인 프롬프트. `mcp__opentofu__get-resource-docs`로 스키마 확인이
@@ -387,11 +387,38 @@ PR은 merge 없이 닫음(자산 유지). run [`30605752914`](https://github.com
    `--tf-exclude-downloaded-modules`(훅)로 제외 = 우리 루트 clean. .trivyignore 정책대로 배포 루트에서
    안 덮는다 — public access 수락은 모듈 설계 판단이고 소비자가 CIDR 제한과 함께 opt-in 한 것.
 
-### pre-apply 상태 (EKS README §4) — **전부 충족, dispatch 만 남음**
+### ✅ EKS apply 완료 (2026-08-04, dispatch 2회)
+
+**[run 30878573785](https://github.com/skax-ca/iac-reference-infra/actions/runs/30878573785) — `0 add / 0 change / 2 destroy`**
+
+두 번째 dispatch 성공. 첫 번째 dispatch(run 30877358485)가 `external_dns_iam` IAM 정책 생성에서
+**400 MalformedPolicyDocument**로 실패하기 **직전에** 클러스터·노드그룹·addon을 state에 생성했다.
+두 번째 dispatch는 `enable_external_dns_iam=false` 변경분을 감지해 **external_dns IAMRole+association 2개만 파기**했다.
+
+**실계정 확인** (run 직후):
+- 클러스터 `eks-ref-dev-an2-main-01` — **ACTIVE**, k8s 1.35
+- 노드그룹 `eksn-ref-dev-an2-system` — t4g.medium×2 (graviton)
+- addon 8종 모두 존재: aws-ebs-csi-driver · cert-manager · coredns · eks-pod-identity-agent ·
+  external-dns · kube-proxy · metrics-server · vpc-cni
+- deletion_protection=true (콘솔에서도 삭제 불가)
+
+**🔑 실측: 첫 apply 실패 시에도 클러스터는 이미 생성된다.**
+`eks module`은 리소스 타입이 많아 plan 71개 중 **IAM Role · SG · KMS · EKS cluster 자체**가
+순서대로 state에 write되고, 실패 시점에 도달한 지점에서 멈춘다. 재apply는 state를 읽어
+**이미 있는 것 → plan 0, 없던 것 → 2 destroy**(external_dns IAM만).
+이것이 `tofu apply`의 원자성이 아니라 AWS API의 프로비저닝 타이밍에 기인하는 속성임이 실증됐다.
+
+**⛔ `external_dns_iam` 일시 중단 — upstream 버그(D-NODE-ARCH 유사).**
+`external_dns_hosted_zone_arns=[]` 빈 배열을 넘기면 upstream이 `Resource="*"`인 IAM 정책을 만들지만,
+`route53:ChangeResourceRecordSets`는 리소스 수준 권한이라 AWS가 400으로 거부한다.
+재개 조건: (1) dev hosted zone bootstrap 또는 (2) upstream fix 후 module 승격.
+GitOps helm 설치 시 IAM은 별도 처리한다.
+
+### pre-apply 상태 (EKS README §4) — **전부 충족, apply 완료**
 - ✅ repo 변수 `EKS_PUBLIC_ACCESS_CIDRS = ["211.45.60.3/32"]`.
 - ✅ networking 선행 apply 완료(6 changed — 태그 in-place).
 - ✅ `ami_release_version = 1.35.6-20260728` 핀(**arm64** SSM 경로. 아키텍처별로 값이 다르다).
-- ▶️ **실제 EKS 생성은 `deploy-eks.yml` workflow_dispatch** 로만(D30-1). 누르면 71 리소스 생성(비용 발생).
+- ✅ **EKS apply 완료** — `dispatch run 30878573785`, 클러스터 ACTIVE, 노드그룹 running, 8종 addon 등록.
 
 ### ✅ 2026-08-04 추가분 — graviton · 버전 핀 · 워크플로 rename · 작업 원칙
 
@@ -427,7 +454,12 @@ EKS 컨트롤플레인 ~$73/월 + system NG m6i.large×2 ~$170/월 + 컨트롤�
 
 ## 💰 현재 진행 중 비용
 
-`live/dev/networking` 66개 리소스가 살아 있다. NAT Gateway 1개(월 ~$43) + Flow Logs CloudWatch.
+| 루트 | 상태 | 월 비용 |
+|------|------|---------|
+| `live/dev/networking` | 66개 리소스 apply 완료 | NAT Gateway ~$43 + Flow Logs CloudWatch |
+| `live/dev/eks` | **apply 완료** (run 30878573785) | EKS 컨트롤플레인 ~$73 + system t4g.medium×2 ~$48 + 컨트롤플레인 로그 |
+
+총 예상: **~$165/월 + Flow Logs** (nat $43 + eks $122).
 
 ### ⚠️ 과잉 주장 금지
 
