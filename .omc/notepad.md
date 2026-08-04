@@ -440,5 +440,5 @@ EKS 컨트롤플레인 ~$73/월 + system NG m6i.large×2 ~$170/월 + 컨트롤�
 
 - ✅ **#1 해결** — plan/apply 권한 분리 → C안(현재 구조 유지 + 문서화). `deployment-facts.md` §7
 - ✅ **#4 해결** — CI `init` shallow clone → `&depth=1` 추가. `deployment-facts.md` §8
+- ✅ **deepinit 실행 완료** (2026-08-04) — 9개 AGENTS.md 작성/hierarchical 검증 완료
 - plan artifact 암호화 — `retention-days: 1`은 완화이지 해결이 아니다
-- deepinit 실행 — `.tf` 분석 대상이 존재함
