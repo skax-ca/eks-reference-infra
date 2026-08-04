@@ -70,8 +70,9 @@ tofu -chdir=live/dev/eks plan   # → AccessDenied. plan 은 CI 에서만 돈다
 | k8s 버전 | `1.35` (N-1) |
 | 엔드포인트 | **public-restricted** + private (public 은 `public_access_cidrs` 로 좁힘) |
 | custom networking | ON — Pod 는 `pod-dup`(100.64/16 비라우팅), 노드는 `node-uniq` 로 SNAT (VPC D9) |
-| 노드그룹 | `system` — m6i.large × 2~4 (앱·버스트는 Karpenter) |
-| addon | baseline 6종 + `cert-manager` · `external-dns` (merge, 누락!=삭제) |
+| 노드그룹 | `system` — **t4g.medium(graviton/arm64) × 2~4** (앱·버스트는 Karpenter) |
+| AMI | `AL2023_ARM_64_STANDARD` · release `1.35.6-20260728` **핀**(D-NODE-ARCH · D-NODE-AMI-PIN) |
+| addon | baseline 6종 + `cert-manager` · `external-dns` — **8종 전부 버전 핀**(merge, 누락!=삭제) |
 | Karpenter | ON (IAM 전제. helm/NodePool 은 GitOps) |
 | 컨트롤러 IAM | ALBC · external-dns Pod Identity role ON |
 | 컨트롤플레인 로깅 | `api` · `audit` · `authenticator` |
@@ -86,18 +87,29 @@ external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계
 
 이 루트는 **코드만 먼저 들어왔다**(2026-08-03, 사용자 결정 "코드만 추가"). 실제 apply 전에:
 
-1. **repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 설정** (JSON 배열 문자열). 없으면 plan 실패.
-2. **`main.tf` 의 `ami_release_version` 을 concrete 버전으로 핀** (현재 `null`).
-   `null` 이면 매 plan 이 최신을 해석해 apply 마다 노드 롤링 교체가 난다(D-NODE-AMI-PIN).
-   값 얻는 법: 계정에서
-   `aws ssm get-parameter --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/release_version --profile team`.
-3. **networking 이 먼저 apply 되어 있어야 한다** — karpenter 디스커버리 태그(node-uniq)와
-   serial 을 포함한 클러스터명 태그가 이미 붙어 있어야 이 루트의 조회·디스커버리가 성립한다.
-4. **plan 의 destroy/replace 목록을 읽는다**(공용 계정, D27-2). apply 는 `workflow_dispatch` 로만.
+1. ✅ **repo 변수 `EKS_PUBLIC_ACCESS_CIDRS`** — 설정 완료(2026-08-03). 없으면 plan 이 실패한다.
+2. ✅ **`ami_release_version` 핀** — `1.35.6-20260728`(arm64, 2026-08-04 실측).
+   ⚠️ **아키텍처별로 값이 다르다.** 이 루트는 graviton 이므로 **arm64 경로**에서 얻는다:
+   `aws ssm get-parameter --profile team --region ap-northeast-2 --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/arm64/standard/recommended/release_version`
+3. ✅ **networking 선행 apply** — 완료(2026-08-03, `0 added / 6 changed / 0 destroyed`).
+   karpenter 디스커버리 태그(node-uniq)와 serial 포함 클러스터명 태그가 붙어 있어야 조회가 성립한다.
+4. ⏳ **plan 의 destroy/replace 목록을 읽는다**(공용 계정, D27-2). apply 는 `workflow_dispatch` 로만.
+
+### 🔄 버전을 올릴 때 함께 고치는 것 (묶음이 깨지면 apply 가 죽는다)
+
+`kubernetes_version` 을 올리면 **아래가 한 커밋 안에서 같이** 움직여야 한다:
+
+| 대상 | 이유 |
+|------|------|
+| `cluster_addons` 8종의 `addon_version` | 값이 `f(k8s, region)` 이다. 특히 `kube-proxy` 는 **정의상** k8s 마이너를 따라간다 |
+| `ami_release_version` | k8s 버전별 AMI 다. ⚠️ **arm64 경로**에서 얻는다 |
+
+`instance_types` 의 아키텍처를 바꿀 때는 **`ami_type` 과 `ami_release_version` 을 함께** 고친다.
+이 불일치는 plan 에서 잡히지 않는다(AWS 도 노드그룹 생성 시점에야 거부한다).
 
 ### 💰 비용 (enterprise 프로파일)
 
-EKS 컨트롤플레인 ~$73/월 + system 노드 2×m6i.large ~$170/월 + 컨트롤플레인 로그.
+EKS 컨트롤플레인 ~$73/월 + system 노드 2×t4g.medium ~$48/월 + 컨트롤플레인 로그.
 networking 의 NAT ~$43/월 위에 얹힌다.
 
 ---
