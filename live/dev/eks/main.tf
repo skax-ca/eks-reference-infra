@@ -9,11 +9,17 @@
 #      네이밍이 결정적이라 조회가 예측 가능하다. 이 방식이면 vpc 를 먼저 파기해도 eks plan 이
 #      "VPC 없음"으로 **명확히** 실패하고(조용한 오작동이 아니다), 순서만 지키면 각자 배포·파기된다.
 #
-# ⚠️ 소싱 핀은 정확 태그다(D20). eks-cluster-v0.1.0 = 모듈 repo 74bbf51. 업그레이드는 이 줄을 올리는
+# ⚠️ 소싱 핀은 정확 태그다(D20). eks-cluster-v0.3.0 = 모듈 repo 417154b. 업그레이드는 이 줄을 올리는
 #    명시적 커밋이고 그것이 승격 게이트다. git 소싱에 ~> 는 동작하지 않는다.
 # ⚠️ 0.y.z 는 개발 단계다(모듈 repo architecture/05 = D-VERSION) — 마이너 업그레이드도 계약을
 #    바꿀 수 있으니 태그를 올릴 때 릴리스 메시지를 읽는다. 구 eks-cluster-v1.0.0 은 2026-08-05
 #    재매핑으로 사라졌다(같은 커밋의 v0.1.0 이 대체).
+
+# ── 계정·partition — 클러스터 ARN 을 유도하기 위한 것뿐이다 ────────────────────
+# ⛔ 이 값들을 다른 용도로 늘리지 않는다. 계정 ID 를 코드에 박지 않기 위한 조회이지
+#    "계정 정보를 루트가 안다"는 뜻이 아니다(D25).
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
 
 locals {
   # 클러스터 이름 토큰. 모듈이 "eks-<workload>-<env>-<region>-<purpose>-<serial>" 로 조합한다
@@ -23,12 +29,33 @@ locals {
   #    VPC 가 그 이름으로 서브넷 디스커버리 태그(kubernetes.io/cluster/<name> · karpenter.sh/discovery)를
   #    붙이고, EKS 모듈도 같은 이름으로 node SG 태그를 붙인다. 한 글자라도 어긋나면 selector 가
   #    빈 결과를 내고 프로비저닝이 **에러 없이** 실패한다(모듈 주석의 "PoC 실제 사고").
-  #    실제 이름은 module.eks 가 소유하며 outputs.tf 의 cluster_name 으로 확인한다.
+  #    권위 값은 여전히 module.eks 가 소유한다 — outputs.tf 의 cluster_name 으로 대조한다.
   cluster_purpose = "main"
   cluster_serial  = "01"
 
+  # ⭐ **이 두 줄이 bastion ↔ eks 순환을 끊는다**(모듈 repo 40 §5.1-1).
+  #    bastion 은 eks_cluster_name/arn 을 받고, eks 는 access_entries 에 bastion role ARN 을 받는다 —
+  #    양쪽이 서로의 module 출력을 참조하면 그래프 순환이라 plan 이 죽는다.
+  #    클러스터 이름·ARN 은 네이밍·리전·계정으로 **유도되므로** 루트가 직접 합성한다
+  #    (03 §3.1 의 1순위 "결정적 네이밍으로 값 구성", 결합도 없음).
+  #    ⇒ bastion 은 local 만 참조하고, eks 만 module.bastion 을 참조한다. 단방향.
+  #
+  # ⛔ local.cluster_arn 을 module.eks.cluster_arn 으로 바꾸지 말 것 — 그 순간 순환이다.
+  #    합성식은 실계정 대조로 확인했다(2026-08-06):
+  #      arn:aws:eks:ap-northeast-2:<account>:cluster/eks-ref-dev-an2-main-01
+  cluster_name = "eks-${var.workload}-${var.env}-${var.region_code}-${local.cluster_purpose}-${local.cluster_serial}"
+  cluster_arn  = "arn:${data.aws_partition.current.partition}:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${local.cluster_name}"
+
   # 우리 VPC 를 식별하는 Name 태그. networking 루트가 vpc 모듈에 purpose="main" 으로 넘긴 결과다.
   vpc_name = "vpc-${var.workload}-${var.env}-${var.region_code}-main"
+
+  # bastion 을 놓을 서브넷 하나. bastion 은 1대라 AZ 분산이 의미 없다(40 §2.2).
+  #
+  # ⚠️ **sort() 가 핵심이다.** data.aws_subnets.ids 는 타입이 list 지만 순서는 AWS API 응답 순이라
+  #    계약이 아니다(스키마 확인 2026-08-06). 정렬 없이 [0] 을 쓰면 조회 순서가 바뀌는 것만으로
+  #    subnet_id 가 달라져 **인스턴스가 교체**된다. 어느 AZ 냐가 아니라 **결정적이냐**가 요건이다.
+  #    (모듈 예제는 vpc 모듈 출력의 AZ 순 리스트에서 [0] 을 뽑는다 — 여기는 data source 라 그 순서가 없다.)
+  bastion_subnet_id = sort(data.aws_subnets.vm.ids)[0]
 }
 
 # ── VPC 디스커버리 (독립 배포의 핵심) ──────────────────────────────────────────
@@ -71,8 +98,61 @@ data "aws_subnets" "pod" {
   }
 }
 
+# 관리 호스트 서브넷 — bastion 이 여기 놓인다. private(NAT 아웃바운드)이고 node-uniq 와 **분리**돼
+# 있다. 섞으면 그 대역의 karpenter.sh/discovery 태그 때문에 소유가 흐려진다(40 §구현 4).
+data "aws_subnets" "vm" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.this.id]
+  }
+  filter {
+    name   = "tag:SubnetGroup"
+    values = ["vm-uniq"]
+  }
+}
+
+# ── bastion — private 클러스터의 도달 지점 (모듈 repo 설계 40) ─────────────────
+#
+# ⚠️ bastion 은 module.eks 의 출력을 **참조하지 않는다** — 위 local.cluster_name/arn 만 쓴다(순환 해소).
+module "bastion" {
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/bastion?ref=bastion-v0.1.0&depth=1"
+
+  naming = {
+    workload    = var.workload
+    env         = var.env
+    region_code = var.region_code
+  }
+
+  vpc_id    = data.aws_vpc.this.id
+  subnet_id = local.bastion_subnet_id
+
+  # ⛔ D-BASTION-AMI-PIN — 모듈에 기본값이 **없다**(AMI ID 는 리전 종속이라 재사용 자산의 기본값이
+  #    될 수 없다). 조회한 값을 커밋한다 — SSM latest 경로를 코드에 넣으면 AWS 릴리스마다
+  #    **리뷰 없이 인스턴스가 재생성**된다. 위 ami_release_version 핀과 같은 성격이다.
+  #
+  # AL2023 arm64 / ap-northeast-2 (2026-08-06 실측):
+  #   aws ssm get-parameter --profile team --region ap-northeast-2 \
+  #     --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64 \
+  #     --query Parameter.Value --output text
+  # ⚠️ instance_type 기본값 t4g.nano(arm64)와 **아키텍처가 짝이다.** 모듈은 검증하지 않고
+  #    불일치는 apply 에서야 드러난다 — x86 으로 바꾸려면 위 경로의 -x86_64 를 조회하고
+  #    instance_type 도 함께 넘긴다(노드그룹의 ami_type ↔ instance_types 와 같은 함정).
+  ami_id = "ami-0973292651cddee46"
+
+  # 클러스터 마이너와 맞춘다(1.35 → v1.35.x). https://dl.k8s.io/release/stable-1.35.txt 실측.
+  kubectl_version = "v1.35.7"
+
+  # ⛔ helm 은 받지 않는다. 이 클러스터는 GitOps(pull) 전제라 helm 직접 운영(22 §3 프로파일 B)이
+  #    현재 요구가 아니다. 필요해지면 helm_version 을 그때 연다 — 안 쓰는 바이너리를 미리 얹지 않는다.
+
+  # EKS 접근 3층 중 **1층만** 여기서 성립한다(D-BASTION-SEAM).
+  # 2층(Access Entry)·3층(cluster SG ingress)은 아래 eks 블록이 소유한다.
+  eks_cluster_name = local.cluster_name
+  eks_cluster_arn  = local.cluster_arn
+}
+
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.2.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.3.0&depth=1"
 
   # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(02 §1.4(b)).
   naming = {
@@ -93,10 +173,52 @@ module "eks" {
 
   # ── 엔드포인트 — public-restricted (사용자 결정 2026-08-03) ──────────────────
   # public 을 켜되 CIDR 로 좁힌다. private 도 함께 켜 노드·VPC 내부 경로를 유지한다.
-  # ⚠️ bastion(design/40)이 아직 없어 private-only 면 kubectl 도달 지점이 없다 — 그래서 public 을 켠다.
+  #
+  # 🔴 **아직 켜 둔다 — 이 커밋에서 닫지 않는다.** 위 module.bastion 이 도달 지점을 만들지만
+  #    "만들었다"와 "닿는다"는 다르다. 순서를 뒤집으면 bastion 이 안 될 때 클러스터에 닿을 방법이
+  #    아예 없어진다. public 을 닫는 것은 아래가 전부 실증된 **다음 커밋**이다:
+  #      ① bastion apply  ② SSM 세션 접속  ③ 그 세션에서 kubectl get nodes 성공
+  #    ⇒ 그때 이 두 줄(endpoint_public_access · public_access_cidrs)과 var 를 함께 걷어낸다.
   endpoint_private_access = true
   endpoint_public_access  = true
   public_access_cidrs     = var.public_access_cidrs
+
+  # ── EKS 접근 3층 중 2·3층 — D-BASTION-SEAM (모듈 repo 설계 40 §5) ────────────
+  #
+  # 🔑 소유가 갈리는 기준은 **주체냐 대상이냐**다. 1층(eks:DescribeCluster)은 bastion 자신의
+  #    권한이라 bastion 모듈이, 2·3층은 "클러스터가 누구를 받아들이는가"라 이 모듈이 소유한다
+  #    (03 §2.3 — 소유 모듈이 허용 소스를 변수로 파라미터화한다).
+  #
+  # ⚠️ 세 층이 **모두** 있어야 kubectl 이 닿는다. 빠뜨렸을 때 증상이 층마다 다르다:
+  #      1층 없음 → update-kubeconfig 권한 오류 / 2층 없음 → 401 Unauthorized
+  #      3층 없음 → dial tcp …: i/o timeout   ← 인증 계층에 닿지도 못했다는 뜻
+  #    PoC 는 앞의 두 층만 갖추고 timeout 을 만났다(40 §3). 진단 시 이 표를 먼저 본다.
+
+  # 2층 — 클러스터 안에서 무엇을 할 수 있는가.
+  # ⚠️ ClusterAdmin 은 넓다. **SSM 접근 통제가 곧 클러스터 보안이 된다**(40 §10-1).
+  #    실제 운영이 요구하는 최소 권한은 첫 수행 후 좁힌다(40 §10-3) — 지금 좁히면 무엇이
+  #    필요한지 모른 채 추측으로 닫는 것이다.
+  access_entries = {
+    bastion = {
+      principal_arn = module.bastion.bastion_iam_role_arn
+      policy_associations = {
+        admin = {
+          policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = { type = "cluster" }
+        }
+      }
+    }
+  }
+
+  # 3층 — apiserver 에 네트워크로 닿는가. eks-cluster-v0.3.0 이 신설한 통과 지점이다.
+  cluster_security_group_additional_rules = {
+    bastion_kubectl = {
+      from_port                = 443
+      to_port                  = 443
+      description              = "kubectl from bastion"
+      source_security_group_id = module.bastion.bastion_security_group_id
+    }
+  }
 
   # ── 컨트롤플레인 로깅 (trivy AVD-AWS-0038) ─────────────────────────────────
   # CloudWatch 비용이 발생하지만 감사 대상 환경에서 audit·authenticator 는 사실상 필수다.
