@@ -72,7 +72,7 @@ data "aws_subnets" "pod" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.1.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.2.0&depth=1"
 
   # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(02 §1.4(b)).
   naming = {
@@ -172,8 +172,9 @@ module "eks" {
     # ── community tier (opt-in 추가) ────────────────────────────────────────
     # 컨트롤러+CRD 는 IaC addon, Issuer/Certificate CR 은 GitOps 소관이다(§1 경계).
     "cert-manager" = { addon_version = "v1.21.0-eksbuild.3" }
-    # 관리형 Route53. 애노테이션은 GitOps, IAM 은 아래 enable_external_dns_iam 이 만든다.
-    "external-dns" = { addon_version = "v0.21.0-eksbuild.6" }
+    # ⛔ external-dns 는 **싣지 않는다**(2026-08-05). 아래 enable_external_dns_iam 과 한 쌍이다 —
+    #    IAM 없이 컨트롤러만 돌면 Route53 에 아무것도 쓰지 못하는 파드가 남는다(죽은 경로).
+    #    되켤 때는 addon 과 IAM 을 **함께** 켠다.
   }
 
   # ── Karpenter · 컨트롤러 IAM ────────────────────────────────────────────────
@@ -185,10 +186,20 @@ module "eks" {
   # ALBC 는 community addon 이 없어 GitOps helm 으로 설치되지만 IAM 전제는 IaC 소관이다(§2.6a).
   enable_alb_controller_iam = true
 
-  # ⚠️ **임시 끄기(2026-08-04).** external_dns_hosted_zone_arns=[] 빈 배열을 넘기면
-  #    upstream 이 Resource="*" 인 IAM 정책을 만들지만 route53:ChangeResourceRecordSets 은
-  #    리소스 수준 권한이라 AWS 가 400 MalformedPolicyDocument 로 거부한다.
-  #    재개 조건: (1) dev hosted zone 을 bootstrap 하거나 (2) upstream fix 후 module 승격.
-  #    IAM 미생성은 GitOps helm 설치 시 별도 처리한다.
+  # ⛔ **끈 상태가 기본값이다**(2026-08-05 개정). 2026-08-04 에는 "임시 끄기"였지만, 모듈이
+  #    v0.2.0 에서 가드를 갖게 되면서 성격이 바뀌었다 — 이제 이것이 소비 프로젝트의 기본값이다
+  #    (모듈 repo `design/20 §4.2` = D-EXTDNS-ZONE, 예제 README "external-dns" 절).
+  #
+  #    원인: external_dns_hosted_zone_arns=[] 를 넘기면 upstream 이 Resource="*" 인 IAM 정책을
+  #    만드는데, route53:ChangeResourceRecordSets 는 리소스 수준 권한이라 AWS 가
+  #    400 MalformedPolicyDocument 로 거부한다.
+  #
+  #    ⛔ **upstream fix 를 기다리지 않는다** — upstream 버그가 아니라 AWS IAM 제약이다.
+  #       모듈 v0.2.0 이 이 조합을 **plan 에서** 거부하므로, 이제 zone ARN 없이 켜면
+  #       apply 가 아니라 plan 단계에서 막힌다.
+  #
+  #    되켜는 법: dev hosted zone 을 확보한 뒤 data.aws_route53_zone 으로 **조회**해서 ARN 을
+  #    넘기고, 위 cluster_addons 의 "external-dns" 도 **함께** 되살린다. zone 자체는 이 루트가
+  #    소유하지 않는다 — 워크로드 수명주기보다 오래 살기 때문이다(03 §3.1).
   enable_external_dns_iam = false
 }

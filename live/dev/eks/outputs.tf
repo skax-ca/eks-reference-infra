@@ -83,7 +83,9 @@ output "alb_controller_iam_role_arn" {
 }
 
 output "external_dns_iam_role_arn" {
-  description = "external-dns 의 Pod Identity role ARN."
+  # ⚠️ 현재는 **null 이다** — enable_external_dns_iam = false 가 기본값이기 때문이다(main.tf 참조).
+  #    에러가 아니라 모듈의 설계된 동작이며(§3.2 출력 계약), 되켜면 값이 채워진다.
+  description = "external-dns 의 Pod Identity role ARN. 현재 external-dns 는 꺼져 있어 null 이다."
   value       = module.eks.external_dns_iam_role_arn
 }
 
