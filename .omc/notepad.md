@@ -432,6 +432,10 @@ PR은 merge 없이 닫음(자산 유지). run [`30605752914`](https://github.com
 재개 조건: (1) dev hosted zone bootstrap 또는 (2) upstream fix 후 module 승격.
 GitOps helm 설치 시 IAM은 별도 처리한다.
 
+> ⚠️ **위 두 줄은 2026-08-04 당시의 기록이며 2026-08-05에 개정됐다**(아래 D-EXTDNS-ZONE 절).
+> **"일시 중단"이 아니라 기본값**이고, **재개 조건 (2)는 기각됐다** — upstream 버그가 아니라
+> AWS IAM 제약이라 기다릴 대상이 없다. 이 문단은 사실 기록으로만 읽는다.
+
 ### pre-apply 상태 (EKS README §4) — **전부 충족, apply 완료**
 - ✅ repo 변수 `EKS_PUBLIC_ACCESS_CIDRS = ["211.45.60.3/32"]`.
 - ✅ networking 선행 apply 완료(6 changed — 태그 in-place).
@@ -467,6 +471,31 @@ networking plan 결과가 `No changes` 였다. → 경로 필터를 더 좁히�
 
 ### 💰 apply 시 비용
 EKS 컨트롤플레인 ~$73/월 + system NG m6i.large×2 ~$170/월 + 컨트롤플레인 로그. 기존 NAT $43/월 위.
+
+### ✅ 2026-08-05 — 모듈 핀 `eks-cluster-v0.2.0` + external-dns 미탑재 확정 (D-EXTDNS-ZONE)
+
+커밋 `3331eaa`(main 직접). 모듈 repo PR [#11](https://github.com/skax-ca/iac-module-library/pull/11) 종결분을 반영했다.
+
+**⏸ apply 대기 — plan 은 돌았고 dispatch 만 남았다**(run [`30968180122`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30968180122)).
+
+```
+# module.eks.module.eks.aws_eks_addon.this["external-dns"] will be destroyed
+Plan: 0 to add, 0 to change, 1 to destroy.
+```
+
+- ⭐ **핀 상향의 diff 가 0이라는 것이 증거다.** `v0.1.0 → v0.2.0` 은 교차변수 validation 추가뿐이라
+  리소스에 영향이 없어야 하는데 plan 이 그것을 실증했다. 여기서 예상치 못한 change 가 나왔다면
+  릴리스가 계약을 몰래 바꿨다는 뜻이다 — **`0.y.z` 구간에서 특히 확인할 가치가 있는 지점**이다.
+- **destroy 1건 = `external-dns` addon.** IAM 이 꺼져 있어 이 컨트롤러는 Route53 에 아무것도 쓰지
+  못한 채 돌고 있었다(죽은 경로). ⭐ **addon 과 IAM 은 한 쌍**이라 함께 끈다 — 되켤 때도 함께 켠다.
+- ⛔ **"upstream fix 대기"는 기각됐다.** upstream 버그가 아니라 **AWS IAM 제약**이고
+  (`route53:ChangeResourceRecordSets` 는 리소스 수준 권한), 조합을 막는 것은 facade 의 일이라는 것이
+  D-EXTDNS-ZONE 의 판단이다. 모듈 `v0.2.0` 이 이제 그 조합을 **plan 에서** 거부한다.
+- **되켜는 법**: dev hosted zone 확보 → `data.aws_route53_zone` 으로 **조회**해 ARN 을 넘기고
+  addon 도 함께 되살린다. ⛔ **zone 은 이 루트가 소유하지 않는다** — 워크로드 수명주기보다 오래 산다.
+  (모듈 repo `examples/eks-cluster-enterprise/README.md` "external-dns" 절이 안내 SSOT)
+- ⚠️ **이 머신에는 `backend.hcl` 이 없어 로컬 plan 이 불가하다**(D25 partial backend).
+  로컬은 `fmt`·`validate`·`init` 까지가 한계이고 **판정은 CI plan** 이 한다.
 
 ---
 
