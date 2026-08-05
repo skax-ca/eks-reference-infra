@@ -35,8 +35,11 @@ apply `0/20/0`(서브넷 태그 in-place). D20 소싱 규약의 정상 운영을
 
 **🆕 2026-08-03~04: live/dev/eks 배포 루트 + graviton·버전 핀**(아래 「live/dev/eks」).
 PR#13(루트 신설) · **PR#12(D30-1)** · **PR#14**(graviton+핀+rename+§8) 전부 **merge**.
-**✅ 2026-08-04: EKS apply 완료(2회 dispatch)** — 클러스터 ACTIVE, graviton 노드그룹 running, 8종 addon 등록.
-비용 발생: ~$165/월 + Flow Logs. `external_dns_iam` 일시 중단(upstream 버그, 재개 조건 문서化).
+**✅ 2026-08-04: EKS apply 완료(2회 dispatch)** — 클러스터 ACTIVE, graviton 노드그룹 running.
+비용 발생: ~$165/월 + Flow Logs.
+**🆕 2026-08-05: 모듈 핀 `eks-cluster-v0.2.0` + external-dns 제거 apply 완료** — **현행 addon 7종**
+(구 8종 기록은 08-04 시점이다). ⛔ **external-dns 는 "일시 중단"이 아니라 기본값**이고
+**"upstream fix 대기"는 기각됐다**(AWS IAM 제약이라 기다릴 대상이 없다) — 아래 D-EXTDNS-ZONE 절.
 
 ⚠️ **MCP 서버 3종이 `.mcp.json`에 있다**(opentofu·aws-docs·**aws-api**). aws-api는 2026-07-31
 추가분 — 재시작 후 첫 사용 시 승인 프롬프트. `mcp__opentofu__get-resource-docs`로 스키마 확인이
@@ -476,12 +479,19 @@ EKS 컨트롤플레인 ~$73/월 + system NG m6i.large×2 ~$170/월 + 컨트롤�
 
 커밋 `3331eaa`(main 직접). 모듈 repo PR [#11](https://github.com/skax-ca/iac-module-library/pull/11) 종결분을 반영했다.
 
-**⏸ apply 대기 — plan 은 돌았고 dispatch 만 남았다**(run [`30968180122`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30968180122)).
+**✅ apply 완료** — push plan run [`30968180122`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30968180122) →
+dispatch run [`30968371410`](https://github.com/skax-ca/iac-reference-infra/actions/runs/30968371410).
 
 ```
 # module.eks.module.eks.aws_eks_addon.this["external-dns"] will be destroyed
 Plan: 0 to add, 0 to change, 1 to destroy.
+→ Destroying... [id=eks-ref-dev-an2-main-01:external-dns]
+→ Apply complete! Resources: 0 added, 0 changed, 1 destroyed.
 ```
+
+✅ **실계정 독립 확인**: `aws eks list-addons` = **7종**(8종에서 `external-dns` 빠짐) —
+`vpc-cni`·`coredns`·`kube-proxy`·`eks-pod-identity-agent`·`aws-ebs-csi-driver`·`metrics-server`·`cert-manager`.
+🔑 apply 로그의 성공만으로 끝내지 않았다 — 이 repo 의 판정 기준은 실물 조회다.
 
 - ⭐ **핀 상향의 diff 가 0이라는 것이 증거다.** `v0.1.0 → v0.2.0` 은 교차변수 validation 추가뿐이라
   리소스에 영향이 없어야 하는데 plan 이 그것을 실증했다. 여기서 예상치 못한 change 가 나왔다면
@@ -496,6 +506,10 @@ Plan: 0 to add, 0 to change, 1 to destroy.
   (모듈 repo `examples/eks-cluster-enterprise/README.md` "external-dns" 절이 안내 SSOT)
 - ⚠️ **이 머신에는 `backend.hcl` 이 없어 로컬 plan 이 불가하다**(D25 partial backend).
   로컬은 `fmt`·`validate`·`init` 까지가 한계이고 **판정은 CI plan** 이 한다.
+- ⚠️ **이 머신(`/Users/born2k/…`)에는 `team` 프로파일이 없다.** CLAUDE.md 는
+  *"`aws` CLI 는 항상 `--profile team`"* 이라고 적지만 그것은 다른 머신 기준이다 —
+  여기서는 **`silverte`** 프로파일로 조회했다(`aws configure list-profiles` = silverte·born2k·default).
+  🔑 게이트 도구와 같은 유형의 **머신별 상태**다. 새 머신에서 먼저 확인한다.
 
 ---
 
