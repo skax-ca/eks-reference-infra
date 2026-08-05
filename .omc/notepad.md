@@ -506,10 +506,11 @@ Plan: 0 to add, 0 to change, 1 to destroy.
   (모듈 repo `examples/eks-cluster-enterprise/README.md` "external-dns" 절이 안내 SSOT)
 - ⚠️ **이 머신에는 `backend.hcl` 이 없어 로컬 plan 이 불가하다**(D25 partial backend).
   로컬은 `fmt`·`validate`·`init` 까지가 한계이고 **판정은 CI plan** 이 한다.
-- ⚠️ **이 머신(`/Users/born2k/…`)에는 `team` 프로파일이 없다.** CLAUDE.md 는
-  *"`aws` CLI 는 항상 `--profile team`"* 이라고 적지만 그것은 다른 머신 기준이다 —
-  여기서는 **`silverte`** 프로파일로 조회했다(`aws configure list-profiles` = silverte·born2k·default).
-  🔑 게이트 도구와 같은 유형의 **머신별 상태**다. 새 머신에서 먼저 확인한다.
+- ✅ **`team` 프로파일 해소**(2026-08-05, 사용자가 이 머신에 설정). 최초 확인 때는 없어서
+  임시로 다른 프로파일로 조회했으나, 지금은 **CLAUDE.md 규약대로 `--profile team` 이 동작한다**
+  (`list-addons` 7종 재확인 완료 — 같은 결과).
+  🔑 게이트 도구와 같은 유형의 **머신별 상태**다. `brew` 설치·`git config`·`backend.hcl`·
+  AWS 프로파일은 **clone·머신 단위**라 dotfiles 동기화로 따라오지 않는다 — 새 머신에서 먼저 확인한다.
 
 ---
 
