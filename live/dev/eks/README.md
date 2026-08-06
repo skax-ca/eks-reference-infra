@@ -77,7 +77,7 @@ tofu -chdir=live/dev/eks plan   # → AccessDenied. plan 은 CI 에서만 돈다
 | 컨트롤러 IAM | ALBC Pod Identity role ON. **external-dns 는 OFF**(addon 과 한 쌍이라 함께 끈다) |
 | 컨트롤플레인 로깅 | `api` · `audit` · `authenticator` |
 | 삭제 보호 | `deletion_protection = true` (AWS 네이티브) |
-| **bastion** | **ON** — `vm-uniq` private 서브넷, t4g.nano(arm64), SSM 전용(인바운드 0). `bastion-v0.1.0` |
+| **workbench** | **ON** — `vm-uniq` private 서브넷, t4g.nano(arm64), SSM 전용(인바운드 0). `workbench-v0.1.0` |
 
 이 루트가 만들지 **않는** 것: helm 릴리스 · NodePool/NodeClass · Issuer/Certificate CR ·
 external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계). 이 루트는 그 전제(클러스터·IAM)만 만든다.
@@ -94,19 +94,19 @@ external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계
    `aws ssm get-parameter --profile team --region ap-northeast-2 --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/arm64/standard/recommended/release_version`
 3. ✅ **networking 선행 apply** — 완료(2026-08-03, `0 added / 6 changed / 0 destroyed`).
    karpenter 디스커버리 태그(node-uniq)와 serial 포함 클러스터명 태그가 붙어 있어야 조회가 성립한다.
-4. ✅ **bastion AMI 핀** — `ami-0973292651cddee46`(AL2023 **arm64**, an2, 2026-08-06 실측).
+4. ✅ **workbench AMI 핀** — `ami-0973292651cddee46`(AL2023 **arm64**, an2, 2026-08-06 실측).
    `aws ssm get-parameter --profile team --region ap-northeast-2 --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64`
    ⚠️ `instance_type` 기본값 `t4g.nano`(arm64)와 **아키텍처가 짝이다.** 모듈은 검증하지 않는다.
 5. ⏳ **plan 의 destroy/replace 목록을 읽는다**(공용 계정, D27-2). apply 는 `workflow_dispatch` 로만.
 
-### 🔴 bastion 도달 → public 차단은 **순서가 안전에 직결된다**
+### 🔴 workbench 도달 → public 차단은 **순서가 안전에 직결된다**
 
-`endpoint_public_access` 는 bastion 을 넣은 커밋에서 닫지 **않는다.** 먼저 닫으면 bastion 이
+`endpoint_public_access` 는 workbench 을 넣은 커밋에서 닫지 **않는다.** 먼저 닫으면 workbench 이
 동작하지 않을 때 **클러스터에 닿을 방법이 아예 없어진다**(kubectl 도, 콘솔의 리소스 탭도).
 
 ```
-① bastion apply            # 이 커밋. public 은 켜 둔 채로
-② aws ssm start-session --profile team --region ap-northeast-2 --target $(tofu output -raw bastion_instance_id)
+① workbench apply            # 이 커밋. public 은 켜 둔 채로
+② aws ssm start-session --profile team --region ap-northeast-2 --target $(tofu output -raw workbench_instance_id)
 ③ 세션 안에서 kubectl get nodes    # 3층이 전부 성립했는지 = 도달 실증
 ④ 그때 public 을 닫는다             # endpoint_public_access=false + public_access_cidrs·var 제거
 ```
@@ -115,7 +115,7 @@ external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계
 
 | 증상 | 빠진 층 | 소유 |
 |------|---------|------|
-| `update-kubeconfig` 권한 오류 | 1층 `eks:DescribeCluster` | bastion 모듈 |
+| `update-kubeconfig` 권한 오류 | 1층 `eks:DescribeCluster` | workbench 모듈 |
 | `401 Unauthorized` | 2층 Access Entry | eks 모듈 `access_entries` |
 | `dial tcp …: i/o timeout` | 3층 cluster SG ingress 443 | eks 모듈 `cluster_security_group_additional_rules` |
 
@@ -129,18 +129,18 @@ external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계
 |------|------|
 | `cluster_addons` 7종의 `addon_version` | 값이 `f(k8s, region)` 이다. 특히 `kube-proxy` 는 **정의상** k8s 마이너를 따라간다 |
 | `ami_release_version` | k8s 버전별 AMI 다. ⚠️ **arm64 경로**에서 얻는다 |
-| bastion `kubectl_version` | 클러스터 마이너와 맞춘다. `https://dl.k8s.io/release/stable-<major.minor>.txt` |
+| workbench `kubectl_version` | 클러스터 마이너와 맞춘다. `https://dl.k8s.io/release/stable-<major.minor>.txt` |
 
 `instance_types` 의 아키텍처를 바꿀 때는 **`ami_type` 과 `ami_release_version` 을 함께** 고친다.
 이 불일치는 plan 에서 잡히지 않는다(AWS 도 노드그룹 생성 시점에야 거부한다).
 
 ### 💰 비용 (enterprise 프로파일)
 
-EKS 컨트롤플레인 ~$73/월 + system 노드 2×t4g.medium ~$48/월 + bastion t4g.nano ~$3/월 + 컨트롤플레인 로그.
+EKS 컨트롤플레인 ~$73/월 + system 노드 2×t4g.medium ~$48/월 + workbench t4g.nano ~$3/월 + 컨트롤플레인 로그.
 networking 의 NAT ~$43/월 위에 얹힌다.
 
-⚠️ bastion 은 **삭제 보호 대상이 아니다**(D-BASTION-LIFECYCLE) — 상태를 담지 않아 수시 생성·파기가
-정상 운용이다. 안 쓸 때 `bastion_enabled = false` 로 내려도 되지만, **public 을 닫은 뒤에는
+⚠️ workbench 은 **삭제 보호 대상이 아니다**(D-WORKBENCH-LIFECYCLE) — 상태를 담지 않아 수시 생성·파기가
+정상 운용이다. 안 쓸 때 `workbench_enabled = false` 로 내려도 되지만, **public 을 닫은 뒤에는
 유일한 도달 지점**이므로 내리기 전에 다른 경로를 확보한다.
 
 ---

@@ -42,17 +42,17 @@ output "oidc_provider_arn" {
   value       = module.eks.oidc_provider_arn
 }
 
-# ── bastion (도달 지점) ──────────────────────────────────────────────────────
+# ── workbench (도달 지점) ──────────────────────────────────────────────────────
 # ⚠️ GitOps 앵커가 아니라 **운영자용**이다 — private 엔드포인트로 전환하면 이 값이 클러스터를
-#    만지는 유일한 출발점이 된다. bastion_enabled = false 면 null 이다(에러 아님).
+#    만지는 유일한 출발점이 된다. workbench_enabled = false 면 null 이다(에러 아님).
 
-output "bastion_instance_id" {
+output "workbench_instance_id" {
   description = <<-EOT
     SSM 접속 대상. 인바운드가 0이라 SSH 가 아니라 SSM 으로만 들어간다:
       aws ssm start-session --profile team --region ap-northeast-2 --target <id>
-    kubeconfig 는 bastion user_data 가 이미 만들어 둔다(D-BASTION-SEAM 1층).
+    kubeconfig 는 workbench user_data 가 이미 만들어 둔다(D-WORKBENCH-SEAM 1층).
   EOT
-  value       = module.bastion.bastion_instance_id
+  value       = module.workbench.workbench_instance_id
 }
 
 # ── 보안 그룹 ────────────────────────────────────────────────────────────────
