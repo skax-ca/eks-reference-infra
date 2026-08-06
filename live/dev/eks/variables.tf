@@ -56,26 +56,11 @@ variable "execution_role_arn" {
   type        = string
 }
 
-variable "public_access_cidrs" {
-  description = <<-EOT
-    kube-apiserver public 엔드포인트 접근을 허용할 CIDR 목록(운영자·CI 의 출발지 IP).
-
-    ⛔ 기본값을 두지 않는다 — 두 가지 이유가 겹친다:
-      ① 운영자의 출발지 IP 는 계정/조직 식별 정보에 준한다(D25 의 연장). git 에 두지 않는다.
-      ② 이 모듈은 빈 리스트를 받으면 EKS 가 0.0.0.0/0 으로 **전면 개방**한다 — 기본값 [] 는 위험하다.
-         값이 없으면 apply 가 실패하는 편이 낫다(설정 누락을 조용히 통과시키지 않는다).
-
-    주입 경로(둘 다 git 밖):
-      CI   : repo 변수 EKS_PUBLIC_ACCESS_CIDRS(예: "1.2.3.4/32,5.6.7.8/32") → env: TF_VAR_public_access_cidrs
-      로컬 : export TF_VAR_public_access_cidrs='["1.2.3.4/32"]'
-    ⚠️ validate 는 값이 없어도 통과한다(값을 요구하는 것은 plan 이다).
-  EOT
-  type        = list(string)
-
-  validation {
-    # public 을 켜는 루트에서 전면 개방을 방지한다. 0.0.0.0/0 을 명시로도 넣지 못하게 막는다 —
-    # "제한된 public"이 이 루트의 전제이기 때문이다(사용자 결정 2026-08-03).
-    condition     = !contains(var.public_access_cidrs, "0.0.0.0/0")
-    error_message = "public_access_cidrs 에 0.0.0.0/0 을 넣지 않는다. 이 루트는 제한된 public 접근이 전제다."
-  }
-}
+# ⛔ **`public_access_cidrs` 는 삭제됐다**(2026-08-06, private-only 전환).
+#    public 엔드포인트가 꺼지면 EKS 가 이 값을 무시한다 — 남겨 두면 *"좁혀 두었다"* 는 착시만
+#    만드는 죽은 설정이다. 되살리는 것은 설계 목적(모듈 repo 40 §1)을 되돌리는 결정이므로
+#    그때 명시적으로 판단한다.
+#    ⚠️ tflint `terraform_unused_declarations` 가 미사용 변수를 exit 2 로 잡으므로 소비 지점
+#       (main.tf)을 지우는 커밋과 **같은 커밋**에서 지워야 한다.
+#    ⚠️ CI repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 와 워크플로의 `TF_VAR_public_access_cidrs` 도
+#       함께 걷어낸다 — 코드가 안 읽으면 죽은 설정이다.

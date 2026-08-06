@@ -36,13 +36,13 @@ EKS 클러스터 하나를 배포하는 루트다. 모듈은 `iac-module-library
 | state key | 같음 (**`dev/eks.tfstate`** — networking 과 다르다) | 동일 |
 | **실행 Role ARN** | CI: repo 변수 `AWS_EXEC_ROLE_ARN` · 로컬: `TF_VAR_execution_role_arn` | provider `assume_role` |
 | 입구 Role ARN | CI: repo 변수 `AWS_ENTRY_ROLE_ARN` | `configure-aws-credentials` (워크플로) |
-| **public 접근 CIDR** | CI: repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` · 로컬: `TF_VAR_public_access_cidrs` | 모듈 `public_access_cidrs` |
+
+⛔ **`EKS_PUBLIC_ACCESS_CIDRS` 행은 삭제됐다**(2026-08-06, private-only 전환). 변수·주입 지점·
+repo 변수를 함께 걷어냈다 — public 이 꺼지면 EKS 가 그 값을 무시하므로 남겨 두면
+*"좁혀 두었다"* 는 착시만 만든다.
 
 - `backend.hcl`·backend 규약은 networking README §1 과 **동일**하다(CI 는 `assume_role` 포함, 로컬은 제외).
   차이는 **state key 하나**(`dev/eks.tfstate`)뿐이다.
-- ⚠️ **`EKS_PUBLIC_ACCESS_CIDRS` 는 JSON 배열 문자열**이어야 한다(list 타입 주입):
-  `["1.2.3.4/32","5.6.7.8/32"]`. 운영자 출발지 IP 라 git 에 두지 않는다(D25 의 연장).
-  기본값이 없어 **값 없이는 plan 이 실패**한다 — 빈 리스트면 EKS 가 0.0.0.0/0 으로 전면 개방하기 때문이다.
 
 ---
 
@@ -68,7 +68,7 @@ tofu -chdir=live/dev/eks plan   # → AccessDenied. plan 은 CI 에서만 돈다
 | 항목 | 값 |
 |------|-----|
 | k8s 버전 | `1.35` (N-1) |
-| 엔드포인트 | **public-restricted** + private (public 은 `public_access_cidrs` 로 좁힘) |
+| 엔드포인트 | **private-only** (2026-08-06 전환). apiserver 도달 경로는 **VPC 내부뿐** — 조작은 workbench 를 통해서만 |
 | custom networking | ON — Pod 는 `pod-dup`(100.64/16 비라우팅), 노드는 `node-uniq` 로 SNAT (VPC D9) |
 | 노드그룹 | `system` — **t4g.medium(graviton/arm64) × 2~4** (앱·버스트는 Karpenter) |
 | AMI | `AL2023_ARM_64_STANDARD` · release `1.35.6-20260728` **핀**(D-NODE-ARCH · D-NODE-AMI-PIN) |
@@ -88,7 +88,7 @@ external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계
 
 이 루트는 **코드만 먼저 들어왔다**(2026-08-03, 사용자 결정 "코드만 추가"). 실제 apply 전에:
 
-1. ✅ **repo 변수 `EKS_PUBLIC_ACCESS_CIDRS`** — 설정 완료(2026-08-03). 없으면 plan 이 실패한다.
+1. ⛔ **`EKS_PUBLIC_ACCESS_CIDRS`** — private-only 전환으로 **불필요해졌다**(2026-08-06). GitHub repo 변수도 지운다.
 2. ✅ **`ami_release_version` 핀** — `1.35.6-20260728`(arm64, 2026-08-04 실측).
    ⚠️ **아키텍처별로 값이 다르다.** 이 루트는 graviton 이므로 **arm64 경로**에서 얻는다:
    `aws ssm get-parameter --profile team --region ap-northeast-2 --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/arm64/standard/recommended/release_version`
@@ -101,15 +101,22 @@ external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계
 
 ### 🔴 workbench 도달 → public 차단은 **순서가 안전에 직결된다**
 
-`endpoint_public_access` 는 workbench 을 넣은 커밋에서 닫지 **않는다.** 먼저 닫으면 workbench 이
-동작하지 않을 때 **클러스터에 닿을 방법이 아예 없어진다**(kubectl 도, 콘솔의 리소스 탭도).
+`endpoint_public_access` 를 workbench 보다 **먼저** 닫으면, workbench 가 동작하지 않을 때
+**클러스터에 닿을 방법이 아예 없어진다**(kubectl 도, 콘솔의 리소스 탭도). 그래서 이 순서로 갔다.
 
 ```
-① workbench apply            # 이 커밋. public 은 켜 둔 채로
-② aws ssm start-session --profile team --region ap-northeast-2 --target $(tofu output -raw workbench_instance_id)
-③ 세션 안에서 kubectl get nodes    # 3층이 전부 성립했는지 = 도달 실증
-④ 그때 public 을 닫는다             # endpoint_public_access=false + public_access_cidrs·var 제거
+① workbench apply            ✅ run 31059712680 — 10 added / 0 changed / 0 destroyed
+② SSM 접속                   ✅ PingStatus Online (aws ssm start-session --target <id>)
+③ kubectl get nodes          ✅ 노드 2개 Ready — 3층 전부 성립
+④ public 차단                ✅ 2026-08-06 — endpoint_public_access=false + 변수·주입 지점 제거
 ```
+
+> 🔑 **④ 자체가 판정이었다.** ③ 은 public 이 **켜진 채로** 났으므로 *"private 경로로 닿았다"* 를
+> 증명하지 않았다 — public 을 통해 닿고 있었을 가능성이 남는다. 닫은 뒤 workbench 에서 kubectl 이
+> 다시 되는 것이 그 배제의 유일한 방법이다.
+
+⛔ **이제 workbench 가 유일한 도달 지점이다.** 접근이 필요하면 public 을 다시 여는 것이 아니라
+workbench 를 고친다 — 여는 것은 설계 목적(모듈 repo `40 §1`)을 되돌리는 결정이다.
 
 ③ 이 실패할 때 증상으로 층을 특정한다 — 세 층 중 무엇이 빠졌는지가 에러 형태로 갈린다:
 
@@ -139,7 +146,7 @@ external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계
 EKS 컨트롤플레인 ~$73/월 + system 노드 2×t4g.medium ~$48/월 + workbench t4g.nano ~$3/월 + 컨트롤플레인 로그.
 networking 의 NAT ~$43/월 위에 얹힌다.
 
-⚠️ workbench 은 **삭제 보호 대상이 아니다**(D-WORKBENCH-LIFECYCLE) — 상태를 담지 않아 수시 생성·파기가
+⚠️ workbench 는 **삭제 보호 대상이 아니다**(D-WORKBENCH-LIFECYCLE) — 상태를 담지 않아 수시 생성·파기가
 정상 운용이다. 안 쓸 때 `workbench_enabled = false` 로 내려도 되지만, **public 을 닫은 뒤에는
 유일한 도달 지점**이므로 내리기 전에 다른 경로를 확보한다.
 

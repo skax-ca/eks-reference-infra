@@ -30,7 +30,7 @@ source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cl
 
 | 항목 | 상태 | 검증 내용 |
 |------|------|---------|
-| `EKS_PUBLIC_ACCESS_CIDRS` repo 변수 | ✅ | `["211.45.60.3/32"]` — 사용자 IP /32 |
+| ~~`EKS_PUBLIC_ACCESS_CIDRS` repo 변수~~ | ⛔ 삭제 | 2026-08-06 private-only 전환으로 불필요. ⚠️ 이 표에 **운영자 실제 IP 가 커밋돼 있었다** — D25(출발지 IP 는 git 에 두지 않는다) 위반이라 값과 함께 걷어냈다 |
 | networking 먼저 apply | ✅ | 6개 서브넷 태그 변경 apply 완료 |
 | `ami_release_version` 핀 | ✅ | `1.35.6-20250728` — ARM64 SSM 경로 |
 | addon 버전 핀 | ✅ | `vpc-cni` · `coredns` · `kube-proxy` AWS 기본 버전으로 핀 (최신 아님) |
@@ -93,7 +93,7 @@ data "aws_subnets" "node" {
 
 | 제약 | 메커니즘 |
 |------|---------|
-| 공개 접근 제한 | `public_access_cidrs` repo 변수 (사용자 IP /32) |
+| **공개 접근 없음** | `endpoint_public_access = false` — apiserver 는 VPC 내부에서만 도달한다(2026-08-06) |
 | Addon 안정성 | AWS 기본 버전으로 핀, 최신 아님 |
 | 이 루트에서 파기禁止 | 모듈 D12의 `prevent_destroy` |
 
