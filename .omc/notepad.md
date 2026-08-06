@@ -535,9 +535,9 @@ Plan: 0 to add, 0 to change, 1 to destroy.
 **실제 파기는 안 했다** — teardown 2단계(`deletion_protection=false` → `vpc_enabled=false`)는
 자산 정리를 결정할 때 밟는다.
 
-## 🆕 2026-08-06 — workbench 도달 지점 배선 + 개명 (apply 대기)
+## 🆕 2026-08-06 — workbench 배선 + 개명 + **apply·도달 실증 완료**
 
-**⏳ 코드는 전부 들어갔다. 남은 것은 apply 와 도달 실증뿐이다.**
+**✅ ①apply ②SSM ③kubectl 까지 끝났다. 남은 것은 ④ public 차단 하나다.**
 
 ### PR #15 — workbench 3층 배선 + 모듈 핀 v0.3.0
 
@@ -569,26 +569,57 @@ Plan: 0 to add, 0 to change, 1 to destroy.
   [`31058277158`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31058277158)(개명 후)
   둘 다 **`Plan: 10 to add, 0 to change, 0 to destroy`**. Name 도 `-workbench-01` 로 확인.
 
-### 🔴 다음 태스크 — **순서가 안전에 직결된다**
+### ✅ apply·도달 실증 완료 (2026-08-06)
 
+run [`31059712680`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31059712680)
+= **`Apply complete! Resources: 10 added, 0 changed, 0 destroyed.`** 인스턴스 `i-04ac14a6f5891492c`.
+
+✅ **실계정 조회로 대조했다** — 이 repo 판정 기준은 apply 로그가 아니라 실물이다:
+
+| 계약 | 실물 |
+|------|------|
+| 배치 | `ap-northeast-2c` · `subnet-074f0b4094109f277`(vm-uniq) · `10.51.20.186` |
+| ⭐ 공인 IP 미할당 | `PublicIpAddress: null` |
+| ⭐ 키페어 미지정 | `KeyName: null` |
+| ⭐ **인바운드 0개** | `length(IpPermissions) == 0` · egress 는 443/tcp 하나 |
+| 아키텍처 정합 | `t4g.nano` + `ami-0973292651cddee46`(AL2023 arm64) 부팅 성공 |
+
+⭐ 3개는 모듈 repo `40 §5.1` 이 *"`tofu test` 로 지킬 수 없다"* 고 적은 항목이다
+(*"미지정 자체가 계약"* 인데 plan 에선 `known after apply`). **여기서 처음 실증됐고
+모듈 repo `40 §7.3-1` 에 기록했다.**
+
+**도달 3층 전부 성립**:
 ```
-① workflow_dispatch 로 apply                              ← 지금 여기
-② aws ssm start-session --profile team --region ap-northeast-2 \
-     --target $(tofu output -raw workbench_instance_id)
-③ 그 세션에서 kubectl get nodes                            ← 도달 실증
-④ 그때 endpoint_public_access = false (별도 PR)
+SSM 등록      PingStatus: Online · agent 3.3.4851.0 · AL2023
+cloud-init    status: done                     ← 비동기라 kubectl 확인 전에 먼저 본다
+1층           /etc/kubernetes/kubeconfig 생성됨(2447B)
+kubectl       Client Version: v1.35.7          ← 클러스터 1.35 와 마이너 일치
+2·3층         kubectl get nodes → 노드 2개 Ready
 ```
+🔑 **`get nodes` 가 반환된 것 자체가 3층 전부의 증거다.** 실패했다면 층별로 다른 에러가 났다.
 
-⛔ **public 을 먼저 닫으면 안 된다.** workbench 가 동작하지 않을 때 클러스터에 닿을 방법이
-아예 없어진다. `live/dev/eks/main.tf` 의 엔드포인트 블록 주석이 이 순서를 담고 있다.
+⚠️ **판정 방식**: 대화형 `start-session` 이 아니라 **`ssm send-command`**(AWS-RunShellScript)다
+— 자동화 환경에 TTY 가 없다. 같은 채널·IAM·SG 를 지나므로 도달성으로는 동등하다.
+사람이 붙을 때: `aws ssm start-session --profile team --region ap-northeast-2 --target i-04ac14a6f5891492c`
 
-③ 실패 시 **증상으로 층을 특정한다**(`live/dev/eks/README.md §4` 에 표):
-`update-kubeconfig` 권한 오류 = **1층**(workbench IAM) / `401 Unauthorized` = **2층**(Access Entry) /
-`dial tcp …: i/o timeout` = **3층**(cluster SG). timeout 은 인증 계층에 닿지도 못했다는 뜻이다.
+### 🔴 다음 태스크 — **④ `endpoint_public_access = false` 로 닫고 재확인**
 
-**apply 전 plan 요약**(run 31058277158): workbench 7개(EC2·SG·egress rule·IAM role·inline policy·
-policy attachment·instance profile) + Access Entry 2 + cluster SG rule 1 = **10 add / 0 change / 0 destroy**.
-비용 **+~$3/월**(t4g.nano) → 총 ~$168/월 + Flow Logs.
+**이것이 `40 §1` 이 말한 이 설계의 목적이다.** 지금까지는 전부 선행 조건이었다.
+
+> ⚠️ **지금 실증은 public 이 켜진 채로 났다.** 엄밀히는 *"private 경로로 닿았다"* 를 아직
+> 증명하지 않았다 — public 을 통해 닿고 있었을 가능성이 남아 있다. **닫고 재확인하는 것이
+> 그 배제의 유일한 방법**이고, 그래서 ④가 판정이다.
+
+작업 목록(`live/dev/eks`):
+- `main.tf` — `endpoint_public_access = false`, `public_access_cidrs` 줄 제거,
+  그 자리 "🔴 아직 켜 둔다" 주석을 **닫은 근거로 교체**(죽은 주석을 남기지 않는다)
+- `variables.tf` — `var.public_access_cidrs` **삭제**. ⚠️ tflint `terraform_unused_declarations`
+  가 미사용 변수를 exit 2 로 잡으므로 **같은 커밋에서** 지운다
+- repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 정리(코드가 안 쓰면 죽은 설정)
+- `README.md §3` 형상표 엔드포인트 행 → **private-only**
+- apply 후 **workbench 에서 `kubectl get nodes` 재확인** ← 판정
+
+⚠️ 실패하면 되돌릴 방법이 workbench 뿐이다. 그래서 ①~③ 을 먼저 했다.
 
 ⚠️ **apply 는 사람이 `Run workflow` 를 누르는 것이 승인 게이트다**(D30-1). merge 만으로는 안 돈다.
 
