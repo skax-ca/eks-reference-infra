@@ -2,7 +2,7 @@
 
 ## 🔢 현행 모듈 핀 (2026-08-06 기준) — **먼저 읽을 것**
 
-**`vpc-v0.3.0` · `eks-cluster-v0.3.0` · `workbench-v0.1.0`.** 모듈 repo 가 전 모듈을 **`0.y.z`(개발 단계)** 로 전환했다
+**`vpc-v0.3.0` · `eks-cluster-v0.4.0` · `workbench-v0.1.0`.** 모듈 repo 가 전 모듈을 **`0.y.z`(개발 단계)** 로 전환했다
 (SSOT = 모듈 repo `docs/architecture/05-versioning-policy.md` = **D-VERSION**). 커밋 `81d6349`.
 
 - **재매핑이지 업그레이드가 아니다** — 구 태그와 **같은 커밋**이라 모듈 내용은 그대로다.
@@ -519,6 +519,55 @@ Plan: 0 to add, 0 to change, 1 to destroy.
 
 ---
 
+### ✅ 마무리 2건 (2026-08-06) — **plan 이 `No changes` 가 됐다**
+
+#### 1. `volume_tags` drift → `ignore_tags` 로 해소 (PR [#18](https://github.com/skax-ca/iac-reference-infra/pull/18))
+
+⭐ **해법이 이미 repo 안에 있었다.** `providers.tf` 의 `ignore_tags` 는 2026-07-31 networking 에서
+같은 유형을 잡으려고 세운 것이고, `DependencyID`·`DependencyName` 만 목록에서 빠져 있었다.
+`lifecycle ignore_changes` 를 모듈에 넣거나 `volume_tags` 구조를 바꾸는 것은 **이미 있는 장치를
+못 보고 우회하는** 형태였을 것이다.
+
+- 실측: **볼륨 전용**(계정 전수 15건 전부 `ResourceType: volume`) · **생성 이벤트 기반**(재부착 없음)
+- 그래도 넣은 이유: `user_data_replace_on_change = true` 라 **도구 버전·AMI 핀을 올리면 재생성**되고
+  그때마다 같은 가짜 diff 가 난다
+- ⚠️ **networking 에는 안 넣었다** — 볼륨을 만들지 않는다. 두 루트의 `ignore_tags` 가 다른 것은
+  **의도**이니 "parity 복원"으로 맞추지 말 것(주석에 명시)
+- ⚠️ **`Name` 은 막지 않았다** — 같은 태거가 볼륨 `Name` 도 덮지만 `Name` 은 네이밍 계약이라
+  무시하면 **모든 `Name` 규약이 함께 눈이 먼다**. tofu 가 되돌리는 것이 정답이고
+  **볼륨 생성당 1회** diff 로 끝난다(반복 아님)
+
+#### 2. `public_access_cidrs` 영구 diff → `eks-cluster-v0.4.0` (PR [#19](https://github.com/skax-ca/iac-reference-infra/pull/19))
+
+핀 한 줄만 올렸다(계약 무변경). plan
+[`31080181294`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31080181294)
+= **`No changes. Your infrastructure matches the configuration.`**
+
+> 🔑 **빈 컬렉션은 "없음"이 아니라 "있음"이다** — provider 문서: *"drift detection ... **when
+> present in a configuration**."* `null` 만 "없음"이다. 모듈이 기본값 `[]` 를 그대로 넘겨서,
+> 우리가 인자를 지웠는데도 diff 가 났다. 근거 전문은 모듈 repo `20 §4.4`(D-EKS-CIDR-NULL).
+>
+> ⭐ **OIDC `thumbprint_list` 도 함께 사라졌다** — 별개 항목이라 봤던 판단이 틀렸다.
+> `(known after apply)` 는 **다른 리소스 변경에 의존할 때** 뜨므로, 클러스터 diff 가 사라지자
+> 연쇄로 없어졌다. ⇒ **의존 리소스의 diff 를 먼저 닫고 다시 본다.**
+
+⚠️ **`EKS_PUBLIC_ACCESS_CIDRS` repo 변수 삭제 완료.** 남은 변수 4개:
+`AWS_ENTRY_ROLE_ARN` · `AWS_EXEC_ROLE_ARN` · `MODULE_READER_CLIENT_ID` · `TF_STATE_BUCKET`.
+
+### 🔬 `endpoint_private_access = true` 가 실제로 하는 일 (2026-08-06 실측)
+
+스위치 하나로 보이지만 **AWS 가 3개를 조립**한다. 진단할 때 이 셋을 나눠 본다:
+
+| 조립물 | 실측값 |
+|--------|--------|
+| **cross-account ENI**(경로) | `eni-02eaaae3f33f96a13`·`eni-004d81156c35330d1` — owner=우리 계정, **requester=`441647948811`(AWS EKS)**, `RequesterManaged: true`. `subnet_ids`(node-uniq)에 **AZ 당 1개씩 IP 를 소모**한다 |
+| **private hosted zone**(이름) | `Z09127421NJ9XYMXFJ640`, `OwningService: eks.amazonaws.com`, 우리 VPC 에 연결 → **split-horizon DNS**. 같은 호스트명이 VPC 안에서만 private IP 로 해석된다 |
+| **SG 부착**(허용) | 그 ENI 에 `sg-011c…`(upstream cluster SG — 우리 workbench 규칙이 여기) + `sg-0b42…`(EKS 자동 생성 primary) |
+
+⚠️ **전제**: VPC 의 `enableDnsSupport`·`enableDnsHostnames` 가 켜져 있어야 zone 이 동작한다.
+⭐ 세 번째 항목이 `eks-cluster-v0.3.0` 이 출력 설명을 정정한 이유의 **실물 확인**이다 —
+3층 규칙이 붙은 SG 가 실제로 apiserver ENI 에 적용된다. 다른 SG 였다면 `i/o timeout` 이다.
+
 ## 💰 현재 진행 중 비용
 
 | 루트 | 상태 | 월 비용 |
@@ -758,12 +807,8 @@ kubectl       Client Version: v1.35.7          ← 클러스터 1.35 와 마이�
 
 ## 미결 항목
 
-- **EBS `volume_tags` drift** (2026-08-06 신규) — 계정의 다른 자동화가 `DependencyID`·`DependencyName`
-  을 붙이고 `Name` 을 덮는다. tofu 가 매 apply 마다 되돌린다. 무해하나 `0 changed` 를 못 만든다.
-  판단 필요: ① 그대로 두고 되돌린다 ② `volume_tags` 를 `lifecycle.ignore_changes` 로 양보한다
-  (모듈 변경 필요) ③ 그 자동화의 소유자를 찾는다. **공용 계정(F13)의 비용이지 모듈 결함이 아니다.**
-- **GitHub repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 삭제** (2026-08-06 신규) — 코드는 더는 읽지 않는다.
-  콘솔에서 지워야 죽은 설정이 남지 않는다.
+- ✅ **해결** — EBS `volume_tags` drift → `providers.tf` `ignore_tags` 에 `Dependency*` 추가(PR #18)
+- ✅ **해결** — repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 삭제 완료
 
 - ✅ **#1 해결** — plan/apply 권한 분리 → C안(현재 구조 유지 + 문서화). `deployment-facts.md` §7
 - ✅ **#4 해결** — CI `init` shallow clone → `&depth=1` 추가. `deployment-facts.md` §8
