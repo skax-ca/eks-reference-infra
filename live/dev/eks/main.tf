@@ -33,12 +33,12 @@ locals {
   cluster_purpose = "main"
   cluster_serial  = "01"
 
-  # ⭐ **이 두 줄이 bastion ↔ eks 순환을 끊는다**(모듈 repo 40 §5.1-1).
-  #    bastion 은 eks_cluster_name/arn 을 받고, eks 는 access_entries 에 bastion role ARN 을 받는다 —
+  # ⭐ **이 두 줄이 workbench ↔ eks 순환을 끊는다**(모듈 repo 40 §5.1-1).
+  #    workbench 은 eks_cluster_name/arn 을 받고, eks 는 access_entries 에 workbench role ARN 을 받는다 —
   #    양쪽이 서로의 module 출력을 참조하면 그래프 순환이라 plan 이 죽는다.
   #    클러스터 이름·ARN 은 네이밍·리전·계정으로 **유도되므로** 루트가 직접 합성한다
   #    (03 §3.1 의 1순위 "결정적 네이밍으로 값 구성", 결합도 없음).
-  #    ⇒ bastion 은 local 만 참조하고, eks 만 module.bastion 을 참조한다. 단방향.
+  #    ⇒ workbench 은 local 만 참조하고, eks 만 module.workbench 을 참조한다. 단방향.
   #
   # ⛔ local.cluster_arn 을 module.eks.cluster_arn 으로 바꾸지 말 것 — 그 순간 순환이다.
   #    합성식은 실계정 대조로 확인했다(2026-08-06):
@@ -49,13 +49,13 @@ locals {
   # 우리 VPC 를 식별하는 Name 태그. networking 루트가 vpc 모듈에 purpose="main" 으로 넘긴 결과다.
   vpc_name = "vpc-${var.workload}-${var.env}-${var.region_code}-main"
 
-  # bastion 을 놓을 서브넷 하나. bastion 은 1대라 AZ 분산이 의미 없다(40 §2.2).
+  # workbench 을 놓을 서브넷 하나. workbench 은 1대라 AZ 분산이 의미 없다(40 §2.2).
   #
   # ⚠️ **sort() 가 핵심이다.** data.aws_subnets.ids 는 타입이 list 지만 순서는 AWS API 응답 순이라
   #    계약이 아니다(스키마 확인 2026-08-06). 정렬 없이 [0] 을 쓰면 조회 순서가 바뀌는 것만으로
   #    subnet_id 가 달라져 **인스턴스가 교체**된다. 어느 AZ 냐가 아니라 **결정적이냐**가 요건이다.
   #    (모듈 예제는 vpc 모듈 출력의 AZ 순 리스트에서 [0] 을 뽑는다 — 여기는 data source 라 그 순서가 없다.)
-  bastion_subnet_id = sort(data.aws_subnets.vm.ids)[0]
+  workbench_subnet_id = sort(data.aws_subnets.vm.ids)[0]
 }
 
 # ── VPC 디스커버리 (독립 배포의 핵심) ──────────────────────────────────────────
@@ -98,7 +98,7 @@ data "aws_subnets" "pod" {
   }
 }
 
-# 관리 호스트 서브넷 — bastion 이 여기 놓인다. private(NAT 아웃바운드)이고 node-uniq 와 **분리**돼
+# 관리 호스트 서브넷 — workbench 이 여기 놓인다. private(NAT 아웃바운드)이고 node-uniq 와 **분리**돼
 # 있다. 섞으면 그 대역의 karpenter.sh/discovery 태그 때문에 소유가 흐려진다(40 §구현 4).
 data "aws_subnets" "vm" {
   filter {
@@ -111,11 +111,18 @@ data "aws_subnets" "vm" {
   }
 }
 
-# ── bastion — private 클러스터의 도달 지점 (모듈 repo 설계 40) ─────────────────
+# ── workbench — private 클러스터의 도달 지점 (모듈 repo 설계 40) ─────────────────
 #
-# ⚠️ bastion 은 module.eks 의 출력을 **참조하지 않는다** — 위 local.cluster_name/arn 만 쓴다(순환 해소).
-module "bastion" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/bastion?ref=bastion-v0.1.0&depth=1"
+# ℹ️ **흔히 bastion host 라 부르는 것의 SSM 전용 형태다.** 이름이 다른 이유는 실물이 다르기
+#    때문이다 — 인바운드가 0이라 "받아서 전달하는 요새"가 아니라 kubectl 이 깔린 **작업대**다
+#    (모듈 repo `40 §2.0` = D-WORKBENCH-RENAME).
+# ⛔ 구 태그 `bastion-v0.1.0` 은 **원격에서 삭제됐다**(2026-08-06). 그 핀으로 되돌리면 init 이
+#    실패한다. apply 가 0회인 시점이라 옮길 수 있었다 — 한 번이라도 apply 된 뒤였다면
+#    purpose 가 IAM role·SG 의 **name 인자**로 흘러가 replace 가 연쇄했을 것이다.
+#
+# ⚠️ workbench 는 module.eks 의 출력을 **참조하지 않는다** — 위 local.cluster_name/arn 만 쓴다(순환 해소).
+module "workbench" {
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/workbench?ref=workbench-v0.1.0&depth=1"
 
   naming = {
     workload    = var.workload
@@ -124,9 +131,9 @@ module "bastion" {
   }
 
   vpc_id    = data.aws_vpc.this.id
-  subnet_id = local.bastion_subnet_id
+  subnet_id = local.workbench_subnet_id
 
-  # ⛔ D-BASTION-AMI-PIN — 모듈에 기본값이 **없다**(AMI ID 는 리전 종속이라 재사용 자산의 기본값이
+  # ⛔ D-WORKBENCH-AMI-PIN — 모듈에 기본값이 **없다**(AMI ID 는 리전 종속이라 재사용 자산의 기본값이
   #    될 수 없다). 조회한 값을 커밋한다 — SSM latest 경로를 코드에 넣으면 AWS 릴리스마다
   #    **리뷰 없이 인스턴스가 재생성**된다. 위 ami_release_version 핀과 같은 성격이다.
   #
@@ -145,7 +152,7 @@ module "bastion" {
   # ⛔ helm 은 받지 않는다. 이 클러스터는 GitOps(pull) 전제라 helm 직접 운영(22 §3 프로파일 B)이
   #    현재 요구가 아니다. 필요해지면 helm_version 을 그때 연다 — 안 쓰는 바이너리를 미리 얹지 않는다.
 
-  # EKS 접근 3층 중 **1층만** 여기서 성립한다(D-BASTION-SEAM).
+  # EKS 접근 3층 중 **1층만** 여기서 성립한다(D-WORKBENCH-SEAM).
   # 2층(Access Entry)·3층(cluster SG ingress)은 아래 eks 블록이 소유한다.
   eks_cluster_name = local.cluster_name
   eks_cluster_arn  = local.cluster_arn
@@ -174,19 +181,19 @@ module "eks" {
   # ── 엔드포인트 — public-restricted (사용자 결정 2026-08-03) ──────────────────
   # public 을 켜되 CIDR 로 좁힌다. private 도 함께 켜 노드·VPC 내부 경로를 유지한다.
   #
-  # 🔴 **아직 켜 둔다 — 이 커밋에서 닫지 않는다.** 위 module.bastion 이 도달 지점을 만들지만
-  #    "만들었다"와 "닿는다"는 다르다. 순서를 뒤집으면 bastion 이 안 될 때 클러스터에 닿을 방법이
+  # 🔴 **아직 켜 둔다 — 이 커밋에서 닫지 않는다.** 위 module.workbench 이 도달 지점을 만들지만
+  #    "만들었다"와 "닿는다"는 다르다. 순서를 뒤집으면 workbench 이 안 될 때 클러스터에 닿을 방법이
   #    아예 없어진다. public 을 닫는 것은 아래가 전부 실증된 **다음 커밋**이다:
-  #      ① bastion apply  ② SSM 세션 접속  ③ 그 세션에서 kubectl get nodes 성공
+  #      ① workbench apply  ② SSM 세션 접속  ③ 그 세션에서 kubectl get nodes 성공
   #    ⇒ 그때 이 두 줄(endpoint_public_access · public_access_cidrs)과 var 를 함께 걷어낸다.
   endpoint_private_access = true
   endpoint_public_access  = true
   public_access_cidrs     = var.public_access_cidrs
 
-  # ── EKS 접근 3층 중 2·3층 — D-BASTION-SEAM (모듈 repo 설계 40 §5) ────────────
+  # ── EKS 접근 3층 중 2·3층 — D-WORKBENCH-SEAM (모듈 repo 설계 40 §5) ────────────
   #
-  # 🔑 소유가 갈리는 기준은 **주체냐 대상이냐**다. 1층(eks:DescribeCluster)은 bastion 자신의
-  #    권한이라 bastion 모듈이, 2·3층은 "클러스터가 누구를 받아들이는가"라 이 모듈이 소유한다
+  # 🔑 소유가 갈리는 기준은 **주체냐 대상이냐**다. 1층(eks:DescribeCluster)은 workbench 자신의
+  #    권한이라 workbench 모듈이, 2·3층은 "클러스터가 누구를 받아들이는가"라 이 모듈이 소유한다
   #    (03 §2.3 — 소유 모듈이 허용 소스를 변수로 파라미터화한다).
   #
   # ⚠️ 세 층이 **모두** 있어야 kubectl 이 닿는다. 빠뜨렸을 때 증상이 층마다 다르다:
@@ -199,8 +206,8 @@ module "eks" {
   #    실제 운영이 요구하는 최소 권한은 첫 수행 후 좁힌다(40 §10-3) — 지금 좁히면 무엇이
   #    필요한지 모른 채 추측으로 닫는 것이다.
   access_entries = {
-    bastion = {
-      principal_arn = module.bastion.bastion_iam_role_arn
+    workbench = {
+      principal_arn = module.workbench.workbench_iam_role_arn
       policy_associations = {
         admin = {
           policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
@@ -212,11 +219,11 @@ module "eks" {
 
   # 3층 — apiserver 에 네트워크로 닿는가. eks-cluster-v0.3.0 이 신설한 통과 지점이다.
   cluster_security_group_additional_rules = {
-    bastion_kubectl = {
+    workbench_kubectl = {
       from_port                = 443
       to_port                  = 443
-      description              = "kubectl from bastion"
-      source_security_group_id = module.bastion.bastion_security_group_id
+      description              = "kubectl from workbench"
+      source_security_group_id = module.workbench.workbench_security_group_id
     }
   }
 
