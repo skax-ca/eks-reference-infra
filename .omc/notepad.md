@@ -286,8 +286,11 @@ C 모듈 `design/50` F6/F13/F14(1) · D 모듈 `docs/consumer/dynamic-credential
   빼면 boto3가 ambient 자격증명으로 **조용히 다른 계정**을 칠 수 있다.
 - **CA 번들 env는 넣지 않았다** — `aws` CLI가 `AWS_CA_BUNDLE` 없이 동작 = AWS 엔드포인트 MITM 아님.
   사내 CA만 담긴 번들을 걸면 오히려 public AWS TLS가 깨진다.
-- ⚠️ **모듈 repo `.mcp.json`과 의도적으로 다르다**(PR#7 parity에서 벗어남). aws-api는 **배포 검증
-  도구**라 소싱만 하는 모듈 repo엔 불필요하다. "parity 복원"으로 지우지 말 것.
+- ✅ **2026-08-06: 모듈 repo `.mcp.json`과 다시 같아졌다.** 구 기록은 *"의도적으로 다르다 —
+  aws-api는 배포 검증 도구라 소싱만 하는 모듈 repo엔 불필요"* 였고 **그때는 옳았다.**
+  바뀐 것은 모듈 repo의 역할이다 — `40 §5.1`이 *"apply 판정이 나면 `40`에 기록한다"* 로 정해
+  그쪽도 **실계정 판정을 받아 적는 쪽**이 됐다(모듈 repo notepad의 MCP 절에 근거 전문).
+  ⚠️ 그래도 **모듈 repo는 배포하지 않는다** — 조회가 생겼다고 "apply로 검증했다"가 되지 않는다.
 - ⚠️ 고객사 복사 시 `AWS_API_MCP_PROFILE_NAME`은 그들의 프로파일로 바꿔야 한다(버킷명·CA와 동급).
 
 ### ✅ 6-3 Flow Logs confused deputy 방어 **완료·검증됨** (2026-07-31)
