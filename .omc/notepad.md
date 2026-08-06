@@ -535,9 +535,142 @@ Plan: 0 to add, 0 to change, 1 to destroy.
 **실제 파기는 안 했다** — teardown 2단계(`deletion_protection=false` → `vpc_enabled=false`)는
 자산 정리를 결정할 때 밟는다.
 
-## 🆕 2026-08-06 — workbench 배선 + 개명 + **apply·도달 실증 완료**
+## 🎉 2026-08-06 — workbench 배선·개명·**private-only 전환 완결**
 
-**✅ ①apply ②SSM ③kubectl 까지 끝났다. 남은 것은 ④ public 차단 하나다.**
+**✅ ①apply ②SSM ③kubectl ④public 차단 — 4단계 전부 끝났다.**
+
+### PR #15 — workbench 3층 배선 + 모듈 핀 v0.3.0
+
+| 항목 | 내용 |
+|------|------|
+| 모듈 핀 | `eks-cluster-v0.2.0` → **`v0.3.0`** — 순수 추가 릴리스라 plan 이 **`0 to change`** 로 실증했다 |
+| 신규 모듈 | **`workbench-v0.1.0`** — `vm-uniq` private 서브넷, t4g.nano(arm64), SSM 전용(인바운드 0) |
+| 2층 | `access_entries` — workbench role → `AmazonEKSClusterAdminPolicy` |
+| 3층 | `cluster_security_group_additional_rules` — workbench SG → apiserver 443 |
+| 출력 | `workbench_instance_id` (SSM 접속 대상) |
+
+⭐ **핀 상향의 diff 가 0이라는 것이 증거다.** v0.3.0 은 `cluster_security_group_additional_rules`
+신설 + `required_version` 하한뿐이라 기존 리소스에 영향이 없어야 하는데 plan 이 그것을 실증했다.
+`0.y.z` 구간에서 마이너를 올릴 때마다 확인할 가치가 있는 지점이다.
+
+### PR #16 — bastion → workbench 개명 (D-WORKBENCH-RENAME)
+
+이름이 실물과 어긋나 있었다 — `bastion host` 의 정의는 *인바운드를 받아 안쪽으로 전달*인데
+이 모듈은 **인바운드 규칙이 0개**다. 요새가 아니라 **도구가 갖춰진 작업대**다.
+근거 전문은 모듈 repo `docs/design/40-workbench.md §2.0`.
+
+- ⛔ **구 태그 `bastion-v0.1.0` 은 원격에서 삭제됐다.** 그 핀으로 되돌리면 `init` 이 실패한다.
+- ⏱️ **apply 전이라 공짜였다.** `purpose` 는 태그가 아니라 **식별자**로 흘러간다
+  (`aws_iam_role.name` · `aws_iam_instance_profile.name` · `aws_security_group.name`) —
+  apply 후였다면 그 셋이 replace 되고 Access Entry·cluster SG rule 까지 연쇄 replace 됐다.
+  🔑 일반화: *"purpose·naming 토큰을 바꾸는 개명은 apply 전에만 공짜다."*
+- ✅ **판정**: 개명 후 plan 이 **개명 전과 숫자가 같다.**
+  [`31056930396`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31056930396)(개명 전) ·
+  [`31058277158`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31058277158)(개명 후)
+  둘 다 **`Plan: 10 to add, 0 to change, 0 to destroy`**. Name 도 `-workbench-01` 로 확인.
+
+### ✅ apply·도달 실증 완료 (2026-08-06)
+
+run [`31059712680`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31059712680)
+= **`Apply complete! Resources: 10 added, 0 changed, 0 destroyed.`** 인스턴스 `i-04ac14a6f5891492c`.
+
+✅ **실계정 조회로 대조했다** — 이 repo 판정 기준은 apply 로그가 아니라 실물이다:
+
+| 계약 | 실물 |
+|------|------|
+| 배치 | `ap-northeast-2c` · `subnet-074f0b4094109f277`(vm-uniq) · `10.51.20.186` |
+| ⭐ 공인 IP 미할당 | `PublicIpAddress: null` |
+| ⭐ 키페어 미지정 | `KeyName: null` |
+| ⭐ **인바운드 0개** | `length(IpPermissions) == 0` · egress 는 443/tcp 하나 |
+| 아키텍처 정합 | `t4g.nano` + `ami-0973292651cddee46`(AL2023 arm64) 부팅 성공 |
+
+⭐ 3개는 모듈 repo `40 §5.1` 이 *"`tofu test` 로 지킬 수 없다"* 고 적은 항목이다
+(*"미지정 자체가 계약"* 인데 plan 에선 `known after apply`). **여기서 처음 실증됐고
+모듈 repo `40 §7.3-1` 에 기록했다.**
+
+**도달 3층 전부 성립**:
+```
+SSM 등록      PingStatus: Online · agent 3.3.4851.0 · AL2023
+cloud-init    status: done                     ← 비동기라 kubectl 확인 전에 먼저 본다
+1층           /etc/kubernetes/kubeconfig 생성됨(2447B)
+kubectl       Client Version: v1.35.7          ← 클러스터 1.35 와 마이너 일치
+2·3층         kubectl get nodes → 노드 2개 Ready
+```
+🔑 **`get nodes` 가 반환된 것 자체가 3층 전부의 증거다.** 실패했다면 층별로 다른 에러가 났다.
+
+⚠️ **판정 방식**: 대화형 `start-session` 이 아니라 **`ssm send-command`**(AWS-RunShellScript)다
+— 자동화 환경에 TTY 가 없다. 같은 채널·IAM·SG 를 지나므로 도달성으로는 동등하다.
+사람이 붙을 때: `aws ssm start-session --profile team --region ap-northeast-2 --target i-04ac14a6f5891492c`
+
+### ✅ ④ private-only 전환 완결 (2026-08-06) — 이 배포의 목적 달성
+
+PR [#17](https://github.com/skax-ca/iac-reference-infra/pull/17) 머지 · apply run
+[`31062408357`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31062408357)
+= **`0 added, 2 changed, 0 destroyed`**(클러스터 `vpc_config` **in-place** — replace 없음).
+
+⭐ **음성 대조군이 이 판정의 핵심이다.** workbench 에서 kubectl 이 되는 것만으로는
+*"private 경로로 닿았다"* 가 증명되지 않는다 — public 을 통해 닿고 있었을 수 있다.
+**양쪽을 함께 봐야** 배제된다:
+
+| | 결과 |
+|---|---|
+| 클러스터 실물 | `endpointPublicAccess: **false**` · `endpointPrivateAccess: true` · ACTIVE |
+| **음성** VPC 밖 DNS | `10.51.37.9` · `10.51.36.184` — **private IP 만** |
+| **음성** VPC 밖 `curl <endpoint>/version` | **timeout(12s)** · `http=000` |
+| **양성** workbench DNS | 같은 private IP 2개 |
+| **양성** workbench `kubectl get nodes` | 노드 2개 Ready · pod **21개 Running** |
+
+ℹ️ plan 3건 → apply 2건. OIDC `thumbprint_list` 가 `(known after apply)` 였는데 재계산 결과가
+기존 값과 같아 **no-op** 이 됐다 — `known after apply` 는 *"바뀔 수도 있다"* 이지 *"바뀐다"* 가 아니다.
+
+**함께 걷어낸 것**: `public_access_cidrs` 변수·`TF_VAR_` 주입·README/AGENTS 기술.
+⭐ **덤으로 D25 위반 1건** — `AGENTS.md` pre-apply 표에 **운영자 실제 IP 가 커밋돼 있었다.**
+변수 설명이 *"출발지 IP 는 git 에 두지 않는다"* 를 적고 있는 동안 문서가 값을 노출하고 있었다.
+🔑 **주입 경로를 막아도 문서가 값을 흘릴 수 있다.**
+
+### ⚠️ 이번에 드러난 실측 2건 — 다음 apply 때 놀라지 말 것
+
+1. **`publicAccessCidrs` 는 `describe-cluster` 응답에 남는다.** public 을 끄고 인자를 지워도
+   AWS 가 **직전 값을 계속 반환**한다(운영자 IP `/32`). 동작에는 영향이 없는 무효 필드다.
+   🔑 *"인자를 지우는 것과 값이 사라지는 것은 다르다."* git 에서는 지웠지만 API 응답에는 남아 있다.
+2. **공용 계정의 다른 자동화가 EBS `volume_tags` 를 덮는다** — `DependencyID`·`DependencyName` 추가 +
+   `Name` 을 인스턴스 이름으로 변경. tofu 가 매번 되돌리므로 **apply 마다 반복되는 drift** 다.
+   무해하지만 `0 changed` 를 기대할 수 없게 만든다(아래 미결 항목에 등재).
+
+### ⛔ 이제 workbench 가 **유일한** 도달 지점이다
+
+접근이 필요하면 public 을 다시 여는 것이 아니라 **workbench 를 고친다** — 여는 것은 설계 목적
+(모듈 repo `40 §1`)을 되돌리는 결정이다.
+
+```
+aws ssm start-session --profile team --region ap-northeast-2 --target i-04ac14a6f5891492c
+# 세션 안에서 KUBECONFIG 는 /etc/profile.d/kubeconfig.sh 가 export 한다
+```
+
+⚠️ **`workbench_enabled = false` 로 내리기 전에 다른 경로를 확보한다.** 지금은 이것이 끊기면
+클러스터를 만질 방법이 없다.
+
+⚠️ GitHub **repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 는 콘솔에서 지워야 한다**(코드 밖 작업, 미완).
+
+## 💰 현재 진행 중 비용
+
+| 루트 | 상태 | 월 비용 |
+|------|------|---------|
+| `live/dev/networking` | 66개 리소스 apply 완료 | NAT Gateway ~$43 + Flow Logs CloudWatch |
+| `live/dev/eks` | **apply 완료** (run 30878573785) | EKS 컨트롤플레인 ~$73 + system t4g.medium×2 ~$48 + 컨트롤플레인 로그 |
+
+총 예상: **~$165/월 + Flow Logs** (nat $43 + eks $122).
+
+### ⚠️ 과잉 주장 금지
+
+판정표 SSOT는 `docs/deployment-facts.md` §6. **✅가 찍힌 것만 실증했다고 쓴다.**
+✅ **미검증 6항목 전부 판정됐다**(6-1 각주 ¹의 validation/lifecycle 구분 포함). 그래도
+**실제 파기는 안 했다** — teardown 2단계(`deletion_protection=false` → `vpc_enabled=false`)는
+자산 정리를 결정할 때 밟는다.
+
+## 🎉 2026-08-06 — workbench 배선·개명·**private-only 전환 완결**
+
+**✅ ①apply ②SSM ③kubectl ④public 차단 — 4단계 전부 끝났다.**
 
 ### PR #15 — workbench 3층 배선 + 모듈 핀 v0.3.0
 
@@ -624,6 +757,13 @@ kubectl       Client Version: v1.35.7          ← 클러스터 1.35 와 마이�
 ⚠️ **apply 는 사람이 `Run workflow` 를 누르는 것이 승인 게이트다**(D30-1). merge 만으로는 안 돈다.
 
 ## 미결 항목
+
+- **EBS `volume_tags` drift** (2026-08-06 신규) — 계정의 다른 자동화가 `DependencyID`·`DependencyName`
+  을 붙이고 `Name` 을 덮는다. tofu 가 매 apply 마다 되돌린다. 무해하나 `0 changed` 를 못 만든다.
+  판단 필요: ① 그대로 두고 되돌린다 ② `volume_tags` 를 `lifecycle.ignore_changes` 로 양보한다
+  (모듈 변경 필요) ③ 그 자동화의 소유자를 찾는다. **공용 계정(F13)의 비용이지 모듈 결함이 아니다.**
+- **GitHub repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 삭제** (2026-08-06 신규) — 코드는 더는 읽지 않는다.
+  콘솔에서 지워야 죽은 설정이 남지 않는다.
 
 - ✅ **#1 해결** — plan/apply 권한 분리 → C안(현재 구조 유지 + 문서화). `deployment-facts.md` §7
 - ✅ **#4 해결** — CI `init` shallow clone → `&depth=1` 추가. `deployment-facts.md` §8
