@@ -34,11 +34,11 @@ locals {
   cluster_serial  = "01"
 
   # ⭐ **이 두 줄이 workbench ↔ eks 순환을 끊는다**(모듈 repo 40 §5.1-1).
-  #    workbench 은 eks_cluster_name/arn 을 받고, eks 는 access_entries 에 workbench role ARN 을 받는다 —
+  #    workbench 는 eks_cluster_name/arn 을 받고, eks 는 access_entries 에 workbench role ARN 을 받는다 —
   #    양쪽이 서로의 module 출력을 참조하면 그래프 순환이라 plan 이 죽는다.
   #    클러스터 이름·ARN 은 네이밍·리전·계정으로 **유도되므로** 루트가 직접 합성한다
   #    (03 §3.1 의 1순위 "결정적 네이밍으로 값 구성", 결합도 없음).
-  #    ⇒ workbench 은 local 만 참조하고, eks 만 module.workbench 을 참조한다. 단방향.
+  #    ⇒ workbench 는 local 만 참조하고, eks 만 module.workbench 를 참조한다. 단방향.
   #
   # ⛔ local.cluster_arn 을 module.eks.cluster_arn 으로 바꾸지 말 것 — 그 순간 순환이다.
   #    합성식은 실계정 대조로 확인했다(2026-08-06):
@@ -49,7 +49,7 @@ locals {
   # 우리 VPC 를 식별하는 Name 태그. networking 루트가 vpc 모듈에 purpose="main" 으로 넘긴 결과다.
   vpc_name = "vpc-${var.workload}-${var.env}-${var.region_code}-main"
 
-  # workbench 을 놓을 서브넷 하나. workbench 은 1대라 AZ 분산이 의미 없다(40 §2.2).
+  # workbench 를 놓을 서브넷 하나. workbench 는 1대라 AZ 분산이 의미 없다(40 §2.2).
   #
   # ⚠️ **sort() 가 핵심이다.** data.aws_subnets.ids 는 타입이 list 지만 순서는 AWS API 응답 순이라
   #    계약이 아니다(스키마 확인 2026-08-06). 정렬 없이 [0] 을 쓰면 조회 순서가 바뀌는 것만으로
@@ -98,7 +98,7 @@ data "aws_subnets" "pod" {
   }
 }
 
-# 관리 호스트 서브넷 — workbench 이 여기 놓인다. private(NAT 아웃바운드)이고 node-uniq 와 **분리**돼
+# 관리 호스트 서브넷 — workbench 가 여기 놓인다. private(NAT 아웃바운드)이고 node-uniq 와 **분리**돼
 # 있다. 섞으면 그 대역의 karpenter.sh/discovery 태그 때문에 소유가 흐려진다(40 §구현 4).
 data "aws_subnets" "vm" {
   filter {
@@ -178,17 +178,26 @@ module "eks" {
   enable_custom_networking = true
   pod_subnet_ids           = data.aws_subnets.pod.ids
 
-  # ── 엔드포인트 — public-restricted (사용자 결정 2026-08-03) ──────────────────
-  # public 을 켜되 CIDR 로 좁힌다. private 도 함께 켜 노드·VPC 내부 경로를 유지한다.
+  # ── 엔드포인트 — **private-only** (2026-08-06 전환 완료) ─────────────────────
   #
-  # 🔴 **아직 켜 둔다 — 이 커밋에서 닫지 않는다.** 위 module.workbench 이 도달 지점을 만들지만
-  #    "만들었다"와 "닿는다"는 다르다. 순서를 뒤집으면 workbench 이 안 될 때 클러스터에 닿을 방법이
-  #    아예 없어진다. public 을 닫는 것은 아래가 전부 실증된 **다음 커밋**이다:
-  #      ① workbench apply  ② SSM 세션 접속  ③ 그 세션에서 kubectl get nodes 성공
-  #    ⇒ 그때 이 두 줄(endpoint_public_access · public_access_cidrs)과 var 를 함께 걷어낸다.
+  # apiserver 에 도달하는 유일한 경로가 **VPC 내부**다. 인터넷에서 이 클러스터의 컨트롤플레인은
+  # 존재하지 않는 것과 같다 — 조작은 module.workbench 를 통해서만 이뤄진다.
+  #
+  # ⏱️ **전환 순서가 안전에 직결됐다.** 이 줄을 workbench 보다 먼저 바꿨다면 workbench 가
+  #    동작하지 않을 때 클러스터에 닿을 방법이 아예 없었다. 그래서 다음 순서로 갔다:
+  #      ① workbench apply(run 31059712680) ② SSM PingStatus Online ③ kubectl get nodes 성공
+  #      ④ 그리고 나서 이 전환. ③ 까지가 전부 **선행 조건**이었다.
+  #
+  # 🔑 **이 전환 자체가 판정이다.** ③ 은 public 이 켜진 채로 났으므로 "private 경로로 닿았다"를
+  #    증명하지 않았다 — public 을 통해 닿고 있었을 가능성이 남는다. 닫은 뒤 workbench 에서
+  #    kubectl 이 다시 되는 것이 그 배제의 유일한 방법이다.
+  #
+  # ⛔ 되돌리려면 **workbench 가 유일한 도달 지점**임을 먼저 기억한다. public 을 다시 여는 것은
+  #    설계 목적(모듈 repo 40 §1)을 되돌리는 일이므로, 접근이 필요하면 workbench 를 고친다.
+  #    ⚠️ `public_access_cidrs` 는 넘기지 않는다 — public 이 꺼져 있으면 EKS 가 무시하는 값이라
+  #       남겨 두면 "좁혀 두었다"는 착시만 만든다(죽은 설정).
   endpoint_private_access = true
-  endpoint_public_access  = true
-  public_access_cidrs     = var.public_access_cidrs
+  endpoint_public_access  = false
 
   # ── EKS 접근 3층 중 2·3층 — D-WORKBENCH-SEAM (모듈 repo 설계 40 §5) ────────────
   #
