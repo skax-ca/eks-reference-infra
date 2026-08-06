@@ -9,7 +9,7 @@
 #      네이밍이 결정적이라 조회가 예측 가능하다. 이 방식이면 vpc 를 먼저 파기해도 eks plan 이
 #      "VPC 없음"으로 **명확히** 실패하고(조용한 오작동이 아니다), 순서만 지키면 각자 배포·파기된다.
 #
-# ⚠️ 소싱 핀은 정확 태그다(D20). eks-cluster-v0.3.0 = 모듈 repo 417154b. 업그레이드는 이 줄을 올리는
+# ⚠️ 소싱 핀은 정확 태그다(D20). eks-cluster-v0.4.0 = 모듈 repo ade89e9. 업그레이드는 이 줄을 올리는
 #    명시적 커밋이고 그것이 승격 게이트다. git 소싱에 ~> 는 동작하지 않는다.
 # ⚠️ 0.y.z 는 개발 단계다(모듈 repo architecture/05 = D-VERSION) — 마이너 업그레이드도 계약을
 #    바꿀 수 있으니 태그를 올릴 때 릴리스 메시지를 읽는다. 구 eks-cluster-v1.0.0 은 2026-08-05
@@ -159,7 +159,7 @@ module "workbench" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.3.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.4.0&depth=1"
 
   # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(02 §1.4(b)).
   naming = {
