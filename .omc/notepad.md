@@ -1,8 +1,8 @@
 # Notepad — iac-reference-infra
 
-## 🔢 현행 모듈 핀 (2026-08-05 D-VERSION 이후) — **먼저 읽을 것**
+## 🔢 현행 모듈 핀 (2026-08-06 기준) — **먼저 읽을 것**
 
-**`vpc-v0.3.0` · `eks-cluster-v0.1.0`.** 모듈 repo 가 전 모듈을 **`0.y.z`(개발 단계)** 로 전환했다
+**`vpc-v0.3.0` · `eks-cluster-v0.3.0` · `workbench-v0.1.0`.** 모듈 repo 가 전 모듈을 **`0.y.z`(개발 단계)** 로 전환했다
 (SSOT = 모듈 repo `docs/architecture/05-versioning-policy.md` = **D-VERSION**). 커밋 `81d6349`.
 
 - **재매핑이지 업그레이드가 아니다** — 구 태그와 **같은 커밋**이라 모듈 내용은 그대로다.
@@ -16,7 +16,9 @@
   `git show <tag>` 로 릴리스 메시지를 읽는다 — 마이너라고 안전을 가정하지 않는다.
 - ⛔ 아래 본문·`docs/deployment-facts.md` 에 남은 `v1.x` 번호는 **그때의 사실 기록**이다.
 - 다음 모듈 릴리스 예정: **`eks-cluster-v0.2.0`**(D-EXTDNS-ZONE validation, 모듈 repo 작업).
-- ⚠️ 이 repo 로컬 경로가 **`/Users/born2k/silverte/ai/iac-reference-infra`** 다(구 기록의 `/Users/a07326/…` 아님).
+- ⚠️ **로컬 경로는 머신별 상태다.** 이 머신은 `/Users/a07326/born2k/ai/iac-reference-infra`,
+  다른 머신은 `/Users/born2k/silverte/ai/iac-reference-infra`. `backend.hcl`·AWS 프로파일·게이트 도구와
+  같은 부류로 **clone·머신 단위**라 git·dotfiles 로 따라오지 않는다 — 새 머신에서 먼저 확인한다.
 
 ## 📍 지금 어디인가 (2026-07-31 기준)
 
@@ -529,6 +531,63 @@ Plan: 0 to add, 0 to change, 1 to destroy.
 ✅ **미검증 6항목 전부 판정됐다**(6-1 각주 ¹의 validation/lifecycle 구분 포함). 그래도
 **실제 파기는 안 했다** — teardown 2단계(`deletion_protection=false` → `vpc_enabled=false`)는
 자산 정리를 결정할 때 밟는다.
+
+## 🆕 2026-08-06 — workbench 도달 지점 배선 + 개명 (apply 대기)
+
+**⏳ 코드는 전부 들어갔다. 남은 것은 apply 와 도달 실증뿐이다.**
+
+### PR #15 — workbench 3층 배선 + 모듈 핀 v0.3.0
+
+| 항목 | 내용 |
+|------|------|
+| 모듈 핀 | `eks-cluster-v0.2.0` → **`v0.3.0`** — 순수 추가 릴리스라 plan 이 **`0 to change`** 로 실증했다 |
+| 신규 모듈 | **`workbench-v0.1.0`** — `vm-uniq` private 서브넷, t4g.nano(arm64), SSM 전용(인바운드 0) |
+| 2층 | `access_entries` — workbench role → `AmazonEKSClusterAdminPolicy` |
+| 3층 | `cluster_security_group_additional_rules` — workbench SG → apiserver 443 |
+| 출력 | `workbench_instance_id` (SSM 접속 대상) |
+
+⭐ **핀 상향의 diff 가 0이라는 것이 증거다.** v0.3.0 은 `cluster_security_group_additional_rules`
+신설 + `required_version` 하한뿐이라 기존 리소스에 영향이 없어야 하는데 plan 이 그것을 실증했다.
+`0.y.z` 구간에서 마이너를 올릴 때마다 확인할 가치가 있는 지점이다.
+
+### PR #16 — bastion → workbench 개명 (D-WORKBENCH-RENAME)
+
+이름이 실물과 어긋나 있었다 — `bastion host` 의 정의는 *인바운드를 받아 안쪽으로 전달*인데
+이 모듈은 **인바운드 규칙이 0개**다. 요새가 아니라 **도구가 갖춰진 작업대**다.
+근거 전문은 모듈 repo `docs/design/40-workbench.md §2.0`.
+
+- ⛔ **구 태그 `bastion-v0.1.0` 은 원격에서 삭제됐다.** 그 핀으로 되돌리면 `init` 이 실패한다.
+- ⏱️ **apply 전이라 공짜였다.** `purpose` 는 태그가 아니라 **식별자**로 흘러간다
+  (`aws_iam_role.name` · `aws_iam_instance_profile.name` · `aws_security_group.name`) —
+  apply 후였다면 그 셋이 replace 되고 Access Entry·cluster SG rule 까지 연쇄 replace 됐다.
+  🔑 일반화: *"purpose·naming 토큰을 바꾸는 개명은 apply 전에만 공짜다."*
+- ✅ **판정**: 개명 후 plan 이 **개명 전과 숫자가 같다.**
+  [`31056930396`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31056930396)(개명 전) ·
+  [`31058277158`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31058277158)(개명 후)
+  둘 다 **`Plan: 10 to add, 0 to change, 0 to destroy`**. Name 도 `-workbench-01` 로 확인.
+
+### 🔴 다음 태스크 — **순서가 안전에 직결된다**
+
+```
+① workflow_dispatch 로 apply                              ← 지금 여기
+② aws ssm start-session --profile team --region ap-northeast-2 \
+     --target $(tofu output -raw workbench_instance_id)
+③ 그 세션에서 kubectl get nodes                            ← 도달 실증
+④ 그때 endpoint_public_access = false (별도 PR)
+```
+
+⛔ **public 을 먼저 닫으면 안 된다.** workbench 가 동작하지 않을 때 클러스터에 닿을 방법이
+아예 없어진다. `live/dev/eks/main.tf` 의 엔드포인트 블록 주석이 이 순서를 담고 있다.
+
+③ 실패 시 **증상으로 층을 특정한다**(`live/dev/eks/README.md §4` 에 표):
+`update-kubeconfig` 권한 오류 = **1층**(workbench IAM) / `401 Unauthorized` = **2층**(Access Entry) /
+`dial tcp …: i/o timeout` = **3층**(cluster SG). timeout 은 인증 계층에 닿지도 못했다는 뜻이다.
+
+**apply 전 plan 요약**(run 31058277158): workbench 7개(EC2·SG·egress rule·IAM role·inline policy·
+policy attachment·instance profile) + Access Entry 2 + cluster SG rule 1 = **10 add / 0 change / 0 destroy**.
+비용 **+~$3/월**(t4g.nano) → 총 ~$168/월 + Flow Logs.
+
+⚠️ **apply 는 사람이 `Run workflow` 를 누르는 것이 승인 게이트다**(D30-1). merge 만으로는 안 돈다.
 
 ## 미결 항목
 
