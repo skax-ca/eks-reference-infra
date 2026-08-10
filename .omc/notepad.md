@@ -2,9 +2,9 @@
 
 ## 🔢 현행 모듈 핀 (2026-08-10 기준) — **먼저 읽을 것**
 
-**`vpc-v0.3.0` · `eks-cluster-v0.4.0` · `workbench-v0.3.0`.**
+**`vpc-v0.3.0` · `eks-cluster-v0.4.0` · `workbench-v0.4.0`.**
 
-> ### 🔴 **`workbench-v0.3.0` — apply 하면 인스턴스가 교체된다** (2026-08-10, 브랜치 `feat/workbench-pin-v030`)
+> ### 🔴 **`workbench-v0.4.0` — apply 하면 인스턴스가 교체된다** (2026-08-10)
 >
 > `v0.1.0` → `v0.3.0` 은 `user_data` 가 바뀌므로 **`forces replacement`** 다. 모듈이
 > `user_data_replace_on_change = true` 로 **의도한 계약**이다 — user_data 는 부팅 시에만 실행되므로
@@ -46,7 +46,23 @@
 >
 > ⚠️ 판정은 워크플로 `success` 가 아니라 **로그 본문**으로 했다(이 repo 의 기존 규율).
 >
-> ⏸ **여기서 멈춰 있다.** 다음은 `workflow_dispatch` 로 apply — **누르는 행위가 승인**이다.
+> ### 🔴 **apply 결과 — 부분 실패**(run [`31352399365`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31352399365))
+>
+> `Apply complete! Resources: 1 added, 0 changed, 1 destroyed.` — plan 대로 **부수 피해 0**.
+>
+> | 결과 | |
+> |---|---|
+> | ✅ SSM 재등록 `Online` · kubeconfig **첫 시도 성공** | IAM 전파 재시도 루프가 돌 필요조차 없었다 |
+> | ✅ `kubectl v1.35.7` · `helm v3.21.3` · `argocd v3.5.0` | 전부 자동 설치 |
+> | ❌ **`git` 미설치** | 부팅 중 `dnf` 가 **OOM-kill** 됐다(`total-vm 976MB`) |
+>
+> 🔑 **`free -m` 의 swap 417MB 는 여유가 아니었다** — 실물이 `/dev/zram0`(RAM 압축)이라
+> 용량이 늘지 않는다. 판정은 `swapon --show` 로 한다.
+> ⚠️ 2026-08-07 에 같은 명령이 **손으로는 성공**했었다(유휴 상태였기 때문) —
+> **"수동으로 됐으니 자동으로도 된다"가 부팅 중 경합에서는 성립하지 않는다.**
+>
+> ⇒ 모듈 repo 가 **D-WORKBENCH-SIZE**(`40 §4.3`)로 기본 타입을 **`t4g.small`(2GB)** 로 올리고
+> **`workbench-v0.4.0`** 을 컷했다. 다음 재핀이 `git` 을 회수한다.
 
 > ### ⚠️ **핀 표기가 여러 파일에 흩어져 재발한 drift** (2026-08-10 정정)
 >

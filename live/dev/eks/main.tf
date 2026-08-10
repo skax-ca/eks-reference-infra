@@ -122,16 +122,20 @@ data "aws_subnets" "vm" {
 #
 # ⚠️ workbench 는 module.eks 의 출력을 **참조하지 않는다** — 위 local.cluster_name/arn 만 쓴다(순환 해소).
 module "workbench" {
-  # 🔴 v0.1.0 → v0.3.0 은 **인스턴스를 교체한다.** 모듈이 `user_data_replace_on_change = true` 로
-  #    의도한 계약이다 — user_data 는 부팅 시에만 실행되므로 in-place 갱신은 "코드와 실물이 다른"
-  #    상태를 만든다. plan 에 `# forces replacement` 가 뜨는 것이 정상이다.
+  # 🔴 **인스턴스를 교체한다.** 모듈이 `user_data_replace_on_change = true` 로 의도한 계약이고,
+  #    v0.4.0 은 거기에 더해 **기본 instance_type 이 바뀐다**(t4g.nano → t4g.small).
+  #    plan 에 `# forces replacement` 가 뜨는 것이 정상이다.
   #    · 유지: IAM role·instance profile(Access Entry **2층**) · SG ID(cluster SG ingress **3층**) ·
-  #            kubeconfig(user_data 가 재생성한다)
-  #    · 소실: 2026-08-07 seed 때 **손으로 넣은 것 전부**(git·helm·argocd-seed.sh)
+  #            kubeconfig(user_data 가 재생성한다) — v0.3.0 apply 로 **실증됐다**
   # ⛔ 재생성 중에는 **클러스터 도달 경로가 끊긴다** — endpoint_public_access = false 라
   #    workbench 가 유일한 도달 지점이다. ArgoCD 는 클러스터 안에서 자율로 도므로 영향 없다.
-  # ⭐ v0.2.0(git)과 v0.3.0(argocd CLI)을 **한 번에** 올려 교체를 1회로 묶는다.
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/workbench?ref=workbench-v0.3.0&depth=1"
+  #
+  # ⚠️ **이번 교체는 v0.3.0 apply 의 부분 실패를 회수한다.** 그때 t4g.nano(RAM 0.5GB)에서
+  #    부팅 중 dnf 가 OOM-killer 에 죽어 **git 이 설치되지 않았다**(kubectl·helm·argocd 는 성공).
+  #    D-WORKBENCH-SIZE(모듈 repo `40 §4.3`)가 기본 타입을 t4g.small(2GB)로 올려 그것을 닫는다.
+  #    🔑 instance_type 을 여기서 지정하지 않는다 — **모듈 기본값이 안전한 값이어야** 고객사가
+  #       그대로 써도 부팅이 성공한다. 이 루트가 덮어쓰면 그 계약을 검증하지 못한다.
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/workbench?ref=workbench-v0.4.0&depth=1"
 
   naming = {
     workload    = var.workload
@@ -150,7 +154,7 @@ module "workbench" {
   #   aws ssm get-parameter --profile team --region ap-northeast-2 \
   #     --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64 \
   #     --query Parameter.Value --output text
-  # ⚠️ instance_type 기본값 t4g.nano(arm64)와 **아키텍처가 짝이다.** 모듈은 검증하지 않고
+  # ⚠️ instance_type 기본값 t4g.small(arm64)과 **아키텍처가 짝이다.** 모듈은 검증하지 않고
   #    불일치는 apply 에서야 드러난다 — x86 으로 바꾸려면 위 경로의 -x86_64 를 조회하고
   #    instance_type 도 함께 넘긴다(노드그룹의 ami_type ↔ instance_types 와 같은 함정).
   ami_id = "ami-0973292651cddee46"

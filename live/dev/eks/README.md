@@ -77,7 +77,7 @@ tofu -chdir=live/dev/eks plan   # → AccessDenied. plan 은 CI 에서만 돈다
 | 컨트롤러 IAM | ALBC Pod Identity role ON. **external-dns 는 OFF**(addon 과 한 쌍이라 함께 끈다) |
 | 컨트롤플레인 로깅 | `api` · `audit` · `authenticator` |
 | 삭제 보호 | `deletion_protection = true` (AWS 네이티브) |
-| **workbench** | **ON** — `vm-uniq` private 서브넷, t4g.nano(arm64), SSM 전용(인바운드 0). **`workbench-v0.3.0`** — 도구: `kubectl v1.35.7` · `helm v3.21.3` · `argocd v3.5.0` · `git`(변수 없이 항상). 🔴 **핀을 올리면 인스턴스가 교체된다**(`user_data_replace_on_change`) |
+| **workbench** | **ON** — `vm-uniq` private 서브넷, **`t4g.small`(arm64, 2GB — 모듈 기본값)**, SSM 전용(인바운드 0). **`workbench-v0.4.0`** — 도구: `kubectl v1.35.7` · `helm v3.21.3` · `argocd v3.5.0` · `git`(변수 없이 항상). 🔴 **핀을 올리면 인스턴스가 교체된다**(`user_data_replace_on_change`). ⚠️ `t4g.nano` 로 내리면 부팅 중 `dnf` 가 OOM 으로 죽어 `git` 이 빠진다(2026-08-10 실측) |
 
 이 루트가 만들지 **않는** 것: helm 릴리스 · NodePool/NodeClass · Issuer/Certificate CR ·
 external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계). 이 루트는 그 전제(클러스터·IAM)만 만든다.
