@@ -1,8 +1,42 @@
 # Notepad — iac-reference-infra
 
-## 🔢 현행 모듈 핀 (2026-08-06 기준) — **먼저 읽을 것**
+## 🔢 현행 모듈 핀 (2026-08-10 기준) — **먼저 읽을 것**
 
-**`vpc-v0.3.0` · `eks-cluster-v0.4.0` · `workbench-v0.1.0`.** 모듈 repo 가 전 모듈을 **`0.y.z`(개발 단계)** 로 전환했다
+**`vpc-v0.3.0` · `eks-cluster-v0.4.0` · `workbench-v0.3.0`.**
+
+> ### 🔴 **`workbench-v0.3.0` — apply 하면 인스턴스가 교체된다** (2026-08-10, 브랜치 `feat/workbench-pin-v030`)
+>
+> `v0.1.0` → `v0.3.0` 은 `user_data` 가 바뀌므로 **`forces replacement`** 다. 모듈이
+> `user_data_replace_on_change = true` 로 **의도한 계약**이다 — user_data 는 부팅 시에만 실행되므로
+> in-place 갱신은 *"코드와 실물이 다른"* 상태를 만든다.
+>
+> | 유지 | 소실 |
+> |---|---|
+> | IAM role·instance profile ⇒ **Access Entry(2층) 그대로** | 2026-08-07 seed 때 **손으로 넣은 것 전부** |
+> | SG ID ⇒ **cluster SG ingress(3층) 그대로** | `git` · `helm` · `argocd-seed.sh` |
+> | kubeconfig — `user_data` 가 재생성 | ⇒ **셋 다 자동으로 돌아온다**(아래) |
+>
+> - `git` = **`workbench-v0.2.0`** 이 user_data 에 넣었다(변수 없이 항상)
+> - `helm v3.21.3` · `argocd v3.5.0` = **이 커밋이 변수로 지정**했다(전엔 미지정이라 아예 없었다)
+> - `argocd-seed.sh` = GitOps 저장소 `bootstrap/` 에 **vendoring** 됐다(gitops `ba9d079`)
+>
+> ⇒ 🔑 **교체가 곧 복구다.** 손으로 넣은 상태를 코드가 인수하는 것이 이 변경의 목적이다.
+>
+> ⛔ **재생성 중에는 클러스터 도달 경로가 끊긴다** — `endpoint_public_access = false` 라
+> workbench 가 유일한 도달 지점이다. ArgoCD 는 클러스터 안에서 자율로 도므로 영향 없다.
+> ⭐ **v0.2.0 과 v0.3.0 을 한 번에** 올려 교체를 1회로 묶었다.
+>
+> ⚠️ **apply 전 destroy/replace 목록을 사람이 읽는다**(공용 계정 — 예외 없음).
+> plan 은 main push 로 돌고 **apply 는 `workflow_dispatch` 를 누르는 행위가 승인**이다.
+
+> ### ⚠️ **핀 표기가 여러 파일에 흩어져 재발한 drift** (2026-08-10 정정)
+>
+> `main.tf` 는 `eks-cluster-v0.4.0` 인데 **`AGENTS.md`(4곳)·`README.md`·`docs/deployment-facts.md`
+> 가 `v0.1.0` 에 멈춰 있었다.** 같은 날 모듈 repo 예제 README 도 같은 유형이었다.
+> 🔑 **`main.tf` 의 `?ref=` 가 유일한 사실이고 나머지는 전부 사본이다** — 사본이 늘수록 재발한다.
+> 구조적 해법(핀을 한 곳에서만 표기)은 아직 판단하지 않았다.
+
+모듈 repo 가 전 모듈을 **`0.y.z`(개발 단계)** 로 전환했다
 (SSOT = 모듈 repo `docs/architecture/05-versioning-policy.md` = **D-VERSION**). 커밋 `81d6349`.
 
 - **재매핑이지 업그레이드가 아니다** — 구 태그와 **같은 커밋**이라 모듈 내용은 그대로다.
