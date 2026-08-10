@@ -63,6 +63,21 @@
 >
 > ⇒ 모듈 repo 가 **D-WORKBENCH-SIZE**(`40 §4.3`)로 기본 타입을 **`t4g.small`(2GB)** 로 올리고
 > **`workbench-v0.4.0`** 을 컷했다. 다음 재핀이 `git` 을 회수한다.
+>
+> ### ✅ **v0.4.0 재핀 plan 판정** (PR #21 머지 · run [`31353415892`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31353415892))
+>
+> ```
+> Plan: 1 to add, 0 to change, 1 to destroy.
+>   # module.workbench.aws_instance.this[0] must be replaced
+>   ~ instance_type = "t4g.nano" -> "t4g.small"
+>   ~ user_data     = <<-EOT # forces replacement
+>   +   HOME=/root argocd version --client || true
+> ```
+> **replace 는 다시 인스턴스 1개뿐**이다 — IAM·SG 는 목록에 없다.
+>
+> ⏸ **여기서 멈춰 있다.** 다음은 `workflow_dispatch` 로 apply — **누르는 행위가 승인**이다.
+> 🔴 apply 후 반드시 확인: **`git --version`**(이번 릴리스가 닫으려는 바로 그것) ·
+> `free -m`(2GB) · `swapon --show` · `helm version` · `argocd version --client` · `kubectl get nodes`.
 
 > ### ⚠️ **핀 표기가 여러 파일에 흩어져 재발한 drift** (2026-08-10 정정)
 >
