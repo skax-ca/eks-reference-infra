@@ -28,6 +28,25 @@
 >
 > ⚠️ **apply 전 destroy/replace 목록을 사람이 읽는다**(공용 계정 — 예외 없음).
 > plan 은 main push 로 돌고 **apply 는 `workflow_dispatch` 를 누르는 행위가 승인**이다.
+>
+> ### ✅ **plan 판정 완료 — 부수 피해 0** (PR #20 머지 `1f6ab8c` · run [`31352249270`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31352249270))
+>
+> ```
+> Plan: 1 to add, 0 to change, 1 to destroy.
+>   # module.workbench.aws_instance.this[0] must be replaced
+>   ~ user_data = <<-EOT # forces replacement
+> ```
+> 🔑 **replace 대상이 인스턴스 1개뿐이다.** IAM role·instance profile·SG·SG rule 이 목록에 **없다**
+> ⇒ Access Entry(2층)·cluster SG ingress(3층)가 **그대로 유지된다**는 예측이 plan 으로 확인됐다.
+> `0 to change` 라 다른 리소스의 in-place 변경도 없다.
+>
+> **user_data diff 실물**(`+` = 새로 들어가는 줄):
+> `+ dnf install -y git-core` · `+ .../argocd-linux-$ARCH`(v3.5.0) · `+ .../helm-v3.21.3-...tar.gz`.
+> `kubectl v1.35.7` 줄에는 `+` 가 없다(변경 없음) ⇒ **의도한 것만 들어갔다.**
+>
+> ⚠️ 판정은 워크플로 `success` 가 아니라 **로그 본문**으로 했다(이 repo 의 기존 규율).
+>
+> ⏸ **여기서 멈춰 있다.** 다음은 `workflow_dispatch` 로 apply — **누르는 행위가 승인**이다.
 
 > ### ⚠️ **핀 표기가 여러 파일에 흩어져 재발한 drift** (2026-08-10 정정)
 >
