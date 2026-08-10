@@ -122,7 +122,16 @@ data "aws_subnets" "vm" {
 #
 # ⚠️ workbench 는 module.eks 의 출력을 **참조하지 않는다** — 위 local.cluster_name/arn 만 쓴다(순환 해소).
 module "workbench" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/workbench?ref=workbench-v0.1.0&depth=1"
+  # 🔴 v0.1.0 → v0.3.0 은 **인스턴스를 교체한다.** 모듈이 `user_data_replace_on_change = true` 로
+  #    의도한 계약이다 — user_data 는 부팅 시에만 실행되므로 in-place 갱신은 "코드와 실물이 다른"
+  #    상태를 만든다. plan 에 `# forces replacement` 가 뜨는 것이 정상이다.
+  #    · 유지: IAM role·instance profile(Access Entry **2층**) · SG ID(cluster SG ingress **3층**) ·
+  #            kubeconfig(user_data 가 재생성한다)
+  #    · 소실: 2026-08-07 seed 때 **손으로 넣은 것 전부**(git·helm·argocd-seed.sh)
+  # ⛔ 재생성 중에는 **클러스터 도달 경로가 끊긴다** — endpoint_public_access = false 라
+  #    workbench 가 유일한 도달 지점이다. ArgoCD 는 클러스터 안에서 자율로 도므로 영향 없다.
+  # ⭐ v0.2.0(git)과 v0.3.0(argocd CLI)을 **한 번에** 올려 교체를 1회로 묶는다.
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/workbench?ref=workbench-v0.3.0&depth=1"
 
   naming = {
     workload    = var.workload
@@ -149,8 +158,21 @@ module "workbench" {
   # 클러스터 마이너와 맞춘다(1.35 → v1.35.x). https://dl.k8s.io/release/stable-1.35.txt 실측.
   kubectl_version = "v1.35.7"
 
-  # ⛔ helm 은 받지 않는다. 이 클러스터는 GitOps(pull) 전제라 helm 직접 운영(22 §3 프로파일 B)이
-  #    현재 요구가 아니다. 필요해지면 helm_version 을 그때 연다 — 안 쓰는 바이너리를 미리 얹지 않는다.
+  # ⚠️ 이 자리에는 *"helm 은 받지 않는다 — GitOps(pull) 전제라 helm 직접 운영(22 §3 프로파일 B)이
+  #    현재 요구가 아니다"* 라고 적혀 있었다. **그 전제가 뒤집혔다**: `23` 이 self-managed ArgoCD 를
+  #    workbench 에서 `helm install` 로 seed 하기로 정하면서 helm 은 **프로파일과 무관하게 필수**가 됐다.
+  #    실제로 2026-08-07 seed 때 helm 이 없어 손으로 설치했고, 그 상태는 인스턴스와 함께 사라진다.
+  # 핀의 SSOT 는 모듈 repo `23 §5` 다. ⛔ 최신은 v4 계열이지만 **일부러 v3** 다 —
+  #    chart argo-cd 10.3.0 은 helm 3 시대 산물이고, 최초 부트스트랩에 메이저 CLI 변경까지 겹치면
+  #    실패 시 원인이 둘로 갈린다(진단 가능성도 비용 항목이다).
+  helm_version = "v3.21.3"
+
+  # ⭐ chart appVersion 과 **같은 값**이다(`23 §5`). 다른 값을 핀하면 "UI 에서 되는데 CLI 에서
+  #    안 된다"를 진단할 근거가 사라진다. ⚠️ chart 를 올리면 이 핀도 같이 올린다.
+  # 용도는 "로그인해서 쓴다"가 아니다: ① `argocd account update-password` — seed 완료 조건
+  #    (`23 §2.3`)을 port-forward·대화형 SSM 세션 없이 끝낸다 · ② `argocd cluster list` —
+  #    cluster Secret 이 내장 in-cluster 를 대체하는지 판정(`30` 판정 ③, kubectl 로는 절반만 봤다).
+  argocd_version = "v3.5.0"
 
   # EKS 접근 3층 중 **1층만** 여기서 성립한다(D-WORKBENCH-SEAM).
   # 2층(Access Entry)·3층(cluster SG ingress)은 아래 eks 블록이 소유한다.
