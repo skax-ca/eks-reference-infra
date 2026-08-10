@@ -75,9 +75,33 @@
 > ```
 > **replace 는 다시 인스턴스 1개뿐**이다 — IAM·SG 는 목록에 없다.
 >
-> ⏸ **여기서 멈춰 있다.** 다음은 `workflow_dispatch` 로 apply — **누르는 행위가 승인**이다.
-> 🔴 apply 후 반드시 확인: **`git --version`**(이번 릴리스가 닫으려는 바로 그것) ·
-> `free -m`(2GB) · `swapon --show` · `helm version` · `argocd version --client` · `kubectl get nodes`.
+> ### ✅ **apply 완료 — 전부 통과** (run [`31353547193`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31353547193))
+>
+> `1 added, 0 changed, 1 destroyed`. 인스턴스 `t4g.small` 로 교체.
+>
+> | 항목 | 결과 |
+> |---|---|
+> | **`git`** | ✅ **`git version 2.50.1`** — 이번 릴리스가 닫으려던 바로 그것 |
+> | `kubectl` · `helm` · `argocd` | ✅ `v1.35.7` · `v3.21.3` · `v3.5.0` |
+> | 메모리 | ✅ 총 1846MB · available 1544MB · **OOM 0건** |
+> | 클러스터 · ArgoCD | ✅ 노드 2개 `Ready` · root-app `Synced Healthy` · pod 5개 Running |
+>
+> ⏱️ **부팅이 3분+ → 32초로 줄었다.** 도구가 하나 늘었는데 더 빨라졌다 — 늘어난 시간의 정체는
+> **`dnf` 가 메모리를 구하지 못해 헤매던 시간**이었다.
+> 🔑 **OOM 은 "죽는 것"만이 아니라 "죽기 전까지 느려지는 것"으로도 나타난다.**
+>
+> 🔑 **`t4g.small` 에는 zram swap 이 아예 없다**(`Swap: 0`). AL2023 은 저메모리 인스턴스에만
+> zram 을 켠다 — *"swap 이 사라졌으니 나빠졌다"* 가 아니라 **압축 swap 이 필요 없을 만큼
+> 실제 RAM 이 생겼다**는 뜻이다.
+>
+> ✅ **덤으로 `30` 판정 ③이 닫혔다**: `argocd admin cluster stats -n argocd` → 서버 항목이
+> **하나뿐** ⇒ cluster Secret 이 내장 `in-cluster` 를 **대체했다. 중복이 아니다.**
+> ⚠️ `argocd login` 없이 판정했다(`argocd admin` 은 k8s 를 직접 읽는다).
+> 🔴 `-n argocd` 를 빠뜨리면 *"`argocd-cm` 을 찾을 수 없다"* 가 나온다 — **네임스페이스 누락**이지
+> 설정 공백이 아니다.
+>
+> ⛔ **남은 것 1건**: 초기 비밀번호 교체 + `argocd-initial-admin-secret` 삭제(`23 §2.3` 완료 조건).
+> Secret 이 아직 존재한다(실측). **비밀번호는 사용자가 정할 값**이라 대신 정하지 않는다.
 
 > ### ⚠️ **핀 표기가 여러 파일에 흩어져 재발한 drift** (2026-08-10 정정)
 >
