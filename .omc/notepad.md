@@ -120,6 +120,18 @@
 > 📌 `argocd account bcrypt` 가 있어 **Secret 을 직접 patch 하는 경로**(port-forward 0)도 존재한다.
 > 다만 그 경로도 비밀번호가 명령줄에 들어가므로 **대화형 세션 요건은 같다.**
 
+> ### ⚠️ **볼륨 태그 drift 가 교체와 함께 재현됐다** (run [`31354423963`](https://github.com/skax-ca/iac-reference-infra/actions/runs/31354423963))
+>
+> ```
+> Plan: 0 to add, 1 to change, 0 to destroy.
+>   ~ volume_tags = { ~ "Name" = "ec2-…-workbench-01" -> "vol-…-workbench-01" }
+> ```
+> 모듈 repo `40 §7.3-2` 가 *"공용 계정의 다른 자동화가 EBS `volume_tags` 를 덮는다 —
+> apply 마다 반복되는 drift"* 로 이미 기록한 항목이다. **인스턴스를 교체했으니 새 볼륨에
+> 자동 태거가 다시 붙은 것이고, 재현이 정상이다.**
+> 🔑 그래서 이 루트에서는 **`No changes` 를 기대하지 않는다** — "변경 0" 을 건강 지표로 쓰면
+> 매번 거짓 경보가 난다. ⛔ 무해하므로 apply 하지 않고 두어도 된다.
+
 > ### ⚠️ **핀 표기가 여러 파일에 흩어져 재발한 drift** (2026-08-10 정정)
 >
 > `main.tf` 는 `eks-cluster-v0.4.0` 인데 **`AGENTS.md`(4곳)·`README.md`·`docs/deployment-facts.md`
