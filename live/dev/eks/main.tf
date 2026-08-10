@@ -173,9 +173,17 @@ module "workbench" {
 
   # ⭐ chart appVersion 과 **같은 값**이다(`23 §5`). 다른 값을 핀하면 "UI 에서 되는데 CLI 에서
   #    안 된다"를 진단할 근거가 사라진다. ⚠️ chart 를 올리면 이 핀도 같이 올린다.
-  # 용도는 "로그인해서 쓴다"가 아니다: ① `argocd account update-password` — seed 완료 조건
-  #    (`23 §2.3`)을 port-forward·대화형 SSM 세션 없이 끝낸다 · ② `argocd cluster list` —
-  #    cluster Secret 이 내장 in-cluster 를 대체하는지 판정(`30` 판정 ③, kubectl 로는 절반만 봤다).
+  # 용도는 "로그인해서 쓴다"가 아니다:
+  #  ① ✅ **판정 ③ 종결**(2026-08-10) — `argocd admin cluster stats -n argocd` 로 cluster Secret 이
+  #     내장 in-cluster 를 **대체**함을 확인했다(중복 아님). kubectl 로는 절반만 봤던 항목이다.
+  #     ⭐ `argocd admin` 계열은 API 서버가 아니라 **k8s 를 직접 읽어 port-forward 도 login 도 없다.**
+  #  ② `argocd account update-password` — seed 완료 조건(`23 §2.3`).
+  #     🔴 **정정**: 이 자리에 *"port-forward·대화형 SSM 세션 없이 끝낸다"* 고 적었는데 **틀렸다.**
+  #     `argocd-server` 는 **ClusterIP** 라(실측) workbench 에서는 **CLI 가 있어도 port-forward 가
+  #     필요**하다. CLI 가 없애는 것은 **브라우저 UI 의존과 운영자 노트북까지의 터널**이다 —
+  #     port-forward 가 인스턴스 로컬 루프백으로 축소된다.
+  #     ⛔ 그리고 **대화형 세션으로 한다**: 새 비밀번호를 send-command 에 실으면 평문으로
+  #     CloudTrail·히스토리에 남는다. **기술 제약이 아니라 비밀 취급**이다.
   argocd_version = "v3.5.0"
 
   # EKS 접근 3층 중 **1층만** 여기서 성립한다(D-WORKBENCH-SEAM).
