@@ -595,7 +595,7 @@ OpenTofu 문서(`opentofu.org/docs/language/modules/sources/#shallow-clone`)에�
 - OpenTofu는 shallow clone에서 모듈 소스 디렉토리만 추출하므로 전체 히스토리가 불필요
 
 **우리 상황:**
-- 현재 핀: `vpc-v0.3.0` · **`eks-cluster-v0.4.0`** · **`workbench-v0.3.0`** (전부 태그) ✅
+- 현재 핀: `vpc-v0.3.0` · **`eks-cluster-v0.4.0`** · **`workbench-v0.4.0`** (전부 태그) ✅
   ⚠️ 2026-08-05 D-VERSION 재매핑 전에는 `vpc-v1.2.0`·`eks-cluster-v1.0.0`이었다 —
   **같은 커밋**이므로 shallow clone 검증 결과는 그대로 유효하다.
   🔴 **2026-08-10 정정**: 이 줄이 `eks-cluster-v0.1.0` 에 멈춰 있었다(`main.tf` 는 `v0.4.0`).
