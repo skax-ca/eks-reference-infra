@@ -169,5 +169,5 @@ module "vpc" {
   # D12 — 공용 계정(F13)에서 실수 삭제의 마지막 방어선이다(CLAUDE.md §4-1).
   # ⚠️ 이걸 켜면 teardown 이 **2단계**가 된다: deletion_protection = false 로 apply →
   #    vpc_enabled = false 로 apply. 결함이 아니라 보호의 정의다(모듈 변수 문서).
-  deletion_protection = true
+  deletion_protection = false # Wave 4 실증 teardown — 재구축 시 true 로 되돌린다
 }
