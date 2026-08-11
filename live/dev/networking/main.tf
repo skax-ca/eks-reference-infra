@@ -167,7 +167,8 @@ module "vpc" {
   single_nat_gateway = true
 
   # D12 — 공용 계정(F13)에서 실수 삭제의 마지막 방어선이다(CLAUDE.md §4-1).
-  # ⚠️ 이걸 켜면 teardown 이 **2단계**가 된다: deletion_protection = false 로 apply →
-  #    vpc_enabled = false 로 apply. 결함이 아니라 보호의 정의다(모듈 변수 문서).
-  deletion_protection = false # Wave 4 실증 teardown — 재구축 시 true 로 되돌린다
+  # ⚠️ 이걸 켜면 teardown 이 **2단계**가 된다: 이 값을 false 로 apply → destroy 워크플로.
+  #    결함이 아니라 보호의 정의다. 절차는 모듈 repo `docs/04-teardown.md` §2·§4.
+  # ⛔ false 로 바꾼 커밋을 main 에 남겨두지 않는다 — 파기가 끝나면 즉시 되돌린다.
+  deletion_protection = true
 }
