@@ -122,20 +122,27 @@ data "aws_subnets" "vm" {
 #
 # ⚠️ workbench 는 module.eks 의 출력을 **참조하지 않는다** — 위 local.cluster_name/arn 만 쓴다(순환 해소).
 module "workbench" {
-  # 🔴 **인스턴스를 교체한다.** 모듈이 `user_data_replace_on_change = true` 로 의도한 계약이고,
-  #    v0.4.0 은 거기에 더해 **기본 instance_type 이 바뀐다**(t4g.nano → t4g.small).
-  #    plan 에 `# forces replacement` 가 뜨는 것이 정상이다.
+  # 🔴 **인스턴스를 교체한다.** 모듈이 `user_data_replace_on_change = true` 로 의도한 계약이고
+  #    v0.5.0·v0.6.0 이 **둘 다 user_data 를 바꾼다.** plan 에 `# forces replacement` 가 뜨는 것이 정상이다.
   #    · 유지: IAM role·instance profile(Access Entry **2층**) · SG ID(cluster SG ingress **3층**) ·
-  #            kubeconfig(user_data 가 재생성한다) — v0.3.0 apply 로 **실증됐다**
+  #            kubeconfig(user_data 가 재생성한다) — v0.3.0·v0.4.0 apply 로 **두 번 실증됐다**
   # ⛔ 재생성 중에는 **클러스터 도달 경로가 끊긴다** — endpoint_public_access = false 라
   #    workbench 가 유일한 도달 지점이다. ArgoCD 는 클러스터 안에서 자율로 도므로 영향 없다.
   #
-  # ⚠️ **이번 교체는 v0.3.0 apply 의 부분 실패를 회수한다.** 그때 t4g.nano(RAM 0.5GB)에서
-  #    부팅 중 dnf 가 OOM-killer 에 죽어 **git 이 설치되지 않았다**(kubectl·helm·argocd 는 성공).
-  #    D-WORKBENCH-SIZE(모듈 repo `40 §4.3`)가 기본 타입을 t4g.small(2GB)로 올려 그것을 닫는다.
-  #    🔑 instance_type 을 여기서 지정하지 않는다 — **모듈 기본값이 안전한 값이어야** 고객사가
-  #       그대로 써도 부팅이 성공한다. 이 루트가 덮어쓰면 그 계약을 검증하지 못한다.
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/workbench?ref=workbench-v0.4.0&depth=1"
+  # ⭐ **이번 교체는 "손으로 만든 상태"를 코드가 인수하는 두 번째 회수다**(2026-08-11).
+  #    v0.5.0 **D-WORKBENCH-KUBECONFIG** — kubeconfig 정본을 `0444` 로 잠그고 `/etc/skel` 로
+  #      상속시켜 **사용자마다 자기 사본**을 갖게 한다. 실측 근거 두 가지:
+  #        · `/home/ssm-user` 는 부팅보다 **2시간 37분 뒤**에 생긴다(SSM Agent 가 첫 세션에서
+  #          `useradd -m`) ⇒ user_data 는 "그 사용자의 홈"에 아무것도 놓을 수 없다
+  #        · 🔴 이 인스턴스의 공유 kubeconfig 가 실제로 **0666(world-writable)** 이 되어 있었고
+  #          기본 네임스페이스가 전역 오염돼 있었다. kubeconfig 는 `users[].user.exec` 로 임의
+  #          명령을 지정할 수 있어 **로컬 권한 상승 경로**다 — 편의가 아니라 보안 문제다
+  #    v0.6.0 **D-WORKBENCH-TOOLING** — `eks-node-viewer`·`krew`(플러그인 6종)·로그인 프로파일.
+  #
+  # 🔑 instance_type 을 여기서 지정하지 않는다 — **모듈 기본값이 안전한 값이어야** 고객사가
+  #    그대로 써도 부팅이 성공한다. 이 루트가 덮어쓰면 그 계약을 검증하지 못한다.
+  #    (v0.4.0 이 t4g.nano → t4g.small 로 올려 v0.3.0 의 dnf OOM 부분 실패를 닫은 것이 그 사례다.)
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/workbench?ref=workbench-v0.6.0&depth=1"
 
   naming = {
     workload    = var.workload
@@ -185,6 +192,21 @@ module "workbench" {
   #     ⛔ 그리고 **대화형 세션으로 한다**: 새 비밀번호를 send-command 에 실으면 평문으로
   #     CloudTrail·히스토리에 남는다. **기술 제약이 아니라 비밀 취급**이다.
   argocd_version = "v3.5.0"
+
+  # ── 진단·조작 도구 (v0.6.0 D-WORKBENCH-TOOLING, 모듈 repo `40 §4.3-2`) ─────────
+  #
+  # 노드별 CPU/메모리 할당과 비용을 한 화면에서 본다 — Karpenter 가 만든 노드가 실제로
+  # 어떻게 채워졌는지 보는 용도다(같은 판정을 kubectl 로 하면 명령이 여러 개 필요하다).
+  # ⚠️ 릴리스 자산 이름이 `_Linux_x86_64` 라 다른 도구의 `amd64` 와 다르다 — 모듈이 매핑한다.
+  eks_node_viewer_version = "v0.7.4"
+
+  # krew 는 `KREW_ROOT=/usr/local/krew` 로 **시스템 설치**된다(모듈이 처리).
+  # ⭐ 기본값 `$HOME/.krew` 였다면 user_data 가 root 라 `/root/.krew` 에 갇혔을 것이다 —
+  #    v0.5.0 이 kubeconfig 에서 고친 것과 **같은 함정, 반대 정답**이다: 플러그인은 *상태* 가
+  #    아니라 *바이너리* 라 사용자별 사본이 아니라 **공유가 옳다.**
+  # ⛔ 플러그인 목록(ctx·ns·neat·rbac-tool·view-secret·whoami)은 **모듈 기본값을 그대로 받는다** —
+  #    같은 값을 여기 다시 적으면 모듈이 세트를 바꿀 때 조용히 어긋난다(중복은 곧 drift다).
+  krew_version = "v0.5.0"
 
   # EKS 접근 3층 중 **1층만** 여기서 성립한다(D-WORKBENCH-SEAM).
   # 2층(Access Entry)·3층(cluster SG ingress)은 아래 eks 블록이 소유한다.
