@@ -11,7 +11,7 @@ EKS 클러스터 배포 루트. `networking/`과 독립적인 state. 생성 대�
 | 파일 | 설명 |
 |------|------|
 | `backend.tf` | `networking/`과 같은 부분 설정 패턴 — 버킷 명은 init 시 주입 |
-| `main.tf` | EKS 모듈 호출 (`eks-cluster-v0.4.0`) + workbench 모듈 호출 (`workbench-v0.4.0`). graviton 사용 (`ami_type = AL2023_ARM_64_STANDARD`) |
+| `main.tf` | EKS 모듈 호출 (`eks-cluster-v0.4.0`) + workbench 모듈 호출 (`workbench-v0.6.0`). graviton 사용 (`ami_type = AL2023_ARM_64_STANDARD`) |
 | `outputs.tf` | 클러스터 엔드포인트, kubeconfig (민감), 노드 그룹 정보 |
 | `providers.tf` | AWS provider + k8s provider (향후 리소스용) |
 | `variables.tf` | `ami_release_version = "1.35.6-20250728"` (ARM64 SSM 경로), `cluster_version`, `eks_cluster_name = "eks-ref-dev-an2-main-01"` |
@@ -85,7 +85,7 @@ data "aws_subnets" "node" {
 - `live/dev/networking/`이 먼저 apply되어야 함 (태그로 VPC 조회)
 
 ### 외부
-- `iac-module-library` eks-cluster 모듈 (`eks-cluster-v0.4.0`) · workbench 모듈 (`workbench-v0.4.0`)
+- `iac-module-library` eks-cluster 모듈 (`eks-cluster-v0.4.0`) · workbench 모듈 (`workbench-v0.6.0`)
 - `terraform-aws-modules/eks` v21.24.1 (전이적)
 - S3 backend + OIDC + Roles (`bootstrap/`에서 생성)
 
