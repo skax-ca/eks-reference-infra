@@ -921,7 +921,18 @@ kubectl       Client Version: v1.35.7          ← 클러스터 1.35 와 마이�
 — 자동화 환경에 TTY 가 없다. 같은 채널·IAM·SG 를 지나므로 도달성으로는 동등하다.
 사람이 붙을 때: `aws ssm start-session --profile team --region ap-northeast-2 --target i-04ac14a6f5891492c`
 
-### 🔴 다음 태스크 — **④ `endpoint_public_access = false` 로 닫고 재확인**
+### ~~🔴 다음 태스크 — **④ `endpoint_public_access = false` 로 닫고 재확인**~~ ✅ **완료(2026-08-06)**
+
+> ## 🔴 **이 블록은 stale 이었다 — 2026-08-11 에 정정한다**
+>
+> ④는 **2026-08-06 에 이미 완결**됐다(위 「✅ ④ private-only 전환 완결」).
+> 코드 실물도 `live/dev/eks/main.tf` 의 **`endpoint_public_access = false`** 이고,
+> 2026-08-11 실측 `describe-cluster` 도 **`"public": false`** 를 반환한다.
+>
+> ⚠️ **이 파일에는 같은 구간이 두 벌 들어가 있다** — 「💰 현재 진행 중 비용」과
+> 「🎉 2026-08-06 …」이 각각 **두 번** 나온다. 앞쪽 사본은 갱신됐는데 **뒤쪽 사본에 옛
+> "다음 태스크"가 남아** 다음 세션을 오도할 수 있었다.
+> 🔑 **중복은 곧 stale 이다** — 한쪽만 갱신되기 때문이다. 아래 「미결 항목」에 정리 대상으로 올린다.
 
 **이것이 `40 §1` 이 말한 이 설계의 목적이다.** 지금까지는 전부 선행 조건이었다.
 
@@ -942,8 +953,44 @@ kubectl       Client Version: v1.35.7          ← 클러스터 1.35 와 마이�
 
 ⚠️ **apply 는 사람이 `Run workflow` 를 누르는 것이 승인 게이트다**(D30-1). merge 만으로는 안 돈다.
 
+## 🎉 2026-08-11 — **workbench 핀 `v0.6.0` apply 완료** (PR [#23](https://github.com/skax-ca/iac-reference-infra/pull/23) `9387201`)
+
+`workbench-v0.4.0` → **`v0.6.0`**(두 릴리스 동시 흡수). 모듈 repo 설계 `40 §4.3-1`·`§4.3-2`.
+
+| 단계 | 결과 |
+|---|---|
+| plan (push run `31463038512`) | **`1 to add, 0 to change, 1 to destroy`** — replace 는 `module.workbench.aws_instance.this[0]` **1건뿐**. 원인 `~ user_data … # forces replacement` |
+| apply (dispatch run `31463187477`) | ✅ plan·apply 두 job **success** |
+| 새 인스턴스 | **`i-0e7440e9e0350f731`** (구 `i-0675ba8c5ad9dd507` 대체, `t4g.small`) |
+
+**부팅 판정 — 전 항목 통과** (`/var/log/workbench-bootstrap.log` 05:56:54 → 05:58:07, **73초**)
+
+| # | 항목 | 결과 |
+|---|---|---|
+| 1 | 도구 6종 | git · kubectl `v1.35.7` · helm `v3.21.3` · argocd `v3.5.0` · **eks-node-viewer `0.7.4`** · **krew `v0.5.0`** 전부 설치 |
+| 2 | krew 플러그인 | `ctx`·`ns`·`neat`·`rbac-tool`·`view-secret`·`whoami` **6개 전부** `/usr/local/krew/bin/` |
+| 3 | kubeconfig 정본 | **`-r--r--r--`** — `ssm-user` 쓰기 **불가** ✅ |
+| 4 | ⭐ **skel 상속 실증** | `/home/ssm-user/.kube/config` 가 **`ssm-user:ssm-user 0600`** 으로 존재. user_data 는 `root`·`ec2-user` 만 순회하므로 **`/etc/skel` 이 작동했다는 직접 증거**다 |
+| 5 | 전역 오염 차단 | `ssm-user` 가 `set-context --namespace=argocd` 실행 → **자기 사본만** 바뀌고 **정본의 namespace 항목은 0** ✅ |
+| 6 | 로그인 프로파일 | `AWS_DEFAULT_REGION`·`KREW_ROOT`·`alias k`·`alias nv`·**`complete -o default -F __start_kubectl k`** 전부 활성 |
+| 7 | 도달성 | `ssm-user` 가 `KUBECONFIG` **없이** `kubectl get nodes` → **2대**. `kubectl whoami` → workbench role ARN |
+| 8 | ArgoCD 무영향 | **8개 Application 전부 `Synced Healthy`** 유지 |
+
+> ### ⭐ **이번 교체가 회수한 것 — "손으로 만든 상태"**
+> 이전 인스턴스에는 사람이 만든 kubeconfig 사본이 흩어져 있었고, 공유 정본이 실제로
+> **`0666`(world-writable)** 이 되어 기본 네임스페이스가 전역 오염돼 있었다.
+> 🔑 kubeconfig 는 `users[].user.exec` 로 임의 명령을 지정할 수 있어 world-writable 은
+> **로컬 권한 상승 경로**다 — 편의 문제가 아니었다. 이제 **코드가 그 배치를 소유한다.**
+
+> ### ⚠️ 사람이 붙을 때 (인스턴스 ID 가 바뀌었다)
+> `aws ssm start-session --profile team --region ap-northeast-2 --target i-0e7440e9e0350f731`
+> 자동화(`send-command`)는 여전히 `export HOME=/root; export KUBECONFIG=/root/.kube/config` 가 필요하다
+> — 비로그인 셸은 `/etc/profile.d` 를 읽지 않는다(모듈 repo `40 §6`).
+
 ## 미결 항목
 
+- ⚠️ **이 notepad 에 중복 구간이 있다** — 「💰 현재 진행 중 비용」·「🎉 2026-08-06 …」이 두 벌.
+  2026-08-11 에 뒤쪽 사본의 stale 한 "다음 태스크 ④"를 정정했다. **정리 대상**(중복은 곧 stale 이다).
 - ✅ **해결** — EBS `volume_tags` drift → `providers.tf` `ignore_tags` 에 `Dependency*` 추가(PR #18)
 - ✅ **해결** — repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 삭제 완료
 
