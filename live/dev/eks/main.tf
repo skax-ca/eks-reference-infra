@@ -297,9 +297,10 @@ module "eks" {
   enabled_log_types = ["api", "audit", "authenticator"]
 
   # ── 삭제 보호 (D-EKS-PROTECT) — AWS 네이티브, 콘솔에서도 안 지워진다 ─────────
-  # ⚠️ teardown 은 2단계다: deletion_protection = false 로 apply → cluster_enabled = false.
+  # ⚠️ teardown 은 2단계다: 이 값을 false 로 apply → destroy 워크플로.
   #    공용 계정(F13)에서 실수 삭제의 방어선. VPC 의 prevent_destroy 와 같은 취지지만 더 강하다.
-  deletion_protection = false # Wave 4 실증 teardown — 재구축 시 true 로 되돌린다
+  # ⛔ false 로 바꾼 커밋을 main 에 남겨두지 않는다 — 파기가 끝나면 즉시 되돌린다.
+  deletion_protection = true
 
   # ── 컨트롤플레인 k8s 버전 ──────────────────────────────────────────────────
   # 배포 루트는 버전을 **명시로 소유**한다 — 올릴 때 addon 핀도 함께 갱신한다(D-ADDON-VERSION-PIN-1).
