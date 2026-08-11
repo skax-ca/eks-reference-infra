@@ -48,7 +48,25 @@ on:
   #   ① 승인(=dispatch) 대기 중 state 가 바뀌어 apply 가 거부됐을 때(정상 동작이다)
   #   ② drift 확인 — 계정 자동 태거처럼 우리 밖에서 리소스를 만지는 주체가 있다(§5.2)
   # ⚠️ 어느 경우든 **같은 run 안에서** plan → apply 가 이어진다. 별도 apply 워크플로를 만들지 않는다.
+  #
+  # ── destroy 경로 (2026-08-11 신설) ─────────────────────────────────────────
+  # action=destroy 로 파기한다. **plan 만 -destroy 로 갈리고 apply job 은 그대로다** —
+  # apply 가 저장된 plan 파일을 적용하는 구조라 파기 계획도 같은 경로로 흐른다(코드 변경 0).
+  # 🔑 실행 Role 신뢰가 입구 Role 하나뿐이라(D27-1) **로컬에서는 destroy 를 실행할 수 없다**
+  #    (실측: 로컬 IAM user 의 AssumeRole 이 AccessDenied). 파기 경로가 없으면 철수 시
+  #    콘솔 수동 삭제밖에 남지 않고, 그러면 state 가 남는다.
+  # ⚠️ deletion_protection 이 켜져 있으면 파기는 2단계다 — false 로 apply 한 뒤 destroy 한다.
   workflow_dispatch:
+    inputs:
+      action:
+        description: "apply = 생성·수정 / destroy = 파기"
+        type: choice
+        options: [apply, destroy]
+        default: apply
+      confirm:
+        description: "destroy 일 때만 필수. 정확히 `destroy live/dev/networking` 를 입력한다"
+        type: string
+        default: ""
 
 # state 는 단일 자원이다. 두 run 이 겹치면 lock 경합이거나, 더 나쁘게는 뒤늦은 run 이
 # 오래된 plan 을 적용한다. cancel-in-progress 는 **false** 여야 한다 —
@@ -78,6 +96,18 @@ jobs:
       #    필요 없는 쓰기 권한을 남겨 두지 않는다.
 
     steps:
+      # ── destroy 확인 게이트 — 잘못된 워크플로에 dispatch 하는 사고를 막는다 ──
+      # 공용 개발 계정이고 destroy 는 되돌릴 수 없다. 루트 이름을 손으로 적게 해
+      # "누른 워크플로 = 지우려던 워크플로" 를 사람이 스스로 확인하게 만든다.
+      - name: destroy 확인
+        if: inputs.action == 'destroy'
+        run: |
+          if [ "${{ inputs.confirm }}" != "destroy live/dev/networking" ]; then
+            echo "::error::destroy 하려면 confirm 에 정확히 'destroy live/dev/networking' 를 입력한다."
+            exit 1
+          fi
+          echo "::warning::destroy 계획을 세운다 — live/dev/networking"
+
       - uses: actions/checkout@v7.0.1
 
       # ── D20 · private repo 모듈 소싱 인증 ──────────────────────────────────
@@ -156,8 +186,17 @@ jobs:
           # -detailed-exitcode: 0=변경없음 · 1=오류 · 2=변경있음.
           # "두 번째 apply 가 No changes 인가"(ignore_tags 판정)를 사람 눈이 아니라
           # 종료 코드로 받기 위해 쓴다.
+          # push 이벤트에는 inputs 가 없다 → 빈 문자열이므로 자동으로 apply 경로다.
+          DESTROY=""
+          if [ "${{ inputs.action }}" = "destroy" ]; then
+            DESTROY="-destroy"
+            echo "destroy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "destroy=false" >> "$GITHUB_OUTPUT"
+          fi
+
           set +e
-          tofu plan -no-color -lock-timeout=5m -out=tfplan -detailed-exitcode
+          tofu plan $DESTROY -no-color -lock-timeout=5m -out=tfplan -detailed-exitcode
           code=$?
           set -e
           case "$code" in
@@ -175,7 +214,13 @@ jobs:
         run: |
           tofu show -no-color tfplan > plan.txt
           {
-            echo "### \`tofu plan\` — live/dev/networking"
+            if [ "${{ steps.plan.outputs.destroy }}" = "true" ]; then
+              echo "### 🔴 \`tofu plan -destroy\` — live/dev/networking"
+              echo
+              echo "> **파기 계획이다.** 이 run 의 apply 를 승인하면 아래 목록이 전부 사라진다."
+            else
+              echo "### \`tofu plan\` — live/dev/networking"
+            fi
             echo
             echo "변경 있음: **${{ steps.plan.outputs.changes }}**"
             echo
