@@ -15,6 +15,18 @@
 # ⛔ plan job 에 environment: 를 붙이지 않는다(D28). environment 를 선언한 job 만 OIDC sub 에
 #    :environment:<name> 을 받는다 — 입구 Role 신뢰 정책 3패턴과 어긋난다.
 # ⛔ apply 를 인자 없는 tofu apply(재-plan)로 바꾸지 않는다. 승인한 것과 다른 것을 적용하게 된다.
+#
+# ── destroy 경로 (2026-08-11 신설) ───────────────────────────────────────────
+# dispatch 입력 action=destroy 로 파기한다. **plan 만 -destroy 로 갈리고 apply job 은 그대로다** —
+# apply 가 저장된 plan 파일을 적용하는 구조라 파기 계획도 같은 경로로 흐른다(코드 변경 0).
+#
+# 🔑 왜 필요했나: 실행 Role 신뢰가 입구 Role 하나뿐이고(D27-1) 입구 Role 은 GitHub OIDC 만 믿는다.
+#    ⇒ **로컬에서는 destroy 를 실행할 수 없다**(실측: 로컬 IAM user 의 AssumeRole 이 AccessDenied).
+#    생성 경로만 있고 파기 경로가 없으면 고객사 철수 시 콘솔 수동 삭제밖에 남지 않고,
+#    그러면 state 가 남는다. 공용 계정에서 수동 삭제는 가장 위험한 작업이다.
+#
+# ⚠️ deletion_protection 이 켜져 있으면 파기는 2단계다 — false 로 apply 한 뒤 destroy 한다.
+#    모듈이 교차 검증하므로 한 번에 지울 수 없다(의도된 설계).
 
 name: deploy · live/dev/eks
 
@@ -26,6 +38,16 @@ on:
       - .github/workflows/deploy-eks.yml
   # merge 후 plan 까지만 자동으로 돈다(요약은 run Summary 탭). apply 는 아래 dispatch 로만.
   workflow_dispatch:
+    inputs:
+      action:
+        description: "apply = 생성·수정 / destroy = 파기"
+        type: choice
+        options: [apply, destroy]
+        default: apply
+      confirm:
+        description: "destroy 일 때만 필수. 정확히 `destroy live/dev/eks` 를 입력한다"
+        type: string
+        default: ""
 
 concurrency:
   group: live-dev-eks
@@ -48,6 +70,18 @@ jobs:
       contents: read
 
     steps:
+      # ── destroy 확인 게이트 — 잘못된 워크플로에 dispatch 하는 사고를 막는다 ──
+      # 공용 개발 계정이고 destroy 는 되돌릴 수 없다. 루트 이름을 손으로 적게 해
+      # "누른 워크플로 = 지우려던 워크플로" 를 사람이 스스로 확인하게 만든다.
+      - name: destroy 확인
+        if: inputs.action == 'destroy'
+        run: |
+          if [ "${{ inputs.confirm }}" != "destroy live/dev/eks" ]; then
+            echo "::error::destroy 하려면 confirm 에 정확히 'destroy live/dev/eks' 를 입력한다."
+            exit 1
+          fi
+          echo "::warning::destroy 계획을 세운다 — live/dev/eks"
+
       - uses: actions/checkout@v7.0.1
 
       # ── D20 · private repo 모듈 소싱 인증 (eks-cluster 태그를 받는다) ────────
@@ -111,8 +145,17 @@ jobs:
           #    변수가 사라졌으니 주입 지점도 함께 지운다 — 죽은 경로를 남기지 않는다.
           #    repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 자체도 정리 대상이다(GitHub 설정 쪽).
         run: |
+          # push 이벤트에는 inputs 가 없다 → 빈 문자열이므로 자동으로 apply 경로다.
+          DESTROY=""
+          if [ "${{ inputs.action }}" = "destroy" ]; then
+            DESTROY="-destroy"
+            echo "destroy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "destroy=false" >> "$GITHUB_OUTPUT"
+          fi
+
           set +e
-          tofu plan -no-color -lock-timeout=5m -out=tfplan -detailed-exitcode
+          tofu plan $DESTROY -no-color -lock-timeout=5m -out=tfplan -detailed-exitcode
           code=$?
           set -e
           case "$code" in
@@ -128,7 +171,13 @@ jobs:
         run: |
           tofu show -no-color tfplan > plan.txt
           {
-            echo "### \`tofu plan\` — live/dev/eks"
+            if [ "${{ steps.plan.outputs.destroy }}" = "true" ]; then
+              echo "### 🔴 \`tofu plan -destroy\` — live/dev/eks"
+              echo
+              echo "> **파기 계획이다.** 이 run 의 apply 를 승인하면 아래 목록이 전부 사라진다."
+            else
+              echo "### \`tofu plan\` — live/dev/eks"
+            fi
             echo
             echo "변경 있음: **${{ steps.plan.outputs.changes }}**"
             echo
