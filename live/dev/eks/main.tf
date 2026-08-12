@@ -210,8 +210,23 @@ module "workbench" {
 
   # EKS 접근 3층 중 **1층만** 여기서 성립한다(D-WORKBENCH-SEAM).
   # 2층(Access Entry)·3층(cluster SG ingress)은 아래 eks 블록이 소유한다.
-  eks_cluster_name = local.cluster_name
-  eks_cluster_arn  = local.cluster_arn
+  # 🔴 **name 은 일부러 module.eks 출력에서 받는다 — 이 참조가 유일한 순서 간선이다.**
+  #    local.cluster_name 을 쓰면 값은 같지만 OpenTofu 가 순서를 알 수 없어 workbench 와
+  #    클러스터를 **병렬로** 만든다. EC2 는 1분, EKS 는 10분이라 user_data 의
+  #    update-kubeconfig 가 "클러스터 없음"으로 전부 실패한다(2026-08-12 실측).
+  # ⛔ `depends_on = [module.eks]` 로 풀지 않는다 — **순환**이다(실측). depends_on 은
+  #    모듈의 close 노드, 즉 **모듈 전체**에 걸리는데 module.eks 는 아래에서 workbench 의
+  #    IAM role ARN(access entry)·SG ID(cluster ingress)를 설정 시점에 쓴다.
+  #    값 참조는 **리소스 단위**라 고리가 닫히지 않는다: 클러스터에 매달리는 것은 *인스턴스*,
+  #    module.eks 가 받아가는 것은 *role·SG* 라 서로 다른 리소스다.
+  eks_cluster_name = module.eks.cluster_name
+
+  # ⚠️ **arn 은 deterministic local 을 유지한다 — 비대칭이지만 이유가 있다.**
+  #    모듈의 `aws_iam_role_policy.eks_describe` 는 `count` 를 `eks_cluster_arn != null` 에
+  #    걸어 두는데, 실 ARN 은 AWS 가 만들어 돌려주는 값이라 **plan 시점에 unknown** 이다.
+  #    unknown 을 count 에 넣으면 plan 이 깨진다. name 은 우리가 정해 넣는 값이라 known 이다.
+  #    ⇒ 가르는 기준은 "일관성"이 아니라 **plan 시점 known 여부**다.
+  eks_cluster_arn = local.cluster_arn
 }
 
 module "eks" {
