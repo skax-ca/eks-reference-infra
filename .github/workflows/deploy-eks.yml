@@ -48,6 +48,14 @@ on:
         description: "destroy 일 때만 필수. 정확히 `destroy live/dev/eks` 를 입력한다"
         type: string
         default: ""
+      # 재생성 경로 (2026-08-12 신설) — user_data 는 **부팅 시에만** 돌기 때문에,
+      # 부팅 당시 조건이 틀렸던 인스턴스는 apply 로 고칠 수 없고 교체해야만 코드가 상태를 되찾는다.
+      # ⭐ destroy 와 같은 형태의 누락이었다: 정상 경로가 운영에 실제로 필요한 동작을 못 했다.
+      # ⚠️ 교체는 파괴를 포함하므로 plan 요약의 `must be replaced` 로 승인자에게 드러난다.
+      replace:
+        description: "재생성할 리소스 주소(선택). 예: module.workbench.aws_instance.this"
+        type: string
+        default: ""
 
 concurrency:
   group: live-dev-eks
@@ -154,8 +162,15 @@ jobs:
             echo "destroy=false" >> "$GITHUB_OUTPUT"
           fi
 
+          # 재생성 — 비어 있으면 아무 영향이 없다. destroy 와 겹칠 일은 없다(파기에 교체는 무의미).
+          REPLACE=""
+          if [ -n "${{ inputs.replace }}" ] && [ "${{ inputs.action }}" != "destroy" ]; then
+            REPLACE="-replace=${{ inputs.replace }}"
+            echo "::warning::재생성 계획: ${{ inputs.replace }}"
+          fi
+
           set +e
-          tofu plan $DESTROY -no-color -lock-timeout=5m -out=tfplan -detailed-exitcode
+          tofu plan $DESTROY $REPLACE -no-color -lock-timeout=5m -out=tfplan -detailed-exitcode
           code=$?
           set -e
           case "$code" in
