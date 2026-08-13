@@ -1,6 +1,40 @@
 # Notepad — iac-reference-infra
 
-## 🔴 **workload ref→demo 전환 — 재구축 절반 완료, GitOps(L3)는 ESO 설계 결정 대기 중** (2026-08-13) — **먼저 읽을 것**
+## ✅ **workload ref→demo 전환 — L3(GitOps) 재구축 완료** (2026-08-13(2)) — **먼저 읽을 것**
+
+> ### ▶ 무엇을 했나
+>
+> 모듈 repo(`iac-module-library`)에서 ESO 도입이 **기각**되고 원래 D-KEY-TRANSFER 절차
+> (새 키 발급 → SSM Parameter Store SecureString → workbench 다운로드 → shred) 유지가 확정됨에
+> 따라, 보류됐던 L3를 그 절차로 마저 진행했다.
+>
+> | 단계 | 결과 |
+> |---|---|
+> | private key SSM 업로드 → workbench 다운로드 | ✅ RSA key 유효성 확인(`openssl rsa -check`) |
+> | GitOps 저장소(`iac-platform-gitops`) JWT 클론 | ✅ HEAD `744d82e`, clean, origin과 동일 |
+> | `argocd-seed.sh --dry-run` | ✅ 5단계 전부 사전 확인 |
+> | `argocd-seed.sh` 실제 실행(0·2·3·4·5단계) | ✅ helm install·repository Secret·AppProject·cluster Secret·root App 전부 apply |
+> | root App 검증 | ✅ `Synced Healthy`, `sync.revision`이 **실제 커밋 SHA**(설정값 `main`이 아님 — 함정 회피 확인) |
+> | addon 8개(argocd 자신 포함) | ✅ 전부 `Synced/Healthy`로 정착(2~3분 내 자연 조정 — aws-lbc·karpenter 등 초기 `Progressing`은 정상 과정이었다) |
+> | 완료 조건(③): shred + SSM 파라미터 삭제 | ✅ workbench 파일 삭제 확인, `aws ssm get-parameter` → `ParameterNotFound` 확인 |
+>
+> ⚠️ **ESO 미도입이 최종 확정**이므로, 이전 기록(아래)의 "지금 서 있는 demo VPC·EKS·workbench는
+> 잠정" 경고는 **더 이상 유효하지 않다** — L1/L2/L3 전부 최종 상태로 확정한다.
+>
+> ### ⏭️ **다음 태스크**
+>
+> 1. **⛔ 완료 조건 잔여 1건 — ArgoCD 초기 비밀번호 교체**(선택 아님, 모듈 repo `07-runbooks.md`
+>    2·3절). `kubectl -n argocd port-forward svc/argocd-server 8080:443` → UI 로그인 → 비밀번호
+>    교체 → `kubectl -n argocd delete secret argocd-initial-admin-secret`. **비밀번호는 사용자가
+>    정할 값**이라 사람이 진행한다.
+> 2. 구 `ref` 부트스트랩 자원(state 버킷·IAM Role 2개·OIDC 태그) 정리 여부 확인 — ESO 결정이
+>    끝났으니 이제 진행 가능. 별도 파기 작업이라 사용자 확인 후.
+> 3. 5단계(`bootstrap/README.md`·`AGENTS.md`의 §2 기대상태표 ref→demo 갱신) — L3 완료로 이제
+>    실측값으로 갱신 가능.
+
+---
+
+## ✅ **(과거 기록) workload ref→demo 전환 — 재구축 절반 완료, GitOps(L3)는 ESO 설계 결정 대기 중** (2026-08-13)
 
 > ### ▶ 무엇을 했나
 >
