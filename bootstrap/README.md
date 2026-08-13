@@ -46,13 +46,13 @@ export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다
 
 | 항목 | 기대값 | 근거 |
 |------|--------|------|
-| 이름 | `s3-ref-dev-an2-tfstate-<guid12>` | 네이밍 규약 + AWS가 예측 불가능한 이름을 권장(F12) |
+| 이름 | `s3-demo-dev-an2-tfstate-<guid12>` | 네이밍 규약 + AWS가 예측 불가능한 이름을 권장(F12) |
 | **이름의 소재** | **git에 없다.** 실물은 GitHub repo 변수 `TF_STATE_BUCKET` / 로컬 `backend.hcl` | **D25** |
 | 버저닝 | `Enabled` | state 손상 복구 |
 | 암호화 | `AES256` (SSE-S3, BucketKey on) | 기본값이지만 명시적으로 검사한다 |
 | 퍼블릭 차단 | 4개 전부 `true` | |
 | **lifecycle** | 비현행 버전 **7일** · 불완전 MPU **7일** | **D29** — `use_lockfile=true`가 lock 객체 버전을 폭증시킨다(F8, 공식 경고) |
-| 태그 | `Name` `Workload=ref` `Environment=dev` `ManagedBy=bootstrap.sh` `Owner` `CostCenter` | IaC 밖이라 `default_tags`가 없다 → 스크립트가 직접 붙인다 |
+| 태그 | `Name` `Workload=demo` `Environment=dev` `ManagedBy=bootstrap.sh` `Owner` `CostCenter` | IaC 밖이라 `default_tags`가 없다 → 스크립트가 직접 붙인다 |
 
 ### OIDC provider
 
@@ -61,7 +61,7 @@ export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다
 | URL | `token.actions.githubusercontent.com` |
 | client ID (`aud`) | `sts.amazonaws.com` |
 | thumbprint | **설정하지 않는다** — CLI에서 선택 인자임을 실측 확인했고, AWS가 2023년부터 알려진 IdP를 자체 신뢰 저장소로 검증한다. 지문을 박으면 만료 부채만 남는다 |
-| `Name` 태그 | `iamoidc-ref-dev-an2-gha` |
+| `Name` 태그 | `iamoidc-demo-dev-an2-gha` |
 
 > ⚠️ 이 리소스는 **식별자가 URL**이라 `name` 인자가 없다 → 이름은 **`Name` 태그로만** 표현된다.
 
@@ -69,8 +69,8 @@ export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다
 
 | Role | 신뢰 | 권한 |
 |------|------|------|
-| **입구** `iamr-ref-dev-an2-gha-entry-01` | OIDC provider + `aud` + **`sub` 3패턴** | inline `…-policy`: 실행 Role `sts:AssumeRole` **하나뿐** |
-| **실행** `iamr-ref-dev-an2-gha-exec-01` | **입구 Role만** (계정 루트 아님) | `AdministratorAccess` |
+| **입구** `iamr-demo-dev-an2-gha-entry-01` | OIDC provider + `aud` + **`sub` 3패턴** | inline `…-policy`: 실행 Role `sts:AssumeRole` **하나뿐** |
+| **실행** `iamr-demo-dev-an2-gha-exec-01` | **입구 Role만** (계정 루트 아님) | `AdministratorAccess` |
 
 `sub` 3패턴 (Phase 2 실측 — `docs/deployment-facts.md` §3):
 
@@ -150,15 +150,15 @@ import {
 }
 import {
   to = aws_iam_role.gha_entry
-  id = "iamr-ref-dev-an2-gha-entry-01"
+  id = "iamr-demo-dev-an2-gha-entry-01"
 }
 import {
   to = aws_iam_role.gha_exec
-  id = "iamr-ref-dev-an2-gha-exec-01"
+  id = "iamr-demo-dev-an2-gha-exec-01"
 }
 import {
   to = aws_iam_role_policy.gha_entry          # inline 정책
-  id = "iamr-ref-dev-an2-gha-entry-01:iamr-ref-dev-an2-gha-entry-01-policy"
+  id = "iamr-demo-dev-an2-gha-entry-01:iamr-demo-dev-an2-gha-entry-01-policy"
 }
 ```
 

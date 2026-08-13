@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-08-04 | Updated: 2026-08-04 -->
+<!-- Generated: 2026-08-04 | Updated: 2026-08-13 -->
 
 # bootstrap
 
@@ -20,10 +20,10 @@ Terraform/OpenTofu가 아니라 일반 `aws` CLI 스크립트다. 의도적인 �
 
 | 리소스 | 이름 |
 |--------|------|
-| S3 버킷 (tfstate) | `s3-ref-dev-an2-tfstate-<guid12>` |
+| S3 버킷 (tfstate) | `s3-demo-dev-an2-tfstate-<guid12>` |
 | OIDC provider | `token.actions.githubusercontent.com` |
-| 입구 Role | `iamr-ref-dev-an2-gha-entry-01` |
-| 실행 Role | `iamr-ref-dev-an2-gha-exec-01` |
+| 입구 Role | `iamr-demo-dev-an2-gha-entry-01` |
+| 실행 Role | `iamr-demo-dev-an2-gha-exec-01` |
 
 ## AI 에이전트 가이드
 
@@ -73,3 +73,4 @@ EXPECTED_ACCOUNT=123456789012 bash bootstrap.sh
 | `backend.hcl` 미관여 | Backend 버킷이 bootstrap이 만드는 것이다. 달걀 역전 불가 |
 
 <!-- MANUAL: 2026-08-04 — D27-1 AWSAFTExecution 경고 명시 · 부정 테스트 실측 기록 -->
+<!-- MANUAL: 2026-08-13 — workload ref→demo 갱신(§2 기대상태표 실측) -->
