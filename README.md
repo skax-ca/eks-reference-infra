@@ -68,7 +68,8 @@ tofu -chdir=live/dev/networking plan
 ## 검증 게이트
 
 ```
-tofu fmt -recursive -check → tflint --recursive → trivy config . → tofu validate
+pre-commit: backend.hcl 유출 검사 → tofu fmt -recursive -check → tflint --recursive → trivy config .
+pre-push (live/ 변경 시만): tofu validate
 bootstrap/verify.sh        # 부트스트랩 drift 완화책
 ```
 

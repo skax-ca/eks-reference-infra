@@ -201,11 +201,10 @@ module "vpc" {
 
 ### 코드 변경 후 (git hook이 강제)
 ```
-tofu fmt -recursive -check → tflint --recursive → trivy config . → tofu validate
+pre-commit: backend.hcl 유출 검사 → tofu fmt -recursive -check → tflint --recursive → trivy config .
+pre-push (live/ 변경 시): tofu validate
 ```
 - clone마다 1회: `git config core.hooksPath .githooks`
-- `pre-commit`: **backend.hcl 유출 검사** + fmt·tflint·trivy
-- `pre-push`: `live/` 변경 시 각 루트 `init -backend=false` + `validate`
 - 우회(`--no-verify`)는 긴급 시에만 — 사유를 커밋 메시지에 명시한다.
 - ⚠️ `tofu test`는 없다. 배포 루트는 모듈이 아니다 — 모듈 계약 검증은 모듈 repo가 담당한다.
 - ⚠️ tflint `terraform_unused_declarations`는 미사용 변수를 exit 2로 잡는다. 실제 커밋 단위는

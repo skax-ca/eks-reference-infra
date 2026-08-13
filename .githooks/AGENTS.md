@@ -13,7 +13,7 @@ Git pre-commit / pre-push 훅. 로컬 IaC 품질 게이트를 강제한다. `.gi
 | 파일 | 설명 |
 |------|------|
 | `pre-commit` | `fmt → tflint → trivy` + **backend.hcl 유출 검사**. Terraform 파일 staged 시만 실행 |
-| `pre-push` | `live/` 변경을 push할 때 `init -backend=false → validate`. backend.hcl 미존재 확인 |
+| `pre-push` | `live/` 변경을 push할 때 `init -backend=false → validate`(backend.hcl 없이도 검증만 하므로 존재 여부를 따로 확인하지 않는다 — 그 검사는 pre-commit 소관) |
 
 ## AI 에이전트 가이드
 
