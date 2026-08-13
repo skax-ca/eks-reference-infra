@@ -1,6 +1,6 @@
-# 이 루트의 출력은 **GitOps 저장소(design/30)가 소비하는 앵커**다.
-# EKS 는 IaC 가 클러스터·IAM 전제까지만 만들고, helm/NodePool/애플리케이션은 GitOps(pull)가 맡는다
-# (설계 §1 경계). 그 경계를 넘겨주는 값이 아래다 — cluster 등록 정보 · Karpenter/컨트롤러 IAM ARN.
+# 이 루트의 출력은 **GitOps 저장소(iac-platform-gitops)가 소비하는 앵커**다.
+# EKS 는 IaC 가 클러스터·IAM 전제까지만 만들고, helm/NodePool/애플리케이션은 GitOps(pull)가 맡는다.
+# 그 경계를 넘겨주는 값이 아래다 — cluster 등록 정보 · Karpenter/컨트롤러 IAM ARN.
 #
 # ⚠️ kill switch(cluster_enabled=false)나 opt-out 시 모듈이 null 을 돌려준다(에러 아님).
 #    그래야 teardown 중에도 `tofu output` 이 성립한다.
@@ -50,7 +50,7 @@ output "workbench_instance_id" {
   description = <<-EOT
     SSM 접속 대상. 인바운드가 0이라 SSH 가 아니라 SSM 으로만 들어간다:
       aws ssm start-session --profile team --region ap-northeast-2 --target <id>
-    kubeconfig 는 workbench user_data 가 이미 만들어 둔다(D-WORKBENCH-SEAM 1층).
+    kubeconfig 는 workbench user_data 가 이미 만들어 둔다(EKS 접근 3층 중 1층).
   EOT
   value       = module.workbench.workbench_instance_id
 }
@@ -97,7 +97,7 @@ output "alb_controller_iam_role_arn" {
 
 output "external_dns_iam_role_arn" {
   # ⚠️ 현재는 **null 이다** — enable_external_dns_iam = false 가 기본값이기 때문이다(main.tf 참조).
-  #    에러가 아니라 모듈의 설계된 동작이며(§3.2 출력 계약), 되켜면 값이 채워진다.
+  #    에러가 아니라 모듈의 설계된 동작이며, 되켜면 값이 채워진다.
   description = "external-dns 의 Pod Identity role ARN. 현재 external-dns 는 꺼져 있어 null 이다."
   value       = module.eks.external_dns_iam_role_arn
 }
