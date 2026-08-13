@@ -315,7 +315,7 @@ module "eks" {
   # ⚠️ teardown 은 2단계다: 이 값을 false 로 apply → destroy 워크플로.
   #    공용 계정(F13)에서 실수 삭제의 방어선. VPC 의 prevent_destroy 와 같은 취지지만 더 강하다.
   # ⛔ false 로 바꾼 커밋을 main 에 남겨두지 않는다 — 파기가 끝나면 즉시 되돌린다.
-  deletion_protection = true
+  deletion_protection = false
 
   # ── 컨트롤플레인 k8s 버전 ──────────────────────────────────────────────────
   # 배포 루트는 버전을 **명시로 소유**한다 — 올릴 때 addon 핀도 함께 갱신한다(D-ADDON-VERSION-PIN-1).
