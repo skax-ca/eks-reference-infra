@@ -4,9 +4,9 @@
 provider "aws" {
   region = var.aws_region
 
-  # ── OIDC 2단 체인의 **2단째** (design/50 §3) ────────────────────────────────
+  # ── OIDC 2단 체인의 **2단째** ────────────────────────────────────────────────
   # 1단: GitHub Actions OIDC → 입구 Role. 2단: 입구 Role → 실행 Role(AdministratorAccess). 여기.
-  # 신뢰 경계를 좁힌 것이 D27-1 의 핵심이다 — 실행 Role 은 입구 Role 만 믿는다.
+  # 신뢰 경계를 좁힌 것이 이 체인의 핵심이다 — 실행 Role 은 입구 Role 만 믿는다.
   # ⚠️ 역할 체인 세션은 최대 1시간(연장 불가). apply job 이 다시 인증하므로 승인 지연은 무해하다.
   assume_role {
     role_arn = var.execution_role_arn
@@ -15,7 +15,7 @@ provider "aws" {
     session_name = "tofu-live-dev-eks"
   }
 
-  # ── 거버넌스 태그는 **루트가 100% 담당**한다 (모듈 repo 02 §1.1) ──────────────
+  # ── 거버넌스 태그는 **루트가 100% 담당**한다(모듈 repo 규약) ─────────────────
   # 모듈은 Name 태그만 조합하고 거버넌스 태그를 모른다. EKS 가 만드는 전 리소스(클러스터·노드그룹·
   # SG·IAM role·OIDC provider·SQS)에 이 태그가 default_tags 로 자동 부착된다.
   default_tags {
@@ -28,12 +28,12 @@ provider "aws" {
     }
   }
 
-  # ── 계정 자동 태거 방어 — networking 에서 실측된 것과 동일 (2026-07-31) ────────
-  # 공용 계정(F13)의 전역 자동 태거는 생성 주체·리소스 타입과 무관하게 아래 키를 붙인다.
+  # ── 계정 자동 태거 방어 — networking 에서 실측된 것과 동일 ────────────────────
+  # 공용 개발 계정의 전역 자동 태거는 생성 주체·리소스 타입과 무관하게 아래 키를 붙인다.
   # EKS 가 만드는 서브넷-부착 리소스·ENI 에도 붙으므로 같은 ignore_tags 가 필요하다.
   # 없으면 두 번째 apply 에서 "태그 제거" 가짜 diff 가 생긴다. 판정 기준: 두 번째 apply 가 No changes.
   #
-  # ➕ **`Dependency*` 추가 (2026-08-06)** — workbench apply 에서 실측된 두 번째 태거다.
+  # ➕ **`Dependency*` 추가** — workbench apply 에서 실측된 두 번째 태거다.
   #    `DependencyID`(= 부착 인스턴스 ID) · `DependencyName`(= 그 인스턴스의 Name) 을 붙인다.
   #    ⚠️ **볼륨 전용**이다 — 계정 전수 조회에서 `ResourceType` 이 15건 모두 `volume` 이었다.
   #       그래서 `live/dev/networking`(볼륨을 만들지 않는다)에는 넣지 않았다. 두 루트의
@@ -56,6 +56,6 @@ provider "aws" {
 # ⇒ **tofu 가 되돌리는 것이 정답이고, 그것이 self-healing 이다.** 대가는 볼륨이 생성될 때마다
 #    한 번씩 `volume_tags.Name` diff 가 뜨는 것뿐이다. 반복 drift 가 아니라 **생성당 1회**다.
 #
-# ℹ️ EKS 노드 볼륨은 `Name`·`DependencyName` 이 **빈 값**이다 — 태거가 인스턴스 Name 을 읽는
+# EKS 노드 볼륨은 `Name`·`DependencyName` 이 **빈 값**이다 — 태거가 인스턴스 Name 을 읽는
 #    시점에 아직 태그가 없었던 경쟁 상태다. workbench 는 `volume_tags` 를 쓰므로
 #    `TagSpecifications` 로 생성 시점에 붙어 태거가 값을 읽을 수 있었다(모듈 main.tf 주석 참조).

@@ -6,16 +6,16 @@
 #
 # ⚠️ minimal(examples/vpc) 이 아니라 enterprise 를 택한 결과로 **첫 apply 의 판정 범위가 넓어진다**
 #    — secondary CIDR 2개와 isolated 라우팅이 실제로 만들어지기 때문이다.
-#    무엇이 판정되고 무엇이 안 되는지는 docs/deployment-facts.md §5 가 표로 관리한다.
-#    표에 없는 것을 "검증했다"고 쓰지 않는다(CLAUDE.md §7).
+#    무엇이 판정되고 무엇이 안 되는지는 `docs/deployment-facts.md`가 표로 관리한다.
+#    표에 없는 것을 "검증했다"고 쓰지 않는다(`CLAUDE.md` 참조).
 
 locals {
-  # ── CIDR 3계층 (모듈 repo design/10 §1.5(b)) ───────────────────────────────
+  # ── CIDR 3계층 (모듈 repo 규약) ─────────────────────────────────────────────
   #
   # primary 는 인프라 전용 소형으로 최소화하고 워크로드는 secondary 에 배치한다.
   #
-  # ⚠️ 이 값들은 예제에서 **그대로 가져오지 않았다.** 대상 계정이 공용 개발 계정(F13)이라
-  #    실제 대역을 조회해 비어 있는 것을 골랐다(2026-07-31 실측, VPC 23개의 연결 CIDR 전수):
+  # ⚠️ 이 값들은 예제에서 **그대로 가져오지 않았다.** 대상 계정이 공용 개발 계정이라
+  #    실제 대역을 조회해 비어 있는 것을 골랐다(VPC 23개의 연결 CIDR 전수 조회):
   #      사용 중 · 10.0/16  10.10/16  10.10/21  10.20/16  10.38/16  10.90/16  10.100/16
   #                10.200/20  10.236.56/23  20.0/16  100.0/16  100.100/16  110.0/26
   #                172.30/16  172.31/16  192.168/16  210.0/16
@@ -27,7 +27,7 @@ locals {
   cidr_uniq    = "10.51.0.0/16"  # uniq — 라우팅 가능(온프레미스 도달 가정)
   cidr_dup     = "100.64.0.0/16" # dup 허용 — 비라우팅(RFC 6598)
 
-  # ── cidrsubnet() 파생 (design/10 D2) ───────────────────────────────────────
+  # ── cidrsubnet() 파생 ───────────────────────────────────────────────────────
   # 계산의 소유가 **모듈이 아니라 소비자 루트**다. 고객사는 이 locals 를 복사해 자기 대역으로 고친다.
   #
   # 겹침은 AWS API 가 apply 시 거부하므로(plan 으로는 안 잡힌다) 배치를 표로 남긴다:
@@ -63,14 +63,14 @@ locals {
 }
 
 module "vpc" {
-  # ⛔ 소싱 URL 은 git::https:// **하나로 유지한다**(D20). 인증은 CI 에서만 insteadOf 로 주입되고
+  # ⛔ 소싱 URL 은 git::https:// **하나로 유지한다.** 인증은 CI 에서만 insteadOf 로 주입되고
   #    이 코드는 인증 방식을 모른다. SSH URL 로 바꾸면 로컬/CI 갈래가 생긴다.
   # ⛔ ?ref= 는 **정확 태그 핀**이다. git 소싱에 ~> 는 동작하지 않는다 —
   #    업그레이드는 이 줄을 올리는 명시적 커밋이고, 그 커밋이 곧 승격 게이트다.
   source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v0.3.0&depth=1"
 
-  # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(02 §1.4(b)).
-  # {ref, dev, an2} → vpc-ref-dev-an2-main · snet-ref-dev-an2-pub-uniq-a
+  # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(모듈 repo 규약).
+  # {demo, dev, an2} → vpc-demo-dev-an2-main · snet-demo-dev-an2-pub-uniq-a
   naming = {
     workload    = var.workload
     env         = var.env
@@ -81,7 +81,7 @@ module "vpc" {
   cidr_block            = local.cidr_primary
   secondary_cidr_blocks = [local.cidr_uniq, local.cidr_dup]
 
-  # D7 — 기본 AZ 는 a·c 로 두고 3AZ 그룹만 b 를 추가로 쓴다(서울 리전 관례).
+  # 기본 AZ 는 a·c 로 두고 3AZ 그룹만 b 를 추가로 쓴다(서울 리전 관례).
   # 2AZ 그룹이 모두 a·c 에 몰리는 것은 의도된 결과다.
   az_count     = 3
   az_selection = ["a", "c", "b"]
@@ -95,7 +95,7 @@ module "vpc" {
     }
 
     # 온프레미스 연동 방화벽 오픈 단위. 내부 LB ENI 는 아웃바운드 개시가 없어 isolated 로 둔다 —
-    # 온프레미스 왕복 경로는 TGW 운영 라우트가 추가될 때 생긴다(D3 의 의도된 순서).
+    # 온프레미스 왕복 경로는 TGW 운영 라우트가 추가될 때 생긴다(의도된 순서).
     "elb-uniq" = {
       type     = "isolated"
       cidrs    = local.elb_cidrs
@@ -108,12 +108,12 @@ module "vpc" {
       cidrs = local.vm_cidrs
     }
 
-    # EKS 노드(D9 custom networking) — node-SNAT 의 소스이자 방화벽 오픈 단위.
+    # EKS 노드(custom networking) — node-SNAT 의 소스이자 방화벽 오픈 단위.
     "node-uniq" = {
       type  = "private"
       cidrs = local.node_cidrs
 
-      # ⭐ Karpenter discovery 의 **subnet 절반**. SG 절반은 EKS 모듈(live/dev/eks)이 붙인다.
+      # Karpenter discovery 의 **subnet 절반**. SG 절반은 EKS 모듈(live/dev/eks)이 붙인다.
       #    ⚠️ 한쪽만 붙으면 subnetSelectorTerms 가 빈 결과를 내고 프로비저닝이 조용히 실패한다
       #       (모듈 주석의 "PoC 실제 사고"). 값은 위 local.eks_cluster_name — SG 쪽과 같아야 한다.
       extra_tags = {
@@ -121,7 +121,7 @@ module "vpc" {
       }
     }
 
-    # EKS Pod 전용(D9, ENIConfig). Pod 의 VPC 외부 egress 는 노드 primary ENI 로 SNAT 되어
+    # EKS Pod 전용(ENIConfig). Pod 의 VPC 외부 egress 는 노드 primary ENI 로 SNAT 되어
     # 노드 그룹 RT 를 타므로 Pod 서브넷엔 기본 경로가 불필요하다 → isolated.
     "pod-dup" = {
       type  = "isolated"
@@ -135,7 +135,7 @@ module "vpc" {
     }
 
     # MSK·OpenSearch·Redis — 3AZ 공식 권장(quorum). db 와 분리하는 이유는 AZ 수 요구와
-    # IP 소모 프로파일이 다르기 때문이다(D8). 라우팅은 db 와 같으므로 분리 근거가 아니다.
+    # IP 소모 프로파일이 다르기 때문이다. 라우팅은 db 와 같으므로 분리 근거가 아니다.
     "data-uniq" = {
       type  = "isolated"
       cidrs = local.data_cidrs
@@ -148,27 +148,27 @@ module "vpc" {
     }
 
     # TGW attachment 전용(/28 권장). ⚠️ 워크로드가 존재하는 모든 AZ 를 커버해야 한다 —
-    # attachment 없는 AZ 의 리소스는 TGW 에 도달하지 못한다(공식, D6).
+    # attachment 없는 AZ 의 리소스는 TGW 에 도달하지 못한다(AWS 공식 권고).
     "tgw-uniq" = {
       type  = "isolated"
       cidrs = local.tgw_cidrs
     }
   }
 
-  # D4 — eks_role 이 지정된 그룹(pub-uniq · elb-uniq)에만 cluster 태그가 함께 붙는다.
+  # eks_role 이 지정된 그룹(pub-uniq · elb-uniq)에만 cluster 태그가 함께 붙는다.
   # ⚠️ 이 이름의 EKS 클러스터는 아직 없다(live/dev/eks 가 apply 되면 생긴다). 태그가 먼저 붙는 것은
   #    무해하고 의도된 순서다 — 서브넷 디스커버리 태그는 클러스터 생성 시점에 이미 있어야 한다.
   # 🔑 값은 local.eks_cluster_name 하나로 통일한다(node-uniq karpenter 태그와 같은 출처) —
-  #    serial 을 빠뜨려 "-main" 으로 두면 실제 클러스터명 "-main-01" 과 어긋난다(latent 정합성 버그 수정).
+  #    serial 을 빠뜨려 "-main" 으로 두면 실제 클러스터명 "-main-01" 과 어긋난다.
   eks_cluster_name = local.eks_cluster_name
 
   # dev 는 비용 우선 — NAT 1개를 전 AZ 가 공유한다. prd 는 false(AZ별 NAT)로 가용성을 택하며,
-  # 그때는 pub 그룹의 AZ 수가 private 그룹 최대 AZ 수 이상이어야 한다(D6 precondition).
+  # 그때는 pub 그룹의 AZ 수가 private 그룹 최대 AZ 수 이상이어야 한다(모듈의 precondition).
   single_nat_gateway = true
 
-  # D12 — 공용 계정(F13)에서 실수 삭제의 마지막 방어선이다(CLAUDE.md §4-1).
+  # 공용 개발 계정에서 실수 삭제의 마지막 방어선이다(`CLAUDE.md` 참조).
   # ⚠️ 이걸 켜면 teardown 이 **2단계**가 된다: 이 값을 false 로 apply → destroy 워크플로.
-  #    결함이 아니라 보호의 정의다. 절차는 모듈 repo `docs/04-teardown.md` §2·§4.
+  #    결함이 아니라 보호의 정의다. 절차는 모듈 repo `docs/04-teardown.md`가 소유한다.
   # ⛔ false 로 바꾼 커밋을 main 에 남겨두지 않는다 — 파기가 끝나면 즉시 되돌린다.
   deletion_protection = false
 }
