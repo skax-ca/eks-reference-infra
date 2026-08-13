@@ -174,7 +174,15 @@ jobs:
 
       - name: tofu init
         working-directory: ${{ env.TF_ROOT }}
-        run: tofu init -backend-config=backend.hcl
+        # provider 바이너리 다운로드가 일시적으로 타임아웃되는 경우가 있다(runner ↔
+        # registry 간 네트워크 지연 — 모듈 repo docs/04-teardown.md §8). 재시도로 흡수한다.
+        run: |
+          for i in 1 2 3; do
+            tofu init -backend-config=backend.hcl && exit 0
+            [ "$i" -lt 3 ] && { echo "::warning::tofu init 실패(${i}/3) — 10초 후 재시도"; sleep 10; }
+          done
+          echo "::error::tofu init 3회 재시도 후에도 실패"
+          exit 1
 
       - name: tofu plan
         id: plan
@@ -334,7 +342,15 @@ jobs:
 
       - name: tofu init
         working-directory: ${{ env.TF_ROOT }}
-        run: tofu init -backend-config=backend.hcl
+        # provider 바이너리 다운로드가 일시적으로 타임아웃되는 경우가 있다(runner ↔
+        # registry 간 네트워크 지연 — 모듈 repo docs/04-teardown.md §8). 재시도로 흡수한다.
+        run: |
+          for i in 1 2 3; do
+            tofu init -backend-config=backend.hcl && exit 0
+            [ "$i" -lt 3 ] && { echo "::warning::tofu init 실패(${i}/3) — 10초 후 재시도"; sleep 10; }
+          done
+          echo "::error::tofu init 3회 재시도 후에도 실패"
+          exit 1
 
       # **같은 run** 의 artifact 다. run 경계를 넘지 않는 것이 이 설계의 핵심이다.
       - name: plan artifact 내려받기
