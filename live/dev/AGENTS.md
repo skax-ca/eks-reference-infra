@@ -22,7 +22,7 @@ Phase 3:  bootstrap (D21) — S3 + OIDC + 2 Roles
 Phase 4:  networking apply (66개 리소스)
 Phase 5:  design/50 개정 (D-CONSUME D20~D30)
 Phase 6:  Phase 6-1 (prevent_destroy), 6-2 (계정 정보 정리), 6-3 (confused deputy)
-vpc-v1.2.0 승격 (2026-08-03): 서브넷 태그 in-place, 0 destroy
+vpc-v1.2.0 승격 (2026-08-03, 2026-08-05 재매핑으로 vpc-v0.3.0이 됨 — 태그 자체는 삭제됨): 서브넷 태그 in-place, 0 destroy
 PR#13/14 (2026-08-03~04): eks 루트 + graviton + addon 핀
 ```
 

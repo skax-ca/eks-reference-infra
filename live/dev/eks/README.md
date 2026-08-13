@@ -1,7 +1,8 @@
 # live/dev/eks
 
 EKS 클러스터 하나를 배포하는 루트다. 모듈은 `iac-module-library` 에서 **git tag 로 소싱**한다
-(`eks-cluster-v0.1.0`, D20). **networking 루트와 독립된 state**(`dev/eks.tfstate`)를 쓴다.
+(정확한 태그는 `main.tf` 참조 — SSOT는 `main.tf`, 여기 다시 적지 않는다). **networking 루트와
+독립된 state**(`dev/eks.tfstate`)를 쓴다.
 
 > ⚠️ 이 디렉토리도 코드만 보고는 어느 버킷·어느 계정을 가리키는지 알 수 없다(D25). 그 대가로
 > 이 README 가 **주입 변수명을 명시할 의무**를 진다(§1). networking 의 README 와 같은 규약이다.
@@ -77,7 +78,7 @@ tofu -chdir=live/dev/eks plan   # → AccessDenied. plan 은 CI 에서만 돈다
 | 컨트롤러 IAM | ALBC Pod Identity role ON. **external-dns 는 OFF**(addon 과 한 쌍이라 함께 끈다) |
 | 컨트롤플레인 로깅 | `api` · `audit` · `authenticator` |
 | 삭제 보호 | `deletion_protection = true` (AWS 네이티브) |
-| **workbench** | **ON** — `vm-uniq` private 서브넷, **`t4g.small`(arm64, 2GB — 모듈 기본값)**, SSM 전용(인바운드 0). **`workbench-v0.4.0`** — 도구: `kubectl v1.35.7` · `helm v3.21.3` · `argocd v3.5.0` · `git`(변수 없이 항상). 🔴 **핀을 올리면 인스턴스가 교체된다**(`user_data_replace_on_change`). ⚠️ `t4g.nano` 로 내리면 부팅 중 `dnf` 가 OOM 으로 죽어 `git` 이 빠진다(2026-08-10 실측) |
+| **workbench** | **ON** — `vm-uniq` private 서브넷, **`t4g.small`(arm64, 2GB — 모듈 기본값)**, SSM 전용(인바운드 0). 도구: `kubectl v1.35.7` · `helm v3.21.3` · `argocd v3.5.0` · `git`(변수 없이 항상). 워크벤치 모듈 태그는 `main.tf` 참조. 🔴 **핀을 올리면 인스턴스가 교체된다**(`user_data_replace_on_change`). ⚠️ `t4g.nano` 로 내리면 부팅 중 `dnf` 가 OOM 으로 죽어 `git` 이 빠진다(2026-08-10 실측) |
 
 이 루트가 만들지 **않는** 것: helm 릴리스 · NodePool/NodeClass · Issuer/Certificate CR ·
 external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계). 이 루트는 그 전제(클러스터·IAM)만 만든다.
