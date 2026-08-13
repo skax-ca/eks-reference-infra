@@ -1,6 +1,39 @@
 # Notepad — iac-reference-infra
 
-## ✅ **workload ref→demo 전환 — L3(GitOps) 재구축 완료** (2026-08-13(2)) — **먼저 읽을 것**
+## ✅ **bootstrap 문서 실측 갱신 + 구 ref 부트스트랩 자원 정리 완료** (2026-08-13(3)) — **먼저 읽을 것**
+
+> ### ▶ 무엇을 했나
+>
+> 1. **`bootstrap/README.md`(§2 기대상태표) · `bootstrap/AGENTS.md` ref→demo 갱신**(`90df900`) —
+>    `config.sh`는 이미 `WORKLOAD="demo"`로 부트스트랩 실행 중이었으나 문서 SSOT 표가 갱신되지
+>    않아 실물과 어긋나 있었다. GitHub OIDC `sub` claim의 `ref:refs/heads/main`(GitHub 고유
+>    문법, 우리 workload 네이밍과 무관)은 건드리지 않았다.
+> 2. **구 `ref` 부트스트랩 자원 정리** — 삭제 전 읽기 전용 확인(태그·객체 버전) 후 실행:
+>
+>    | 리소스 | 처리 | 확인 |
+>    |---|---|---|
+>    | `iamr-ref-dev-an2-gha-entry-01` | inline policy 삭제 → Role 삭제 | `list-roles` 조회 0건 |
+>    | `iamr-ref-dev-an2-gha-exec-01` | `AdministratorAccess` detach → Role 삭제 | 〃 |
+>    | `s3-ref-dev-an2-tfstate-733a8852498c` | 버전 93 + delete marker 56(총 149건) 일괄 삭제 → 버킷 삭제 | `list-buckets` 조회 0건 |
+>    | `token.actions.githubusercontent.com` OIDC provider | **삭제 아님** — 계정 전체에 하나뿐인 공유 리소스, `demo`도 같은 걸 씀. `Name`·`Workload` 태그만 `ref`→`demo`로 정정 | `list-open-id-connect-provider-tags` 확인 |
+>
+>    ⚠️ 삭제 전 확인한 것: 버킷의 현재 버전 `dev/eks.tfstate`(1392B)·`dev/networking.tfstate`(844B)가
+>    **빈 state 크기**였다(teardown 완료와 일치) — 라이브 자원이 물려 있지 않음을 확인 후 진행.
+>    `demo`의 GitHub 변수(`AWS_ENTRY_ROLE_ARN`·`AWS_EXEC_ROLE_ARN`)는 이미 별도 `iamr-demo-...`
+>    Role을 가리키고 있어 삭제 대상을 참조하는 곳이 없었다.
+>    ⚠️ 계정에 남아 있는 `oidc.eks...` OIDC provider 2개는 **이번 범위 밖**(EKS 클러스터 관련,
+>    과거 기록에 "공용 계정의 남의 자산일 수 있다"는 경고가 있어 건드리지 않았다).
+>
+> ### ⏭️ **다음 태스크**
+>
+> 1. **⛔ 완료 조건 잔여 1건 — ArgoCD 초기 비밀번호 교체**(선택 아님, 모듈 repo `07-runbooks.md`
+>    2·3절). `kubectl -n argocd port-forward svc/argocd-server 8080:443` → UI 로그인 → 비밀번호
+>    교체 → `kubectl -n argocd delete secret argocd-initial-admin-secret`. **비밀번호는 사용자가
+>    정할 값**이라 사람이 진행한다. **ref→demo 전환·재구축 관련 남은 유일한 항목.**
+
+---
+
+## ✅ **(과거 기록) workload ref→demo 전환 — L3(GitOps) 재구축 완료** (2026-08-13(2))
 
 > ### ▶ 무엇을 했나
 >
