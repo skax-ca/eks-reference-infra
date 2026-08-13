@@ -85,9 +85,11 @@
 
 ## 3. 모듈 소싱 (D20)
 
+정확한 태그 핀은 각 배포 루트의 `main.tf`의 `source`가 유일한 사실(SSOT)이다 — 여기 다시 적지 않는다.
+
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v0.3.0"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=<live/dev/networking/main.tf 참조>"
 }
 ```
 

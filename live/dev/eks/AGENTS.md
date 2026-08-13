@@ -20,8 +20,11 @@ EKS 클러스터 배포 루트. `networking/`과 독립적인 state. 생성 대�
 
 ## 모듈 소싱
 
+정확한 태그 핀은 이 루트의 `main.tf`의 `source`가 유일한 사실(SSOT)이다 — 여기 다시 적지 않는다.
+사본을 두면 모듈 태그를 올릴 때마다 이 문서만 뒤처진다.
+
 ```hcl
-source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.4.0"
+source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=<main.tf 참조>"
 ```
 
 ## AI 에이전트 가이드

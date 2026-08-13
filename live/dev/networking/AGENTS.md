@@ -20,8 +20,11 @@ VPC 배포 루트. Enterprise급 네트워킹 생성: 9개 서브넷 그룹, 20�
 
 ## 모듈 소싱
 
+정확한 태그 핀은 이 루트의 `main.tf`의 `source`가 유일한 사실(SSOT)이다 — 여기 다시 적지 않는다.
+사본을 두면 모듈 태그를 올릴 때마다 이 문서만 뒤처진다.
+
 ```hcl
-source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v0.3.0"
+source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=<main.tf 참조>"
 ```
 
 태그 핀이 **승격 게이트**다. 업그레이드 = `iac-module-library`에 새 태그를 커밋하는 것.
