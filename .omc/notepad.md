@@ -1,6 +1,60 @@
 # Notepad — iac-reference-infra
 
-## 🔢 현행 모듈 핀 (2026-08-10 기준) — **먼저 읽을 것**
+## 🔴 **workload ref→demo 전환 — 재구축 절반 완료, GitOps(L3)는 ESO 설계 결정 대기 중** (2026-08-13) — **먼저 읽을 것**
+
+> ### ▶ 무엇을 했나
+>
+> 사용자 결정: 예시 placeholder를 acme→demo로 통일하는 김에, **이 인스턴스의 실제 workload도
+> ref→demo로 전환**하고 그 과정에서 04-teardown.md·03-new-project.md를 실측으로 재검증한다.
+> 순서: **teardown(ref) → 코드 ref→demo 전환(부트스트랩 포함) → new project(demo)**.
+>
+> | 단계 | 상태 | 증거 |
+> |---|---|---|
+> | ref 워크로드 전체 teardown | ✅ | `teardown-verify.sh` 잔존물 0건(EKS+workbench 76개, VPC 66개 파기) |
+> | workload ref→demo (부트스트랩 포함) | ✅ | 새 state 버킷 `s3-demo-dev-an2-tfstate-efedc8b00120`·IAM Role 2개·OIDC 태그. `verify.sh` drift 없음. GitHub repo 변수 3개 교체 완료 |
+> | L1 VPC(demo) | ✅ apply | `vpc-demo-dev-an2-main` 생성, 66 added |
+> | L2 EKS+workbench(demo) | ✅ apply | `eks-demo-dev-an2-main-01` ACTIVE, 시스템 노드 2개 Ready, 전 시스템 pod Running. 76 added |
+> | L3 GitOps(demo) | ⏸ **보류** | 아래 사유 |
+>
+> ### ⏸ L3가 멈춘 이유 — GitHub App private key 취급 방식을 재검토 중
+>
+> `argocd-seed.sh` 2단계는 GitHub App private key(.pem) 실물을 workbench에 올려야 한다
+> (D-KEY-TRANSFER — 모듈 repo `scripts/README.md`). 이 세션에서 재구축마다 그 비용이 반복된다는
+> 것이 드러나, **사용자가 대안(External Secrets Operator) 검토를 먼저 요청**했다.
+> 제안 전문은 모듈 repo `scripts/README.md` "🔬 검토 중 — External Secrets Operator" 절
+> (커밋 `ef57885`). **미승인·미구현** — 이 repo의 `.tf`·`iac-platform-gitops`의 CRD 어느 쪽도
+> 아직 손대지 않았다.
+>
+> ⚠️ **ESO가 승인되면 지금 세운 L1/L2(demo)를 다시 파괴·재생성해야 할 가능성이 높다** —
+> ESO가 addon 부트스트랩 순서(ArgoCD처럼 GitOps 밖에서 먼저 서야 함)에 끼어들면 EKS 모듈의
+> addon 배선이 바뀔 수 있다. **지금 서 있는 demo VPC·EKS·workbench는 그 결정이 나기 전까지
+> "잠정"으로 취급한다.**
+>
+> ### 📌 부수 처리 (같은 세션)
+>
+> - `iac-platform-gitops` `clusters/dev/eks-ref-dev-an2-main-01/` → `eks-demo-dev-an2-main-01/`
+>   git mv + `cluster-secret.yaml`(name·vpcName·karpenterNodeRole) demo로 갱신, 머지 완료(PR #9).
+>   ⚠️ **아직 어떤 클러스터에도 seed되지 않았다** — L3 보류 중이라 이 매니페스트는 아직 적용 안 됨.
+> - `bootstrap/config.sh`·`live/dev/{networking,eks}/variables.tf`의 `workload` 리터럴 ref→demo.
+> - `CLAUDE.md`·양쪽 `AGENTS.md`의 `?ref=<태그>` 예시값을 전부 지우고 "정확한 값은 main.tf를
+>   본다"는 포인터로 교체 — `eks-cluster-v0.4.0`으로 뒤처져 있던 사본을 없애 재발을 구조적으로 막음.
+> - `.github/workflows/{deploy-eks,deploy-network}.yml`의 `tofu init`에 재시도 3회(10초 간격) 추가
+>   — provider SHA256SUMS 다운로드가 세션 중 2회 일시 타임아웃(둘 다 재시도 1회로 해결).
+>
+> ### ⏭️ 다음 세션 시작 시
+>
+> 1. ESO 도입 여부를 먼저 결정한다(모듈 repo `scripts/README.md` 제안 검토).
+> 2. **승인** → ESO의 IAM·CRD 설계를 이 repo·`iac-platform-gitops`에 배선 → 필요하면 L1/L2 재파괴·재생성 →
+>    `argocd-seed.sh`를 ESO 경유로 재작성.
+>    **기각/보류** → 기존 D-KEY-TRANSFER 절차(새 키 발급→SSM Parameter Store→shred)로 L3를 마저 진행.
+> 3. 어느 쪽이든 완료 후: 구 `ref` 부트스트랩 자원(state 버킷·IAM Role 2개·OIDC 태그) 정리 여부 확인 —
+>    아직 지우지 않았다(별도 파괴 작업이라 사용자 확인 후 진행하기로 함).
+> 4. 5단계(`bootstrap/README.md`·`AGENTS.md`의 §2 기대상태표 ref→demo 갱신)는 L3까지 끝난 뒤
+>    실측값으로 갱신한다 — 지금 갱신하면 ESO 도입 시 다시 갱신해야 한다.
+
+---
+
+## 🔢 현행 모듈 핀 (2026-08-10 기준)
 
 **`vpc-v0.3.0` · `eks-cluster-v0.4.0` · `workbench-v0.4.0`.**
 
