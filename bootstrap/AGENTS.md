@@ -7,7 +7,8 @@
 
 ## 목적
 IaC 밖 부트스트랩: S3 state 버킷, OIDC provider, 2단 IAM Role 체인을 만든다.
-Terraform/OpenTofu가 아니라 일반 `aws` CLI 스크립트다. 의도적인 설계 (D21 — 달걀이 먼저라서 IaC로 부트스트랩할 수 없다).
+Terraform/OpenTofu가 아니라 일반 `aws` CLI 스크립트다. 의도적인 설계다 — 달걀이 먼저라서
+IaC로 부트스트랩할 수 없다(state 버킷·자격증명이 먼저 있어야 tofu가 돈다).
 
 ## 주요 파일
 
@@ -39,10 +40,10 @@ EXPECTED_ACCOUNT=123456789012 bash bootstrap.sh
 ```
 
 ### 멱등성 계약
-두 번째 실행은 `CHANGES=0`이어야 한다. 이것이 D21 완화책 1의 수용 기준이다.
+두 번째 실행은 `CHANGES=0`이어야 한다. 이것이 멱등성 요건의 수용 기준이다.
 
 ### 수정하지 말 것
-- ⛔ **`AWSAFTExecution` Role** — D27-1. 신뢰 정책이 깨져 있지만 남의 자산이다. 우리 자산이 아니다.
+- ⛔ **`AWSAFTExecution` Role.** 신뢰 정책이 깨져 있지만 남의 자산이다. 우리 자산이 아니다.
 - ⛔ `update-assume-role-policy` 로직을 추가하지 말 것. 이 내용이 `bootstrap.sh`에 나타나면 잘못된 것이다.
 
 ### verify.sh 계약

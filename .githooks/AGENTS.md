@@ -26,7 +26,7 @@ git config core.hooksPath .githooks
 
 | 단계 | 도구 | 실패 조건 |
 |------|------|----------|
-| 1 | `grep backend.hcl` | `backend.hcl` staged → exit 1 (D25 강제) |
+| 1 | `grep backend.hcl` | `backend.hcl` staged → exit 1 (버킷명 비노출 강제) |
 | 2 | `tofu fmt -recursive -check` | Non-zero exit → 서식 위반 |
 | 3 | `tflint --recursive` | Non-zero exit → 린트 위반 |
 | 4 | `trivy config` | 모듈 외 코드에서 MEDIUM+ 발견 |

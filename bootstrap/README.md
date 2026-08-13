@@ -1,4 +1,4 @@
-# bootstrap — 부트스트랩 (IaC 밖, D21)
+# bootstrap — 부트스트랩 (IaC 밖)
 
 **읽는 사람**: 부트스트랩 스크립트를 실행하거나 고치는 사람.
 
@@ -6,7 +6,7 @@ state 버킷·OIDC provider·2단 Role을 **AWS CLI 스크립트로** 만든다.
 `tofu`가 이것들을 만들려면 이미 state 버킷이 있어야 하므로(닭-달걀), 이 한 겹만 IaC 밖에 둔다.
 
 > ⛔ **대가가 있다.** drift 감지·변경 이력·IaC 자산성을 잃는다. 그래서 아래 4개는 선택이 아니라
-> **요건**이다(D21, `iac-module-library`의 `docs/`가 근거를 소유한다). 이 README의 **§2 표가
+> **요건**이다(근거는 `iac-module-library`의 `docs/`가 소유한다). 이 README의 **§2 표가
 > `.tf`를 대체하는 SSOT**다.
 
 | 요건 | 이행 | 증명 |
@@ -27,17 +27,16 @@ export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다
 ./verify.sh         # drift 확인만 (read-only). exit 0=일치 / 1=drift / 2=실행 불가
 ```
 
-- ⛔ **`EXPECTED_ACCOUNT`에 기본값을 두지 않는다** — 계정 ID는 git에 남기지 않는다
-  (D25의 연장). 미설정이면 스크립트가 **즉시 중단**한다. 값의 소재는
-  `docs/deployment-facts.md` §2가 가리킨다.
+- ⛔ **`EXPECTED_ACCOUNT`에 기본값을 두지 않는다** — 계정 ID는 git에 남기지 않는다.
+  미설정이면 스크립트가 **즉시 중단**한다. 값의 소재는 `docs/deployment-facts.md`가 가리킨다.
   - 이 값은 **검증에만 쓰이는 것이 아니다.** `oidc_arn()`·`role_arn()`이 ARN을 조립할 때
     소비하므로, 빠지면 부트스트랩 전체가 성립하지 않는다.
-  - ⛔ *"해시로 저장해 비교하면 되지 않나"* 는 **이미 기각된 안**이다(D25) — 계정 ID 공간이
+  - ⛔ *"해시로 저장해 비교하면 되지 않나"* 는 **이미 기각된 안**이다 — 계정 ID 공간이
     10¹²뿐이라 전수 해싱이 가능하다. **해시가 보호가 되지 않는다.**
-- ⚠️ **대상 계정은 공용 개발 계정이다**(`CLAUDE.md` §4-1). 스크립트는 `sts get-caller-identity`로
+- ⚠️ **대상 계정은 공용 개발 계정이다**(`CLAUDE.md` 참조). 스크립트는 `sts get-caller-identity`로
   실제 계정과 `EXPECTED_ACCOUNT`를 대조하고 다르면 즉시 중단한다 — 조용히 다른 계정을 치지 않게
   하는 장치다. **필수 주입이 된 덕에 실행자가 매번 대상을 명시하게 되므로 이 방어가 강해졌다.**
-- ⛔ **`AWSAFTExecution`을 건드리지 않는다**(D27-1). `update-assume-role-policy`가
+- ⛔ **`AWSAFTExecution`을 건드리지 않는다.** `update-assume-role-policy`가
   이 디렉토리에서 그 Role을 향하면 규약 위반이다.
 - 스크립트는 **bash 전용**이다(`config.sh`가 bash 배열을 쓴다). zsh에서 `source` 하지 않는다.
 
@@ -49,12 +48,12 @@ export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다
 
 | 항목 | 기대값 | 근거 |
 |------|--------|------|
-| 이름 | `s3-demo-dev-an2-tfstate-<guid12>` | 네이밍 규약 + AWS가 예측 불가능한 이름을 권장(F12) |
-| **이름의 소재** | **git에 없다.** 실물은 GitHub repo 변수 `TF_STATE_BUCKET` / 로컬 `backend.hcl` | **D25** |
+| 이름 | `s3-demo-dev-an2-tfstate-<guid12>` | 네이밍 규약 + AWS가 예측 불가능한 이름을 권장 |
+| **이름의 소재** | **git에 없다.** 실물은 GitHub repo 변수 `TF_STATE_BUCKET` / 로컬 `backend.hcl` | |
 | 버저닝 | `Enabled` | state 손상 복구 |
 | 암호화 | `AES256` (SSE-S3, BucketKey on) | 기본값이지만 명시적으로 검사한다 |
 | 퍼블릭 차단 | 4개 전부 `true` | |
-| **lifecycle** | 비현행 버전 **7일** · 불완전 MPU **7일** | **D29** — `use_lockfile=true`가 lock 객체 버전을 폭증시킨다(F8, 공식 경고) |
+| **lifecycle** | 비현행 버전 **7일** · 불완전 MPU **7일** | `use_lockfile=true`가 lock 객체 버전을 폭증시킨다(AWS 공식 경고) |
 | 태그 | `Name` `Workload=demo` `Environment=dev` `ManagedBy=bootstrap.sh` `Owner` `CostCenter` | IaC 밖이라 `default_tags`가 없다 → 스크립트가 직접 붙인다 |
 
 ### OIDC provider
@@ -68,14 +67,14 @@ export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다
 
 > ⚠️ 이 리소스는 **식별자가 URL**이라 `name` 인자가 없다 → 이름은 **`Name` 태그로만** 표현된다.
 
-### IAM Role 2단 (D27-1)
+### IAM Role 2단
 
 | Role | 신뢰 | 권한 |
 |------|------|------|
 | **입구** `iamr-demo-dev-an2-gha-entry-01` | OIDC provider + `aud` + **`sub` 3패턴** | inline `…-policy`: 실행 Role `sts:AssumeRole` **하나뿐** |
 | **실행** `iamr-demo-dev-an2-gha-exec-01` | **입구 Role만** (계정 루트 아님) | `AdministratorAccess` |
 
-`sub` 3패턴 (Phase 2 실측 — `docs/deployment-facts.md` §3):
+`sub` 3패턴 (근거: `docs/deployment-facts.md`):
 
 ```
 repo:skax-ca@310520211/iac-reference-infra@1316830050:pull_request
@@ -83,7 +82,7 @@ repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main
 repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev
 ```
 
-- ⚠️ **`environment`를 선언한 job만 `:environment:`를 받는다**(D28). 하나로 뭉칠 수 없다.
+- ⚠️ **`environment`를 선언한 job만 `:environment:`를 받는다.** 하나로 뭉칠 수 없다.
 - ⛔ **와일드카드로 넓히지 않는다.** `repo:…*`로 쓰면 org 내 **다른 repo**가 이 Role을 assume한다.
 - 실행 Role의 신뢰를 계정 루트(`arn:aws:iam::<acct>:root`)로 두면 **계정 내 누구나** assume할 수
   있다. 공용 계정이므로 특히 안 된다 — 입구 Role 하나로 못박는다.
@@ -104,7 +103,7 @@ repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev
   이 재시도가 없으면 첫 실행은 반드시 실패하고 두 번째에만 성공한다 —
   **멱등성이 실패를 가려주는 상태**이고, 그건 수렴이 아니라 운이다.
 
-## 4. 검증 기록 (2026-07-30 실측)
+## 4. 검증 기록
 
 ### 4-1. 멱등성
 
@@ -137,10 +136,10 @@ aws_ iam put-role-policy --role-name "$ENTRY_ROLE" --policy-name "$ENTRY_POLICY"
 
 ## 5. IaC 승격 경로 (`import` 초안)
 
-지금 올리지 않는다(§5 열린 항목, D21). 올릴 때 처음부터 다시 설계하지 않도록 초안만 둔다.
+지금 올리지 않는다(§5 열린 항목). 올릴 때 처음부터 다시 설계하지 않도록 초안만 둔다.
 
 ```hcl
-# ⚠️ 버킷명은 git 에 없다(D25) → var 로 받는다. 값을 여기 적으면 D25 가 무의미해진다.
+# ⚠️ 버킷명은 git 에 없다 → var 로 받는다. 값을 여기 적으면 그 요건이 무의미해진다.
 variable "state_bucket" { type = string }
 
 import {
@@ -171,7 +170,8 @@ import {
 
 ## 6. 출력값의 행선지
 
-`bootstrap.sh`가 마지막에 출력한다. **어느 것도 git에 커밋하지 않는다**(D25 확장).
+`bootstrap.sh`가 마지막에 출력한다. **어느 것도 git에 커밋하지 않는다** — 계정 식별 정보를
+git에 두지 않는다는 요건의 연장이다.
 
 | 값 | 행선지 |
 |----|--------|

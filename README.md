@@ -27,22 +27,22 @@ repo로 복사해 주는 것이 이 repo의 존재 이유다.
 | `iac-module-library`의 [`docs/`](https://github.com/skax-ca/iac-module-library/tree/main/docs) | 소비 경로 규약의 SSOT. 이 repo의 모든 구조가 여기서 나온다 |
 | 이 repo `docs/deployment-facts.md` | 이 **인스턴스**의 배포 사실 — 값이 아니라 **어디에 있는지**를 기록한다 |
 
-이 분리는 D26이다: **규약은 모듈 repo(모든 소비 repo가 따르는 계약), 사실은 소비 repo(인스턴스 값).**
+이렇게 나누는 이유: **규약은 모듈 repo(모든 소비 repo가 따르는 계약), 사실은 소비 repo(인스턴스 값).**
 
 ## 구조
 
 ```
-bootstrap/            # state 버킷 · OIDC provider · Role  — IaC 밖(D21)
+bootstrap/            # state 버킷 · OIDC provider · Role  — IaC 밖
 ├── bootstrap.sh      #   멱등. 재실행이 안전해야 한다
 ├── verify.sh         #   read-only drift 검사 (plan 의 대체물)
 └── README.md         #   기대 상태 표 + IaC 승격용 import 초안
-live/dev/networking/  # VPC 하나 (D22 — 목표 토폴로지 유지) · state: dev/networking.tfstate
+live/dev/networking/  # VPC 하나(목표 토폴로지 유지) · state: dev/networking.tfstate
 live/dev/eks/         # EKS 하나 — **networking 과 독립 state**(dev/eks.tfstate).
                       #   결합은 Name·SubnetGroup 태그 data source 조회로만(remote_state 아님)
 .github/workflows/    # 배포 루트마다 워크플로 하나 — 경로·state키·concurrency 를 분리한다
 ├── deploy-network.yml  #   live/dev/networking
 └── deploy-eks.yml      #   live/dev/eks
-                      #   둘 다 D30-1: push 는 plan 까지, **apply 는 workflow_dispatch 로만**
+                      #   둘 다 push 는 plan 까지, **apply 는 workflow_dispatch 로만**
 ```
 
 ## 로컬에서 쓰기
@@ -50,7 +50,7 @@ live/dev/eks/         # EKS 하나 — **networking 과 독립 state**(dev/eks.t
 ```bash
 git config core.hooksPath .githooks     # clone마다 1회
 
-# backend 는 부분 설정이다(D25) — 버킷명은 git에 없다.
+# backend 는 부분 설정이다 — 버킷명은 git에 없다.
 cat > live/dev/networking/backend.hcl <<'EOF'
 bucket       = "<bootstrap.sh 가 출력한 버킷명>"
 key          = "dev/networking.tfstate"
@@ -63,13 +63,13 @@ tofu -chdir=live/dev/networking plan
 ```
 
 ⛔ `backend.hcl`은 `.gitignore`에 있고 pre-commit 훅이 staged 여부를 따로 검사한다.
-**커밋하지 말 것** — 버킷명이 git에 들어가면 D25의 근거가 그 자리에서 무너진다.
+**커밋하지 말 것** — 버킷명이 git에 들어가면 이 요건의 근거가 그 자리에서 무너진다.
 
 ## 검증 게이트
 
 ```
 tofu fmt -recursive -check → tflint --recursive → trivy config . → tofu validate
-bootstrap/verify.sh        # 부트스트랩 drift (D21 완화책)
+bootstrap/verify.sh        # 부트스트랩 drift 완화책
 ```
 
 `tofu test`는 없다 — 배포 루트는 모듈이 아니다. 모듈 계약 검증은 `iac-module-library`의

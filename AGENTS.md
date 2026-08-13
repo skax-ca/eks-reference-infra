@@ -18,8 +18,8 @@
 | 경로 | 무엇 | 고칠 때 주의 |
 |------|------|-------------|
 | `.githooks/` | pre-commit/pre-push 훅 | 실행 비트(100755) 필수. chmod 누락 시 조용히 안 돈다 |
-| `bootstrap/` | state 버킷·OIDC·Role. **IaC 밖**(D21) | 멱등성이 요건이다. `verify.sh`도 같이 고친다 — 기대 상태가 갈라지면 완화책이 무력해진다 |
-| `live/dev/networking/` | VPC 배포 루트 (apply 완료) | `backend.tf`는 **비어 있어야 한다**(D25). 버킷명을 여기 넣지 않는다 |
+| `bootstrap/` | state 버킷·OIDC·Role. **IaC 밖** | 멱등성이 요건이다. `verify.sh`도 같이 고친다 — 기대 상태가 갈라지면 완화책이 무력해진다 |
+| `live/dev/networking/` | VPC 배포 루트 (apply 완료) | `backend.tf`는 **비어 있어야 한다.** 버킷명을 여기 넣지 않는다 |
 | `live/dev/eks/` | EKS 배포 루트 (apply 완료) | `backend.tf`는 networking과 같은 부분 설정 패턴이다 |
 | `.github/workflows/` | plan → 승인 → apply (네트워킹·eks 각 워크플로) | **한 run 두 job**을 유지한다. 쪼개면 "승인한 계획 ≠ 적용된 계획" 구멍이 열린다 |
 | `docs/deployment-facts.md` | 이 인스턴스의 사실 | **값이 아니라 포인터**를 적는다. 계정 ID·버킷명·Role ARN을 여기 쓰지 않는다 |
@@ -28,11 +28,11 @@
 
 | 하면 안 되는 것 | 왜 |
 |----------------|-----|
-| `backend.tf`에 `bucket = "..."` 추가 | D25 근거(계정 식별 정보 비노출 + 템플릿 재사용성)가 무너진다. `-backend-config`로 주입한다 |
+| `backend.tf`에 `bucket = "..."` 추가 | 계정 식별 정보 비노출 + 템플릿 재사용성이 무너진다. `-backend-config`로 주입한다 |
 | `backend.hcl` 커밋 | 같은 이유. `.gitignore` + pre-commit 훅이 이중으로 막는데 `--no-verify`로 뚫지 말 것 |
-| `source`를 `git::ssh://`로 변경 | 로컬/CI 갈래가 생긴다. 인증은 `insteadOf`가 CI에서만 주입한다(D20) |
+| `source`를 `git::ssh://`로 변경 | 로컬/CI 갈래가 생긴다. 인증은 `insteadOf`가 CI에서만 주입한다 |
 | `source`의 `?ref=`를 브랜치로 변경 | 정확 태그 핀이 승격 게이트다. 브랜치는 게이트를 없앤다 |
-| plan job에 `environment:` 추가 | `sub`가 바뀌어 신뢰 정책과 불일치한다(D28). apply job만 선언한다 |
+| plan job에 `environment:` 추가 | `sub`가 바뀌어 신뢰 정책과 불일치한다. apply job만 선언한다 |
 | apply를 `tofu apply`(재-plan)로 변경 | 승인한 계획과 다른 것을 적용한다. `tofu apply tfplan`이어야 한다 |
 | 약어를 임의 생성 | 카탈로그가 SSOT다. 없으면 **물어서 모듈 repo에 등재 후** 사용 |
 | 개별 리소스에 거버넌스 태그 반복 | 루트 `default_tags`가 100% 담당한다 |
@@ -66,9 +66,9 @@ bootstrap/verify.sh                                    # 부트스트랩 drift
 | `.github/workflows/` | 두 배포 워크플로 아키텍처 (deploy-network · deploy-eks) |
 | `bootstrap/` | S3 버킷 · OIDC · 2단 Role 생성 스크립트 + verify.sh 계약 |
 | `docs/` | deployment-facts.md만 (값x 포인터o 원칙) |
-| `live/dev/` | Phase별 배포 루트 (networking + eks 독립 배포) |
-| `live/dev/networking/` | VPC 배포 루트 (66개 리소스 apply 완료) |
-| `live/dev/eks/` | EKS 배포 루트 (plan only — 71개 리소스 plan 완료) |
+| `live/dev/` | 배포 루트 묶음 (networking + eks 독립 배포) |
+| `live/dev/networking/` | VPC 배포 루트 (apply 완료) |
+| `live/dev/eks/` | EKS 배포 루트 (apply 완료) |
 
 ## 세션 인계
 
