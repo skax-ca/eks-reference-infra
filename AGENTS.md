@@ -1,15 +1,17 @@
 # AGENTS.md — 에이전트 작업 지침
 
+**읽는 사람**: 이 repo에서 작업하는 AI 에이전트.
+
 이 repo에서 작업하기 전에 **`CLAUDE.md`를 먼저 읽는다.** 이 파일은 그 규칙을 전제로
 "어디를 고치면 무엇이 깨지는가"를 다룬다.
 
 ## 이 repo가 무엇이 아닌가
 
-- ❌ **모듈 repo가 아니다.** `modules/`가 없고 `tofu test`도 없다. 여기에 모듈을 만들지 않는다 —
+- ⛔ **모듈 repo가 아니다.** `modules/`가 없고 `tofu test`도 없다. 여기에 모듈을 만들지 않는다 —
   모듈은 `iac-module-library`에 만들고 태그로 소싱한다.
-- ❌ **설계 문서 소유자가 아니다.** 규약을 바꿔야 하면 모듈 repo `docs/design/50`(D-CONSUME)을 고치고
-  여기로 내려온다. 역방향은 drift다(D26).
-- ❌ **실 고객사 배포가 아니다.** 리허설이고, 통과한 형태를 복사해 준다.
+- ⛔ **설계 문서 소유자가 아니다.** 규약을 바꿔야 하면 모듈 repo의 `docs/`를 고치고 여기로
+  내려온다. 역방향은 drift다.
+- ⛔ **실 고객사 배포가 아니다.** 리허설이고, 통과한 형태를 복사해 준다.
 
 ## 디렉토리별 소유 관심사
 
@@ -17,8 +19,8 @@
 |------|------|-------------|
 | `.githooks/` | pre-commit/pre-push 훅 | 실행 비트(100755) 필수. chmod 누락 시 조용히 안 돈다 |
 | `bootstrap/` | state 버킷·OIDC·Role. **IaC 밖**(D21) | 멱등성이 요건이다. `verify.sh`도 같이 고친다 — 기대 상태가 갈라지면 완화책이 무력해진다 |
-| `live/dev/networking/` | VPC 배포 루트 (apply 완료, 66개 리소스) | `backend.tf`는 **비어 있어야 한다**(D25). 버킷명을 여기 넣지 않는다 |
-| `live/dev/eks/` | EKS 배포 루트 (**plan만 완료**, 71개 리소스 plan됨) | `backend.tf`는 networking과 같은 부분 설정 패턴이다 |
+| `live/dev/networking/` | VPC 배포 루트 (apply 완료) | `backend.tf`는 **비어 있어야 한다**(D25). 버킷명을 여기 넣지 않는다 |
+| `live/dev/eks/` | EKS 배포 루트 (apply 완료) | `backend.tf`는 networking과 같은 부분 설정 패턴이다 |
 | `.github/workflows/` | plan → 승인 → apply (네트워킹·eks 각 워크플로) | **한 run 두 job**을 유지한다. 쪼개면 "승인한 계획 ≠ 적용된 계획" 구멍이 열린다 |
 | `docs/deployment-facts.md` | 이 인스턴스의 사실 | **값이 아니라 포인터**를 적는다. 계정 ID·버킷명·Role ARN을 여기 쓰지 않는다 |
 
@@ -54,7 +56,7 @@ bootstrap/verify.sh                                    # 부트스트랩 drift
 
 - git hook이 강제한다: `git config core.hooksPath .githooks` (clone마다 1회)
 - **스키마를 추정하지 않는다** — `mcp__opentofu__get-resource-docs`로 확인한다
-- ⚠️ `apply` 결과를 서술할 때는 **실제로 판정된 것만** 쓴다(`CLAUDE.md` §7)
+- ⚠️ `apply` 결과를 서술할 때는 **실제로 판정된 것만** 쓴다(`CLAUDE.md` 참조)
 
 ## 하위 AGENTS.md 참조 (hierarchical navigation)
 

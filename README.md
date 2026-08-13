@@ -1,5 +1,7 @@
 # iac-reference-infra
 
+**읽는 사람**: 이 배포 루트에서 작업하거나, 고객사 repo로 복사할 형태를 확인하는 사람.
+
 **레퍼런스 소비 repo** — `iac-module-library`의 모듈을 **git tag로 소싱**하는 배포 루트.
 
 실 고객사 배포가 아니다. **소비 경로를 끝까지 통과시키는 리허설**이고, 통과한 형태를 고객사
@@ -22,8 +24,7 @@ repo로 복사해 주는 것이 이 repo의 존재 이유다.
 
 | 문서 | 내용 |
 |------|------|
-| `iac-module-library` `docs/design/50-reference-consumer-repo.md` | **D-CONSUME** — D20~D30 결정과 근거. 이 repo의 모든 구조가 여기서 나온다 |
-| 같은 repo `docs/consumer/*` | 🗄️ **TFC 시절 잔재 — 규약이 아니다**(D26-1). 인용 금지. 개정하지 않는다 |
+| `iac-module-library`의 [`docs/`](https://github.com/skax-ca/iac-module-library/tree/main/docs) | 소비 경로 규약의 SSOT. 이 repo의 모든 구조가 여기서 나온다 |
 | 이 repo `docs/deployment-facts.md` | 이 **인스턴스**의 배포 사실 — 값이 아니라 **어디에 있는지**를 기록한다 |
 
 이 분리는 D26이다: **규약은 모듈 repo(모든 소비 repo가 따르는 계약), 사실은 소비 repo(인스턴스 값).**
@@ -76,15 +77,14 @@ bootstrap/verify.sh        # 부트스트랩 drift (D21 완화책)
 
 ## 현재 상태
 
-**Phase 4 (VPC 배포) 대기 중.** `live/`와 워크플로가 아직 비어 있다.
+워크로드 코드는 **`demo`**다. 소비 경로 3계층이 전부 배포되어 있다.
 
-| Phase | 내용 | 상태 |
-|-------|------|------|
-| 1 | repo 골격 + GitHub App | ✅ 완료 (`cfb575a` · D20 실측 검증 `efe1776`) |
-| 2 | OIDC `sub` claim 실측 | ✅ 완료 (`0cc0ec0`+`a2416d9` · 값은 `docs/deployment-facts.md` §3) |
-| 3 | `bootstrap.sh` (버킷·OIDC·Role) | ✅ 완료 — 멱등·음성 테스트·D25 검증 통과 (`bootstrap/README.md` §4) |
-| 4 | `live/dev/networking` + apply | ⏭️ **다음** |
-| 5 | 실측 반영 → 모듈 repo `design/50` 개정 + 이 repo `docs/` 갱신 | ⏸ 대기 |
+| 계층 | 내용 | 상태 |
+|------|------|------|
+| 부트스트랩 | state 버킷·OIDC provider·2단 IAM Role | ✅ |
+| `live/dev/networking` | VPC(`vpc-v0.3.0`) | ✅ apply 완료 |
+| `live/dev/eks` | EKS(`eks-cluster-v0.5.0`) + workbench(`workbench-v0.6.0`) | ✅ apply 완료 |
+| 플랫폼 GitOps | `skax-ca/iac-platform-gitops` — self-managed ArgoCD + addon | ✅ seed·흡수 완료 |
 
-> ⚠️ Phase 5는 **`docs/consumer/*` 개정이 아니다**(D26-1로 변경). 그 디렉토리는 TFC 잔재 보관소이고,
-> 개정 대상은 규약의 SSOT인 모듈 repo `docs/design/50-reference-consumer-repo.md`다.
+⛔ **완료 조건 1건 미이행** — ArgoCD 초기 비밀번호 교체 + `argocd-initial-admin-secret` 삭제
+(`skax-ca/iac-platform-gitops`의 README 참조). 선택이 아니라 완료 조건이다.

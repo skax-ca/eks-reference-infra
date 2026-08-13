@@ -3,6 +3,8 @@
 
 # bootstrap
 
+**읽는 사람**: 이 repo에서 작업하는 AI 에이전트.
+
 ## 목적
 IaC 밖 부트스트랩: S3 state 버킷, OIDC provider, 2단 IAM Role 체인을 만든다.
 Terraform/OpenTofu가 아니라 일반 `aws` CLI 스크립트다. 의도적인 설계 (D21 — 달걀이 먼저라서 IaC로 부트스트랩할 수 없다).
@@ -68,7 +70,7 @@ EXPECTED_ACCOUNT=123456789012 bash bootstrap.sh
 
 | 제약 | 이유 |
 |------|------|
-| `--description`에 한글禁止 | IAM description은 Latin-1만 허용. 한글 입력 시 `ValidationError` 발생 |
+| `--description`에 한글 금지 | IAM description은 Latin-1만 허용. 한글 입력 시 `ValidationError` 발생 |
 | Role 생성 후 assume 재시도 로직 | IAM eventual consistency — 방금 만든 Role이 신뢰 정책 principal으로 인정되기까지 수 초 소요 |
 | `backend.hcl` 미관여 | Backend 버킷이 bootstrap이 만드는 것이다. 달걀 역전 불가 |
 

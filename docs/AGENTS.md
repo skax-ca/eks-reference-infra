@@ -3,6 +3,8 @@
 
 # docs
 
+**읽는 사람**: 이 repo에서 작업하는 AI 에이전트.
+
 ## 목적
 이 인스턴스의 배포 사실과 증거. **실측으로 증명된 사실**만 이곳에 — 설계나 의견은 아니다.
 
@@ -19,8 +21,8 @@
 | 내용 | 위치 |
 |------|------|
 | 이 repo run의 실측 값 | `deployment-facts.md` |
-| 설계 결정과 근거 | `iac-module-library/docs/design/50-reference-consumer-repo.md` (SSOT) |
-| 고객사 배포용 문서 | 고객사 repo (이 repo는 템플릿임) |
+| 설계 결정과 근거 | `iac-module-library`의 `docs/`(SSOT) |
+| 고객사 배포용 문서 | 고객사 repo(이 repo는 템플릿임) |
 
 ### deployment-facts.md 구조
 

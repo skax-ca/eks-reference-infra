@@ -1,5 +1,7 @@
 # CLAUDE.md — 프로젝트 규칙
 
+**읽는 사람**: 이 배포 루트에서 코드를 쓰거나 배포 절차를 실행하는 사람.
+
 **레퍼런스 소비 repo.** `iac-module-library`의 모듈을 git tag로 소싱하는 **배포 루트**다.
 실 고객사 배포가 아니라 **소비 경로 리허설**이고, 통과한 형태를 고객사 repo로 복사해 준다.
 
@@ -7,33 +9,32 @@
 
 ---
 
-## 0. ⛔ 설계는 이 repo에 없다 (반드시 먼저 읽을 것)
+## 0. 설계는 이 repo에 없다 (반드시 먼저 읽을 것)
 
-소비 경로 규약의 **SSOT는 모듈 repo**다. 이 repo에서 설계를 새로 만들지 않는다.
+소비 경로 규약의 **SSOT는 모듈 repo(`iac-module-library`)의 `docs/`**다. 이 repo에서 설계를 새로 만들지 않는다.
 
 | repo | 역할 |
 |------|------|
-| `iac-module-library` | 모듈·**설계**의 SSOT. `docs/design/50-reference-consumer-repo.md` = **D-CONSUME**(D20~D30) |
+| `iac-module-library` | 모듈·**설계**의 SSOT |
 | **이 repo** | 그 설계의 **첫 이행 인스턴스**. 배포 루트와 배포 사실만 소유 |
-| `terraform-enterprise-poc` | 2026-07-28 **동결**. TFE 제안서 레퍼런스 전용 — 고치지 않는다 |
+| `terraform-enterprise-poc` | **동결**. TFE 제안서 레퍼런스 전용 — 고치지 않는다 |
 
-- **D20~D30을 재논의하지 않는다.** 실측 근거와 기각 이유가 D-CONSUME에 다 있다.
-  특히 *"부트스트랩을 IaC로 하면 되지 않나"*(D21) · *"버킷명에 계정 ID를 넣으면 간단한데"*(D25) ·
-  *"입구 Role에 S3 권한만 주면 되지 않나"*(**D30**)는 **이미 값을 매겨 결정한 안**이다.
-- 규약을 바꿔야 한다면 **모듈 repo의 D-CONSUME을 고치고** 여기로 내려온다. 역방향은 drift다.
+- 아래 각 절의 규칙(부트스트랩을 IaC로 하지 않는 이유·버킷명을 git에 두지 않는 이유·2단 Role
+  체인을 쓰는 이유 등)은 전부 **한 번 검토해서 값을 매겨 결정한 것**이다. 재논의하려면 그 절의
+  근거를 먼저 반증해야 한다.
+- 규약을 바꿔야 한다면 **모듈 repo의 `docs/`를 고치고** 여기로 내려온다. 역방향은 drift다.
 - 설계 변경 없이 구현을 시작하지 않는다: **설계(모듈 repo) → 검토 → 구현(여기) → 검증**.
 
-### D26 — 무엇이 어느 repo에 있나
+### 무엇이 어느 repo에 있나
 
 | 대상 | 위치 |
 |------|------|
-| 소비 **규약** (소싱 인증·backend 규약·OIDC 체인·plan artifact 규칙) | 모듈 repo **`docs/design/50`(D-CONSUME) — SSOT** |
+| 소비 **규약**(소싱 인증·backend 규약·OIDC 체인·plan artifact 규칙) | 모듈 repo `docs/` — SSOT |
 | 이 인스턴스의 배포 **사실** | 이 repo `docs/deployment-facts.md` |
-| TFC 시절 잔재 (참고용, **인용 금지**) | 모듈 repo `docs/consumer/*` — D26-1 |
 
 ---
 
-## 1. 🔑 backend는 부분 설정이다 (D25·D30) — 잊으면 init이 실패한다
+## 1. backend는 부분 설정이다 — 잊으면 init이 실패한다
 
 `backend.tf`는 **`terraform { backend "s3" {} }` 뿐**이다. **버킷명이 git에 없다.**
 
@@ -42,38 +43,38 @@
 | CI | repo 변수로 `backend.hcl`을 **runner에서 조립** → `tofu init -backend-config=backend.hcl` |
 | 로컬 | **gitignore된** `backend.hcl` → `tofu init -backend-config=backend.hcl` |
 
-- 🔴 **CI의 `backend.hcl`에는 `assume_role`이 들어간다** (D30). **backend는 provider와 독립적으로
-  자격증명을 해결**해서, provider의 `assume_role`이 backend에 적용되지 않는다. 입구 Role의 권한은
-  `sts:AssumeRole` 하나뿐이라(D27-1) 걸지 않으면 `init`이 **`HeadObject 403`**으로 죽는다.
+- 🔴 **CI의 `backend.hcl`에는 `assume_role`이 들어간다.** backend는 provider와 독립적으로
+  자격증명을 해결해서, provider의 `assume_role`이 backend에 적용되지 않는다. 입구 Role의 권한은
+  `sts:AssumeRole` 하나뿐이라 걸지 않으면 `init`이 **`HeadObject 403`**으로 죽는다.
   ⚠️ **plan job·apply job 양쪽에 필요하다** — apply job이 `init`을 새로 하기 때문이다.
 - ⚠️ `-backend-config=KEY=VALUE` 플래그로는 안 된다. **문자열 값만** 받는데 `assume_role`은 객체다.
-- ℹ️ 로컬 `backend.hcl`에는 `assume_role`을 **넣지 않는다** — 개인 IAM user는 실행 Role을
+- 로컬 `backend.hcl`에는 `assume_role`을 **넣지 않는다** — 개인 IAM user는 실행 Role을
   assume할 수 없고(신뢰가 입구 Role뿐) 버킷은 그 user 권한으로 읽힌다.
 
 - ⛔ `backend.hcl`을 커밋하지 않는다. `.gitignore` + pre-commit 훅의 별도 검사가 이중으로 막는다.
 - 근거: AWS 공식이 **예측 불가능한 버킷명을 권장**하고, 이 repo의 `backend.tf`는
-  **고객사에 복사해 줄 템플릿**이라 "private이니 안 보인다"는 논리가 성립하지 않는다(D25).
+  **고객사에 복사해 줄 템플릿**이라 "private이니 안 보인다"는 논리가 성립하지 않는다.
 - **계정 식별 정보 일반으로 확장한다**: 계정 ID·Role ARN도 git에 두지 않고 repo 변수에 둔다.
-  D25 근거의 직접적 연장이다. `docs/deployment-facts.md`는 **값이 아니라 포인터**를 기록한다.
+  `docs/deployment-facts.md`는 **값이 아니라 포인터**를 기록한다.
 
 ---
 
-## 2. 🏷️ 네이밍 & 태깅 (모듈 repo 규약을 그대로 따른다)
+## 2. 네이밍 & 태깅 (모듈 repo 규약을 그대로 따른다)
 
 ```
 (resourcetype)-(workloadcode)-(env)-(regioncode)-(purpose)-(serial|suffix)
-예) vpc-ref-dev-an2-main · iamr-ref-dev-an2-gha-entry-01 · iamoidc-ref-dev-an2-gha
+예) vpc-demo-dev-an2-main · iamr-demo-dev-an2-gha-entry-01 · iamoidc-demo-dev-an2-gha
 ```
 
 | 토큰 | 이 repo의 값 |
 |------|-------------|
-| resourcetype | 모듈 repo `docs/reference/aws-naming-abbreviations.md` (**SSOT, 312개, 임의 생성 금지**) |
-| workloadcode | **`ref`** (D24) |
+| resourcetype | 모듈 repo `docs/aws-naming-abbreviations.md` (**SSOT, 임의 생성 금지**) |
+| workloadcode | **`demo`** |
 | env | `dev` |
 | regioncode | `an2` (ap-northeast-2) |
 
 - **약어가 카탈로그에 없으면**: 생략도 임의 생성도 금지. **사용자에게 물어 확정 → 모듈 repo 카탈로그
-  등재 → 구현** 순서다. 등재 시 **3곳을 함께 고친다**(섹션 헤더 · 상단 총계 · 끝 카운트 요약표).
+  등재 → 구현** 순서다.
 - **거버넌스 태그는 루트 `default_tags`로** 100% 자동 부착. 개별 리소스에 반복하지 않는다.
 - **`Name`은 모듈이 조합한다.** 루트는 `naming` 객체(`{workload, env, region_code}`)만 넘긴다 —
   소비자가 약어를 타이핑하지 않게 하는 것이 규약의 핵심이다.
@@ -83,7 +84,7 @@
 
 ---
 
-## 3. 모듈 소싱 (D20)
+## 3. 모듈 소싱
 
 정확한 태그 핀은 각 배포 루트의 `main.tf`의 `source`가 유일한 사실(SSOT)이다 — 여기 다시 적지 않는다.
 
@@ -97,13 +98,11 @@ module "vpc" {
   코드는 인증 방식을 모른다. SSH URL로 바꾸지 않는다.
 - 태그는 **컴포넌트별 semver 정확 핀**. git 소싱에는 `~>`가 동작하지 않는다 —
   업그레이드는 **태그를 올리는 명시적 커밋**이고, 그것이 승격 게이트다.
-- ⚠️ **모듈은 전부 `0.y.z`(개발 단계)다** — 모듈 repo `docs/architecture/05-versioning-policy.md`
-  (**D-VERSION**, 2026-08-05)가 SSOT다. **이 구간에서는 마이너 업그레이드도 계약을 바꿀 수 있다.**
-  태그를 올릴 때 `git show <tag>` 로 릴리스 메시지를 읽는다 — 마이너라고 안전을 가정하지 않는다.
-  - 현행: **`vpc-v0.3.0`** · **`eks-cluster-v0.1.0`**.
-  - 구 `v1.x` 태그는 **같은 커밋의 `v0.x`로 재매핑**되고 삭제됐다(`vpc-v1.0.0/1.1.0/1.2.0` →
-    `v0.1.0/v0.2.0/v0.3.0`, `eks-cluster-v1.0.0` → `v0.1.0`). **모듈 내용은 바뀌지 않았다.**
-- ⚠️ `//modules/vpc`는 clone **후** 경로 선택이다. CI는 **repo 전체**를 받는다(실측).
+- ⚠️ **모듈은 전부 `0.y.z`(개발 단계)다** — 모듈 repo `docs/06-conventions.md`가 SSOT다.
+  **이 구간에서는 마이너 업그레이드도 계약을 바꿀 수 있다.** 태그를 올릴 때 `git show <tag>`로
+  릴리스 메시지를 읽는다 — 마이너라고 안전을 가정하지 않는다.
+- ⚠️ `//modules/vpc`는 clone **후** 경로 선택이다. CI는 **`&depth=1`로 얕게** 받는다(`main.tf`
+  소싱 URL 참조) — repo 전체 히스토리는 받지 않는다.
 
 ---
 
@@ -118,18 +117,17 @@ module "vpc" {
 | 항목 | 규칙 |
 |------|------|
 | plan → apply | plan을 **artifact로 저장**해 승인 후 **그 파일을 apply**한다. `tofu apply tfplan` — 재-plan 금지 |
-| **트리거** (D30-1) | `push`(main) → **plan 까지만** · `workflow_dispatch` → plan + apply. ⛔ `pull_request` 트리거는 **제거됐다** |
-| 승인 게이트 | ⚠️ **required reviewers는 이 org(GitHub Free)에서 걸 수 없다**(`docs/deployment-facts.md` §5.3) → **dispatch 를 누르는 행위가 승인**이다. apply job만 `environment: dev`를 선언한다 |
+| **트리거** | `push`(main) → **plan까지만** · `workflow_dispatch` → plan + apply. ⛔ `pull_request` 트리거는 **없다** |
+| 승인 게이트 | ⚠️ **required reviewers는 이 org(GitHub Free)에서 걸 수 없다**(`docs/deployment-facts.md` 참조) → **dispatch를 누르는 행위가 승인**이다. apply job만 `environment: dev`를 선언한다 |
 | 동시 실행 | 루트별로 분리: `live-dev-networking` · `live-dev-eks`. 둘 다 `cancel-in-progress: false` |
 | 자격증명 | GitHub OIDC → 입구 Role → 실행 Role(**2단 체인**). 정적 키 금지 |
 | state | S3 + `use_lockfile = true` (DynamoDB 불필요). 키는 루트별(`dev/networking.tfstate` · `dev/eks.tfstate`) |
 
-- ⚠️ **잔여 간극**: push run 의 plan 을 읽고 dispatch 하면 dispatch run 은 **자기 plan 을 새로 만들어**
-  적용한다. 그 사이 state 가 바뀌면 읽은 것과 적용되는 것이 달라질 수 있다 — run 경계를 넘어 artifact 를
-  가져오는 것이 더 나쁘므로 이 구조를 택했다. 상위 요금제로 올리면 `if:` 를 되돌리고 required reviewers 로
-  승인을 **같은 run 안**에 넣어 이 간극도 사라진다.
-
-- ⚠️ **plan job과 apply job의 `sub`가 다르다**(D28) — `environment:`를 선언한 job만
+- ⚠️ **잔여 간극**: push run의 plan을 읽고 dispatch하면 dispatch run은 **자기 plan을 새로 만들어**
+  적용한다. 그 사이 state가 바뀌면 읽은 것과 적용되는 것이 달라질 수 있다 — run 경계를 넘어 artifact를
+  가져오는 것이 더 나쁘므로 이 구조를 택했다. 상위 요금제로 올리면 required reviewers로 승인을
+  **같은 run 안**에 넣어 이 간극도 사라진다.
+- ⚠️ **plan job과 apply job의 `sub`가 다르다** — `environment:`를 선언한 job만
   `:environment:<name>`을 받는다. 신뢰 정책은 **3패턴**이다.
 - ⚠️ **plan artifact는 민감할 수 있다.** 리소스 속성이 평문으로 들어간다 → `retention-days: 1`.
 - ⚠️ 역할 체인 세션은 **최대 1시간**(연장 불가). apply job이 다시 인증하므로 승인 지연은 문제없지만,
@@ -137,42 +135,39 @@ module "vpc" {
 
 ---
 
-## 4-1. ⚠️ 대상 계정은 **공용 개발 계정**이다 (F13 · D27-2) — 가장 먼저 읽을 것
+## 4-1. 대상 계정은 **공용 개발 계정**이다 — 가장 먼저 읽을 것
 
-`AWS_PROFILE=team`이 가리키는 계정, 신원은 IAM user다. **계정 ID는 git에 두지 않는다**(D25의 연장) —
-값의 소재는 `docs/deployment-facts.md` §2가 가리킨다.
+`AWS_PROFILE=team`이 가리키는 계정, 신원은 IAM user다. **계정 ID는 git에 두지 않는다** —
+값의 소재는 `docs/deployment-facts.md`가 가리킨다.
 
-**이 계정은 우리 전용이 아니다.** 실측(2026-07-30): VPC **23개**, tfstate 버킷 **7개**가
-다른 사람들 것이고, 소유자는 **12명 이상**이다.
-
-> ℹ️ 초판은 동료들의 리소스 prefix를 나열했으나 지웠다(2026-07-31). 이 경고가 성립하는 근거는
-> **개수**이지 누구인지가 아니다 — 사람 이름을 적어 둘 이유가 없다.
+**이 계정은 우리 전용이 아니다.** 다수(12명 이상)가 공유하며, VPC·tfstate 버킷 상당수가
+다른 사람들 것이다.
 
 | 규칙 | 내용 |
 |------|------|
-| **남의 자산을 건드리지 않는다** | 우리 자산은 **`Workload=ref` 태그**로 식별한다. 이름만 보고 판단하지 않는다 |
-| **`AWSAFTExecution`을 손대지 않는다** | **D27-1**: 신뢰 정책이 깨져 있지만(F14) 우리는 그 Role을 쓰지 않는다. 고치는 것도 남의 자산 변경이다 |
+| **남의 자산을 건드리지 않는다** | 우리 자산은 **`Workload=demo` 태그**로 식별한다. 이름만 보고 판단하지 않는다 |
+| **`AWSAFTExecution`을 손대지 않는다** | 신뢰 정책이 깨져 있지만 우리는 그 Role을 쓰지 않는다 — 무관하다. 고치는 것도 남의 자산 변경이다 |
 | **삭제 대상 사람 검토** | apply 승인 전 plan의 **destroy/replace 목록을 읽는다.** 공용 계정이므로 **예외 없음** |
-| **`prevent_destroy` 유지** | VPC 모듈 D12. 실수 삭제의 마지막 방어선 |
+| **`prevent_destroy` 유지** | VPC 모듈이 건다. 실수 삭제의 마지막 방어선 |
 | **`aws` CLI는 항상 `--profile team`** | default 자격증명이 없다. 프로파일을 빼면 실패한다(조용히 다른 계정을 치지 않는다) |
 
-- ⚠️ **`AdministratorAccess`가 자동 트리거에 연결된다.** PoC에서는 사람이 TFC에서 돌렸지만
-  이제 `pull_request`가 `plan`을 자동 실행한다 — 이것이 PoC 대비 **실질적으로 달라진 위험**이다.
-- ⚠️ **"사람이 검토"의 이행 지점은 `workflow_dispatch` 를 누르는 행위다**(D30-1, 2026-08-03 개정).
-  GitHub Free에서는 required reviewers를 걸 수 없어(`docs/deployment-facts.md` §5.3) 승인 게이트가
-  존재하지 않는다. 그래서 **merge 만으로는 apply 되지 않게** 바꿨다 — push 는 plan 까지만 돌고,
-  그 요약(run Summary 탭의 destroy/replace 목록)을 읽은 사람이 **Run workflow 를 눌러야** apply 된다.
-  ⛔ 구 형태("PR plan 댓글을 읽고 merge = 검토")는 **폐기됐다** — PR plan 트리거 자체가 없다.
+- ⚠️ **`AdministratorAccess`가 자동 트리거에 연결된다.** `push`(main)가 `plan`을 자동 실행한다 —
+  실행 Role이 `AdministratorAccess`인 채로 자동 트리거가 걸리는 것이 이 구조의 핵심 위험이다.
+- ⚠️ **"사람이 검토"의 이행 지점은 `workflow_dispatch`를 누르는 행위다.** GitHub Free에서는
+  required reviewers를 걸 수 없어(`docs/deployment-facts.md` 참조) 승인 게이트가 존재하지 않는다.
+  그래서 **merge만으로는 apply되지 않게** 만들었다 — push는 plan까지만 돌고, 그 요약(run Summary
+  탭의 destroy/replace 목록)을 읽은 사람이 **Run workflow를 눌러야** apply된다.
 - ⚠️ **다른 사람 리소스는 우리 plan에 나타나지 않는다**(우리 state에 없으므로).
   위험은 plan에 잡히는 범위가 아니라 **실행 Role이 손댈 수 있는 범위 전체**다.
-- 근거: 모듈 repo `design/50` F13·D27-2. PoC repo `05` §7.1이 원문이다.
 
 ---
 
-## 5. 부트스트랩은 IaC 밖이다 (D21) — 완화책이 규약이다
+## 5. 부트스트랩은 IaC 밖이다 — 완화책이 규약이다
 
-`bootstrap/`은 aws CLI 스크립트다. 닭-달걀이 성립하지 않는 대신 **drift 감지·이력·IaC 자산성을
-잃는다.** 그래서 아래 4개는 선택이 아니라 요건이다.
+`bootstrap/`은 aws CLI 스크립트다. S3 backend·OIDC·IAM Role을 Terraform으로 만들려면 그 Terraform이
+먼저 backend에 접근할 자격증명을 가져야 하는데, 그 자격증명이 바로 이 스크립트가 만드는 대상이다
+— 닭과 달걀 문제가 성립하지 않는다. 그 대가로 **drift 감지·이력·IaC 자산성을 잃는다.** 그래서
+아래 4개는 선택이 아니라 요건이다.
 
 | 요건 | 내용 |
 |------|------|
@@ -181,17 +176,17 @@ module "vpc" {
 | drift 감지 대체 | `verify.sh`(**read-only**)가 불일치를 exit 1로 낸다. ⚠️ **음성 테스트로 실제로 잡는지 증명**해야 한다 |
 | IaC 승격 경로 | `bootstrap/README.md`에 `import` 블록 초안 |
 
-**생성 대상 (D27-1 반영)**
+**생성 대상**
 
 | 리소스 | 이름 | 비고 |
 |--------|------|------|
-| S3 버킷 | `s3-ref-dev-an2-tfstate-<guid12>` | 버저닝·SSE·퍼블릭 차단 + **lifecycle**(D29) |
-| OIDC provider | `token.actions.githubusercontent.com` | `aud`=`sts.amazonaws.com`. `Name` 태그 `iamoidc-ref-dev-an2-gha` |
-| **입구** Role | `iamr-ref-dev-an2-gha-entry-01` | 신뢰=OIDC `sub` 3패턴. 권한=**실행 Role assume 하나뿐** |
-| **실행** Role | `iamr-ref-dev-an2-gha-exec-01` | **신설**(D27-1). 신뢰=입구 Role만. 권한=`AdministratorAccess` |
+| S3 버킷 | `s3-demo-dev-an2-tfstate-<hex12>` | 버저닝·SSE·퍼블릭 차단 + **lifecycle** |
+| OIDC provider | `token.actions.githubusercontent.com` | `aud`=`sts.amazonaws.com`. `Name` 태그 `iamoidc-demo-dev-an2-gha` |
+| **입구** Role | `iamr-demo-dev-an2-gha-entry-01` | 신뢰=OIDC `sub` 3패턴. 권한=**실행 Role assume 하나뿐** |
+| **실행** Role | `iamr-demo-dev-an2-gha-exec-01` | 신뢰=입구 Role만. 권한=`AdministratorAccess` |
 
-⛔ **`AWSAFTExecution`은 생성 대상도 변경 대상도 아니다** — §4-1 참조. 기존 D27(신뢰 정책 전체 교체)은
-**철회**됐다. `bootstrap.sh`에 `update-assume-role-policy`가 등장하면 안 된다.
+⛔ **`AWSAFTExecution`은 생성 대상도 변경 대상도 아니다** — §4-1 참조. `bootstrap.sh`에
+`update-assume-role-policy`가 등장하면 안 된다.
 
 ---
 
@@ -220,61 +215,53 @@ tofu fmt -recursive -check → tflint --recursive → trivy config . → tofu va
 
 ## 7. 과잉 주장 금지
 
-**판정표의 SSOT는 `docs/deployment-facts.md` §6이다.** 여기에 복제하지 않는다 — 두 곳에 적으면 갈라진다.
+**판정표의 SSOT는 `docs/deployment-facts.md`다.** 여기에 복제하지 않는다 — 두 곳에 적으면 갈라진다.
 
-- 배포 루트가 **enterprise 형상**(9그룹·secondary CIDR 2개)이라, 설계가 상정한 minimal 대비
-  첫 apply의 판정 범위가 **넓어졌다**. 그렇다고 전부가 판정되는 것은 아니다:
-  **Flow Logs 실제 배달**과 **`prevent_destroy` 실동작**은 여전히 별도 시나리오다.
-- ⚠️ 모듈 repo `design/50` §4의 *"첫 apply는 6번과 minimal 경로만 판정한다"* 는
-  **이 배포 루트에는 맞지 않는다.** Phase 5에서 그 문장을 고친다.
+- 배포 루트가 **enterprise 형상**(9그룹·secondary CIDR 2개)이라, minimal 형상 대비 첫 apply의
+  판정 범위가 **넓어졌다**. 그렇다고 전부가 판정되는 것은 아니다: **Flow Logs 실제 배달**과
+  **`prevent_destroy` 실동작**은 여전히 별도 시나리오다.
 
-이 구분을 흐리면 "apply로 검증했다"는 과잉 주장이 되고, 그것이 모듈 repo
-`docs/reference/poc-findings.md`가 경계하는 바로 그 실수다. **실증한 것만 실증했다고 쓴다.**
+**실증한 것만 실증했다고 쓴다.** "apply로 검증했다"는 표현은 실제로 그 항목이 apply 판정 대상이었을
+때만 쓴다.
 
 ---
 
-## 8. 작업 원칙 (2026-08-04 채택)
+## 8. 작업 원칙
 
 대부분 이미 실천하던 것을 규칙으로 승격한 것이다. **이 프로젝트에서 뜻이 달라지는 것은 번역해 뒀다** —
-일반 애플리케이션 규칙을 IaC에 그대로 적용하면 틀리는 지점이 있다.
-
-> ℹ️ **"관심사 분리"·"검증된 라이브러리를 쓴다"는 여기 적지 않는다.** 모듈 repo가 이미 소유한다
-> (facade 원칙·계층형 하이브리드·semver 거버넌스). 두 곳에 적으면 갈라진다 — §7과 같은 이유다.
+일반 애플리케이션 규칙을 IaC에 그대로 적용하면 틀리는 지점이 있다. *"관심사 분리"·"검증된
+라이브러리를 쓴다"*는 여기 적지 않는다 — 모듈 repo가 이미 소유한다(facade 원칙·계층형 하이브리드·
+semver 거버넌스). 두 곳에 적으면 갈라진다 — §7과 같은 이유다.
 
 ### 8-1. 발명하기 전에 찾는다
 
 - 해결책을 설계하기 전에 **upstream 모듈·AWS 공식이 그 문제를 이미 어떻게 푸는지** 본다.
   §6의 "스키마 추정 금지"는 이 원칙의 한 사례다.
-- ⚠️ **"그 기능은 없다"고 단정하지 않는다 — 소스를 열어 확인한다.**
-  실측(2026-08-04): graviton이 막혔을 때 원인은 "upstream이 arm을 지원하지 않아서"가 아니라
-  **facade가 `ami_type`을 안 넘기고 있어서**였다. upstream엔 처음부터 있었다(v21.24.1).
-  소스를 안 열고 단정했다면 launch template 우회를 짰을 것이고, **그 우회가 곧 drift다.**
-  → 확인 경로: `.terraform/modules/` 실물 · `mcp__opentofu__*` · AWS 공식 문서.
+- ⚠️ **"그 기능은 없다"고 단정하지 않는다 — 소스를 열어 확인한다.** facade가 upstream 인자를
+  통과시키지 않는 것을, upstream이 그 기능을 지원하지 않는 것으로 오인하면 불필요한 우회를 짜게
+  되고 **그 우회가 곧 drift다.** → 확인 경로: `.terraform/modules/` 실물 ·
+  `mcp__opentofu__*` · AWS 공식 문서.
 
 ### 8-2. 죽은 경로를 남기지 않는다
 
 - 쓰이지 않게 된 코드·스텝·폴백은 **삭제한다.** 호환 레이어를 덧대 두 경로를 유지하지 않는다.
-  실측: D30-1이 `pull_request` 트리거를 지울 때 **PR 댓글 step도 함께 지웠다**(죽은 채 남기지 않았다).
-  D27 철회 때도 `update-assume-role-policy`를 남기지 않았다.
 - 🔴 **번역 주의 — "하위 호환을 유지하지 마라"를 계약에 적용하지 않는다.**
   모듈은 **고객사에 배송된다.** 계약 파괴는 숨기는 게 아니라 **semver로 드러내는 것**이 규약이다
   (모듈 repo). 즉 *호환 레이어는 덧대지 않되, 깨는 변경은 메이저로 표시한다.*
 - 🔴 **배포된 자산에는 적용되지 않는다.** 태그 이동 같은 "과거를 덮어쓰는" 정리는
-  **소비자가 0일 때만** 허용된다(2026-08-04 `eks-cluster-v1.0.0`: apply된 인프라가 없어 비용 0).
-  한 번이라도 apply된 뒤에는 **마이너를 컷한다.**
+  **소비자가 0일 때만** 허용된다. 한 번이라도 apply된 뒤에는 **마이너를 컷한다.**
 
 ### 8-3. 지금 요구를 채우는 가장 단순한 형태로 만든다
 
 - 추측에 근거한 추상화·설정값·간접 계층을 만들지 않는다. 필요해지면 그때 연다.
-  실측: 모듈 `addons.tf`가 vpc-cni SG를 변수로 열지 않고 *"별도 SG 요구가 생기면 그때 변수를 연다"* 로 남겼다.
 - ⚠️ **안전장치는 "추측 대비"가 아니다.** `prevent_destroy`·`deletion_protection`·교차변수 validation은
   공용 개발 계정(§4-1)이라는 **현재 요구사항**이다. 단순화의 이름으로 걷어내지 않는다.
 
 ### 8-4. 레이어로 키운다
 
-- 엔드투엔드로 **동작하는 최소**에서 시작해 그 위에 하나씩 얹는다. 이 repo의 Phase 1~6이 그 이행이다.
+- 엔드투엔드로 **동작하는 최소**에서 시작해 그 위에 하나씩 얹는다 — networking을 먼저 apply해
+  세운 뒤에야 eks를 독립 루트로 얹는 순서가 그 이행이다.
 - ⚠️ **IaC에서 "동작한다"의 기준은 `apply`가 통과한 형상이다** — `plan` 통과는 아직 아니다.
-  실측: networking을 먼저 apply해 66개를 세운 뒤에야 eks를 독립 루트로 얹었다.
 - ⛔ 검증되지 않은 층 위에 다음 층을 얹지 않는다. §7(과잉 주장 금지)의 다른 얼굴이다.
 
 ### 8-5. 임시방편으로 넘기지 않는다
