@@ -20,7 +20,7 @@ variable "workload" {
        반드시 같아야 클러스터가 우리 VPC 를 찾는다(아래 main.tf).
   EOT
   type        = string
-  default     = "ref"
+  default     = "demo"
 }
 
 variable "env" {

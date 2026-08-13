@@ -53,7 +53,7 @@ readonly REGION="ap-northeast-2"
 readonly EXPECTED_ACCOUNT
 
 # ── 네이밍 토큰 (모듈 repo architecture/02) ─────────────────────────────────
-readonly WORKLOAD="ref"       # D24
+readonly WORKLOAD="demo"      # D24
 readonly ENV="dev"
 readonly REGION_CODE="an2"
 

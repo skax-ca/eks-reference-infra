@@ -17,10 +17,10 @@ variable "workload" {
   description = <<-EOT
     워크로드 코드(D24). Name 태그의 2번째 토큰이자 거버넌스 태그 Workload 의 값이다.
     ⚠️ 이 값이 공용 계정에서 **우리 자산을 식별하는 유일한 기준**이다(F13 · CLAUDE.md §4-1).
-    이름으로 판단하지 않는다 — Workload=ref 태그로 판단한다.
+    이름으로 판단하지 않는다 — Workload=demo 태그로 판단한다.
   EOT
   type        = string
-  default     = "ref"
+  default     = "demo"
 }
 
 variable "env" {
