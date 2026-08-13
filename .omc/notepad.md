@@ -1,5 +1,42 @@
 # Notepad — iac-reference-infra
 
+## ✅ **문서 정확성 감사 — 게이트 서술 오류 + 버전 drift 6곳 정정** (2026-08-14)
+
+> ### ▶ 무엇을 했나 (커밋 `e168759`·`b4ddc62`, main 직접)
+>
+> `iac-module-library`에서 `verify.yml`을 3단계(①정확성 실물 대조 ②배치 ③밀도)로 검토하던
+> 방식을 이 repo에도 적용 — fork 2개로 문서 전체 조사 후 사용자 확인 거쳐 반영.
+>
+> 1. **게이트 서술 오류** — `CLAUDE.md`·`README.md`가 로컬 게이트를
+>    "fmt→tflint→trivy→validate" 한 줄 체인으로 서술했으나 실제론 pre-commit(backend.hcl
+>    유출 검사+fmt+tflint+trivy, 커밋 시점)과 pre-push(validate, `live/` 변경 시)가 다른 훅.
+>    1단계(backend.hcl 검사)도 체인에서 누락돼 있었다. `.githooks/AGENTS.md`의 pre-push
+>    서술("backend.hcl 미존재 확인")도 틀렸다 — 실제로는 `-backend=false`로 우회할 뿐 능동
+>    검사는 pre-commit 소관.
+> 2. **버전 drift 6곳** — `docs/deployment-facts.md`·`live/dev/eks/AGENTS.md`(3곳)·
+>    `live/dev/eks/README.md`가 `eks-cluster-v0.4.0`·`workbench-v0.4.0`으로 stale(실제
+>    `main.tf`는 v0.5.0·v0.6.0). **`deployment-facts.md`는 2026-08-10에 이미 같은 문제를
+>    겪고 "핀 표기가 흩어져 있으면 재발한다"고 남겼는데 숫자만 갱신하고 넘어가 정확히
+>    재발했다** — 이번엔 숫자 갱신 대신 `live/dev/eks/AGENTS.md:23-27`이 이미 쓰던 패턴(SSOT는
+>    `main.tf`, 여기 다시 안 적는다 + `<main.tf 참조>` 플레이스홀더)을 나머지 5곳에도 적용해
+>    재발을 구조적으로 막았다.
+>    - `live/dev/AGENTS.md`의 "vpc-v1.2.0 승격(2026-08-03)" Phase 기록은 과거 사실이라 안
+>      지우고, 2026-08-05 재매핑으로 그 태그가 삭제됐다는 주석만 추가.
+>
+> ### 📌 범위 밖 관찰 — D-ID 재발 가능성
+>
+> `live/dev/eks/README.md:4`(수정 전)가 `D20`을 인용했는데 이 repo 어디에도 `D20`의 정의가
+> 없었다(grep 0건) — `iac-module-library`가 2026-08-12에 겪고 폐지한 것과 같은 문제 패턴.
+> 그 줄 자체는 이번에 버전 stale 문제와 함께 정리했지만, **repo 전체 D-ID 감사는 이번
+> 스코프 밖**이다. 다음에 문서 작업할 때 염두에 둘 것.
+>
+> ### ⏭️ **다음 태스크**
+>
+> 1. 위 D-ID 전수조사 — 급하지 않음, 문서 작업 있을 때 자연스럽게.
+> 2. 아래 2026-08-13(3) 항목들 — 여전히 유효.
+
+---
+
 ## ✅ **bootstrap 문서 실측 갱신 + 구 ref 부트스트랩 자원 정리 완료** (2026-08-13(3)) — **먼저 읽을 것**
 
 > ### ▶ 무엇을 했나
