@@ -170,5 +170,5 @@ module "vpc" {
   # ⚠️ 이걸 켜면 teardown 이 **2단계**가 된다: 이 값을 false 로 apply → destroy 워크플로.
   #    결함이 아니라 보호의 정의다. 절차는 모듈 repo `docs/04-teardown.md` §2·§4.
   # ⛔ false 로 바꾼 커밋을 main 에 남겨두지 않는다 — 파기가 끝나면 즉시 되돌린다.
-  deletion_protection = true
+  deletion_protection = false
 }
