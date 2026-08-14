@@ -241,7 +241,7 @@ module "workbench" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.5.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.6.0&depth=1"
 
   # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(모듈 repo 규약).
   naming = {
@@ -434,6 +434,14 @@ module "eks" {
   # ⚠️ node SG 의 karpenter.sh/discovery 태그는 이 모듈이 붙이고, **노드 서브넷 태그는
   #    networking 루트가 붙인다**(node-uniq extra_tags). 둘 다 local.cluster_name 이어야 한다.
   enable_karpenter = true
+
+  # system 관리형 노드그룹 전용 오토스케일러 IAM 전제조건(eks-cluster-v0.6.0 신설).
+  # helm 설치는 GitOps(iac-platform-gitops) 카탈로그 opt-in 소관 — 이 값은 그 전제조건만
+  # 만든다(Pod Identity 연결 + ASG node-template/* 태그, managed_node_groups.system의
+  # labels·taints를 그대로 미러링). Karpenter가 담당하는 app 워크로드와는 무관하다 —
+  # 켜지 않아도 Karpenter·taint/toleration 배선은 전혀 영향받지 않는다(모듈 코드 확인:
+  # 이 변수 하나로만 게이트된 리소스 2개뿐).
+  enable_cluster_autoscaler = true
 
   # ALBC 는 community addon 이 없어 GitOps helm 으로 설치되지만 IAM 전제는 IaC 소관이다.
   enable_alb_controller_iam = true
