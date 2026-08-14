@@ -24,12 +24,20 @@
   근거를 먼저 반증해야 한다.
 - 규약을 바꿔야 한다면 **모듈 repo의 `docs/`를 고치고** 여기로 내려온다. 역방향은 drift다.
 - 설계 변경 없이 구현을 시작하지 않는다: **설계(모듈 repo) → 검토 → 구현(여기) → 검증**.
+- **이 규칙은 코드 규약에만 그치지 않는다 — 문서 작성 규칙도 같은 SSOT를 따른다.**
+  이 repo가 쓰는 모든 문서(`docs/*.md`·`README.md`·`AGENTS.md`·`CLAUDE.md`, `.omc/` 제외)는
+  모듈 repo `docs/06-conventions.md`의 「8. 문서 작성 규칙」을 그대로 따른다 — 규칙 텍스트를
+  여기 다시 적지 않는다(두 곳에 적으면 갈라진다). 기계 판정 가능한 3개(절 번호 인용 금지·
+  비표준 이모지 금지·400줄 제한)는 `scripts/validate-doc-conventions.py`가 pre-commit에서
+  강제한다(「6. 검증」 참조). 나머지 4개(첫 줄에 "읽는 사람" 명시·변경 이력 금지·표/명령 우선·
+  정정 서술 금지)는 문맥 판단이 필요해 사람이 검토한다.
 
 ### 무엇이 어느 repo에 있나
 
 | 대상 | 위치 |
 |------|------|
 | 소비 **규약**(소싱 인증·backend 규약·OIDC 체인·plan artifact 규칙) | 모듈 repo `docs/` — SSOT |
+| **문서 작성 규칙** | 모듈 repo `docs/06-conventions.md`의 「8. 문서 작성 규칙」 — SSOT |
 | 이 인스턴스의 배포 **사실** | 이 repo `docs/deployment-facts.md` |
 
 ---
@@ -185,7 +193,7 @@ module "vpc" {
 | **입구** Role | `iamr-demo-dev-an2-gha-entry-01` | 신뢰=OIDC `sub` 3패턴. 권한=**실행 Role assume 하나뿐** |
 | **실행** Role | `iamr-demo-dev-an2-gha-exec-01` | 신뢰=입구 Role만. 권한=`AdministratorAccess` |
 
-⛔ **`AWSAFTExecution`은 생성 대상도 변경 대상도 아니다** — §4-1 참조. `bootstrap.sh`에
+⛔ **`AWSAFTExecution`은 생성 대상도 변경 대상도 아니다** — 「4-1. 대상 계정은 공용 개발 계정이다」 참조. `bootstrap.sh`에
 `update-assume-role-policy`가 등장하면 안 된다.
 
 ---
@@ -200,8 +208,15 @@ module "vpc" {
 - **스타일**: `.tf` 작성 시 `terraform-style-guide` 스킬 로드.
 
 ### 코드 변경 후 (git hook이 강제)
+
+pre-commit은 **staged 파일 종류에 따라 갈리는 두 갈래**다 — 순서대로 다 도는 단일 체인이 아니다.
+
+| staged | 실행 |
+|---|---|
+| `docs/*.md`·`README.md`·`AGENTS.md`·`CLAUDE.md` | 문서 작성 규칙 검사(`scripts/validate-doc-conventions.py`) — 모듈 repo `docs/06-conventions.md`의 「8. 문서 작성 규칙」에서 이식(이 문서 「0. 설계는 이 repo에 없다」 참조). 절 번호 인용·비표준 이모지·400줄 초과를 기계로 잡는다 |
+| `.tf`·`.tfvars`·`.terraform.lock.hcl`·`.tflint.hcl`·`.trivyignore` | backend.hcl 유출 검사 → `tofu fmt -recursive -check` → `tflint --recursive` → `trivy config .` |
+
 ```
-pre-commit: backend.hcl 유출 검사 → tofu fmt -recursive -check → tflint --recursive → trivy config .
 pre-push (live/ 변경 시): tofu validate
 ```
 - clone마다 1회: `git config core.hooksPath .githooks`
@@ -230,12 +245,12 @@ pre-push (live/ 변경 시): tofu validate
 대부분 이미 실천하던 것을 규칙으로 승격한 것이다. **이 프로젝트에서 뜻이 달라지는 것은 번역해 뒀다** —
 일반 애플리케이션 규칙을 IaC에 그대로 적용하면 틀리는 지점이 있다. *"관심사 분리"·"검증된
 라이브러리를 쓴다"*는 여기 적지 않는다 — 모듈 repo가 이미 소유한다(facade 원칙·계층형 하이브리드·
-semver 거버넌스). 두 곳에 적으면 갈라진다 — §7과 같은 이유다.
+semver 거버넌스). 두 곳에 적으면 갈라진다 — 「7. 과잉 주장 금지」와 같은 이유다.
 
 ### 8-1. 발명하기 전에 찾는다
 
 - 해결책을 설계하기 전에 **upstream 모듈·AWS 공식이 그 문제를 이미 어떻게 푸는지** 본다.
-  §6의 "스키마 추정 금지"는 이 원칙의 한 사례다.
+  「6. 검증」의 "스키마 추정 금지"는 이 원칙의 한 사례다.
 - ⚠️ **"그 기능은 없다"고 단정하지 않는다 — 소스를 열어 확인한다.** facade가 upstream 인자를
   통과시키지 않는 것을, upstream이 그 기능을 지원하지 않는 것으로 오인하면 불필요한 우회를 짜게
   되고 **그 우회가 곧 drift다.** → 확인 경로: `.terraform/modules/` 실물 ·
@@ -254,16 +269,16 @@ semver 거버넌스). 두 곳에 적으면 갈라진다 — §7과 같은 이유
 
 - 추측에 근거한 추상화·설정값·간접 계층을 만들지 않는다. 필요해지면 그때 연다.
 - ⚠️ **안전장치는 "추측 대비"가 아니다.** `prevent_destroy`·`deletion_protection`·교차변수 validation은
-  공용 개발 계정(§4-1)이라는 **현재 요구사항**이다. 단순화의 이름으로 걷어내지 않는다.
+  공용 개발 계정(「4-1. 대상 계정은 공용 개발 계정이다」)이라는 **현재 요구사항**이다. 단순화의 이름으로 걷어내지 않는다.
 
 ### 8-4. 레이어로 키운다
 
 - 엔드투엔드로 **동작하는 최소**에서 시작해 그 위에 하나씩 얹는다 — networking을 먼저 apply해
   세운 뒤에야 eks를 독립 루트로 얹는 순서가 그 이행이다.
 - ⚠️ **IaC에서 "동작한다"의 기준은 `apply`가 통과한 형상이다** — `plan` 통과는 아직 아니다.
-- ⛔ 검증되지 않은 층 위에 다음 층을 얹지 않는다. §7(과잉 주장 금지)의 다른 얼굴이다.
+- ⛔ 검증되지 않은 층 위에 다음 층을 얹지 않는다. 「7. 과잉 주장 금지」의 다른 얼굴이다.
 
 ### 8-5. 임시방편으로 넘기지 않는다
 
 지금만 넘기고 나중에 교체할 우회를 받아들이지 않는다. 규약을 바꿔야 하면
-**모듈 repo의 설계를 먼저 고치고 여기로 내려온다** — §0의 규칙이 이 원칙의 이행 장치다.
+**모듈 repo의 설계를 먼저 고치고 여기로 내려온다** — 「0. 설계는 이 repo에 없다」의 규칙이 이 원칙의 이행 장치다.

@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
-# pre-commit — OpenTofu 로컬 게이트 (fmt → tflint → trivy)
+# pre-commit — OpenTofu 로컬 게이트 (fmt → tflint → trivy) + 문서 게이트
 # 활성화: git config core.hooksPath .githooks  (clone마다 1회)
 # 의도적 우회는 git commit --no-verify (사유를 커밋 메시지에 남길 것)
 set -euo pipefail
 
+changed=$(git diff --cached --name-only --diff-filter=ACMR)
+
+# 문서 작성 규칙(모듈 repo docs/06-conventions.md §8에서 이식, CLAUDE.md §0) — §N 인용·
+# 비표준 이모지·400줄 초과를 기계로 잡는다. 적용 범위는 스크립트가 스스로 선언한 것과 같다:
+# docs/*.md · 저장소 전역 README.md·AGENTS.md · 루트 CLAUDE.md, .omc/는 제외. staged된 파일만 검사한다.
+docs_staged=$(printf '%s\n' "$changed" | grep -E '^docs/.*\.md$|(^|/)README\.md$|(^|/)AGENTS\.md$|^CLAUDE\.md$' | grep -v '^\.omc/' || true)
+if [ -n "$docs_staged" ]; then
+  echo "[pre-commit] 문서 변경 감지 — 작성 규칙(§8) 검사"
+  # shellcheck disable=SC2086
+  python3 scripts/validate-doc-conventions.py $docs_staged
+fi
+
 # Terraform 관련 파일이 staged된 경우에만 실행 (문서 커밋엔 비용 0)
-staged=$(git diff --cached --name-only --diff-filter=ACMR |
+staged=$(printf '%s\n' "$changed" |
   grep -E '\.(tf|tfvars)$|\.terraform\.lock\.hcl$|^\.tflint\.hcl$|^\.trivyignore$' || true)
 [ -z "$staged" ] && exit 0
 
