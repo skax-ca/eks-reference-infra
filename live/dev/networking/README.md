@@ -106,7 +106,7 @@ TGW·attachment · 온프레미스 대역 라우트 · prefix list · KMS 키. �
 
 ## 4. 이 루트가 판정하는 것 / 판정하지 못하는 것
 
-⚠️ **판정표는 `docs/deployment-facts.md`의 「5. 배포 루트 live/dev/networking — 형상과 CI 제약」이 SSOT 다.** 여기 요약을 복제하지 않는다 —
+⚠️ **판정표는 `docs/deployment-facts.md`의 「6. apply 판정표」가 SSOT 다.** 여기 요약을 복제하지 않는다 —
 두 곳에 적으면 곧 갈라진다. `apply` 결과를 서술할 때는 그 표에 기록된 것만 쓴다(CLAUDE.md 「7. 과잉 주장 금지」).
 
 ---

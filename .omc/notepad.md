@@ -1,5 +1,63 @@
 # Notepad — iac-reference-infra
 
+## ✅ **모듈 repo 문서 작성 규칙 이식 + 전 위반 정정 + ref→demo 사실 오류 발견·수정** (2026-08-14(2))
+
+> 사용자 요청: "iac-module-library의 문서 컨벤션을 소비 repo에도 반드시 적용" +
+> "소비 repo에 코드 말고도 문서 컨벤션을 명문화".
+
+> ### ▶ 게이트 이식
+> `iac-module-library`의 `scripts/validate-doc-conventions.py`(§8 규칙 중 기계 판정 가능한 3개 —
+> 절 번호 인용 금지·비표준 이모지 금지·400줄 제한)를 그대로 복사해 이 repo `scripts/`에 두고,
+> `.githooks/pre-commit`에 문서 파일 staged 시 실행되는 갈래를 추가했다(기존 tf 게이트와 독립,
+> 두 갈래 모두 도는 단일 체인 아님 — 이전 세션이 이미 겪은 오해라 명시적으로 표를 만들었다).
+> `CLAUDE.md` 「0. 설계는 이 repo에 없다」에 "문서 작성 규칙도 같은 SSOT를 따른다"를 명문화 +
+> "무엇이 어느 repo에 있나" 표에 행 추가.
+
+> ### ▶ 전수 검사 결과 — 70건 위반 발견, 전부 정정
+> 게이트를 걸자마자 기존 위반 70건이 드러났다. CLAUDE.md(6)·bootstrap/AGENTS.md(1)·
+> bootstrap/README.md(6)·live/dev/eks/README.md(9)·live/dev/networking/README.md(4)는
+> 절 번호(`§N`) → 「절 제목」 인용으로 교체, 비표준 이모지(🔄·💰) 2건은 제거하는 기계적
+> 작업이었다. 이 과정에서 **stale 참조도 함께 발견**했다 — `live/dev/eks/README.md`가
+> "모듈 repo `03 §3.1`"·"`40 §1`"·"`40 §3`"을 인용했는데 그 절 번호 체계는 모듈 repo의
+> zero-base 재작성(Wave 7, 2026-08-06)으로 이미 사라졌다. 실제 위치
+> (`docs/03-new-project.md`의 「2. 배포 저장소 만들기」, `docs/05-modules.md`의 workbench·
+> 클러스터 접근 3층 절)를 모듈 repo에서 확인 후 정정.
+
+> ### ▶ 🔴 더 큰 발견 — `docs/deployment-facts.md`는 삭제된 `ref` 환경을 서술하고 있었다
+> 이 파일(634줄, 위반 44건)만 이모지·길이 문제를 넘어 **내용 자체가 stale**이었다.
+> 전체가 `workload=ref` 환경(Role 이름·버킷 형식·VPC 이름)을 현재 사실처럼 서술했는데,
+> 그 환경은 2026-08-13 재구축(workload ref→demo)으로 **완전히 삭제됐다**(이 notepad의
+> 2026-08-13(3) 항목 참조). 실측으로 확인: `aws iam get-role --role-name
+> iamr-ref-dev-an2-gha-exec-01` → `NoSuchEntity`, `iamr-demo-dev-an2-gha-exec-01` → 존재.
+> 사용자 확인 후 **ref→demo 사실 정정까지 포함해 재작성**하기로 결정.
+
+> ### ▶ 재구성 — 연대기는 notepad로, 현재 사실만 docs에
+> 원본은 날짜·"Phase N"·"실측 완료"·run ID·"정정" 서술이 섞인 연대기 조사 로그에 가까웠다 —
+> 모듈 repo가 규칙 2("변경 이력은 git·CHANGELOG 소유")·7("문서는 현재 사실만")로 금지하는
+> 형태와 정확히 같다. 634줄 → **256줄**로 재작성(한도 400줄 이내):
+> - **남긴 것**: git에 적어도 되는 값 표(org/repo ID 등, workload만 demo로 정정) · 값 위치·
+>   분류 표(비밀/비노출/이식성) · OIDC `sub` 신뢰 정책 JSON(org/repo ID 불변이라 그대로 유효) ·
+>   부트스트랩 자원 표(demo 이름) · networking 형상(CIDR·태거·승인게이트·backend
+>   `assume_role`·로그 평문 노출) · **apply 판정표**(6항목 ✅, networking README가 SSOT로
+>   의존하길래 복원 — 처음엔 실수로 통째로 뺐다가 참조 무결성 재검사에서 발견) ·
+>   CI 권한 구조(plan/apply 미분리 이유) · shallow clone 사용 · Future Work.
+> - **뺀 것**(git 이력에 여전히 보존됨 — 이전 버전 필요하면 `git log -p`): D20 실험 설계
+>   (음성 대조군)·EXPECTED_ACCOUNT 논의 서사·OIDC Phase 2 실험 서술·부트스트랩 Phase 3
+>   IAM eventual consistency 발견 서사·apply 판정의 run ID·날짜별 실행 기록·plan/apply 권한
+>   분리 논의의 장문 서사·shallow clone 채택 논의·버전 drift 재발 이력(2026-08-10·08-14 두 번).
+> - **재구성 중 자기참조 절 번호도 밀렸다** — 판정표를 「6」으로 복원하며 이후 절이 전부
+>   한 칸씩 밀려 "아래 「7」"이 "아래 「9」"로 바뀌는 걸 놓칠 뻔했다. 파일 내부
+>   `grep "「[0-9]"` 로 전수 재확인 후 고쳤다.
+
+> ### ▶ 검증
+> `python3 scripts/validate-doc-conventions.py`(인자 없음, 전체 스캔) — **대상 12개 파일 전부
+> 통과.** `git grep -c` 로 남은 `ref` 워크로드 하드코딩 없음도 확인.
+
+> ### ⏭️ 다음 태스크
+> 없음 — 이번 요청 스코프 완결. 향후 새 문서를 추가할 때 게이트가 자동으로 규칙을 강제한다.
+
+---
+
 ## ✅ **문서 정확성 감사 — 게이트 서술 오류 + 버전 drift 6곳 정정** (2026-08-14)
 
 > ### ▶ 무엇을 했나 (커밋 `e168759`·`b4ddc62`, main 직접)
