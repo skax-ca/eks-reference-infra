@@ -55,6 +55,21 @@ locals {
   #    subnet_id 가 달라져 **인스턴스가 교체**된다. 어느 AZ 냐가 아니라 **결정적이냐**가 요건이다.
   #    (모듈 예제는 vpc 모듈 출력의 AZ 순 리스트에서 [0] 을 뽑는다 — 여기는 data source 라 그 순서가 없다.)
   workbench_subnet_id = sort(data.aws_subnets.vm.ids)[0]
+
+  # system 노드그룹 taint(workload-class=system:NoSchedule) 대응 toleration/nodeSelector
+  # (모듈 repo docs/07-runbooks.md "Karpenter + Cluster Autoscaler 동시 운영" 절).
+  # coredns·metrics-server(Deployment)에만 쓴다.
+  # ⛔ vpc-cni·eks-pod-identity-agent는 여기 안 쓴다 — 두 DaemonSet은 차트 기본
+  #    tolerations가 이미 operator:Exists라 모든 taint를 통과한다(실측: aws/eks-charts ·
+  #    aws/eks-pod-identity-agent 저장소 values.yaml). 좁은 값을 직접 쓰면 기본값보다
+  #    좁아지는 후퇴이고, vpc-cni는 enable_custom_networking=true라 모듈이 configuration_values를
+  #    재주입해 어차피 반영되지도 않는다.
+  workload_class_toleration = jsonencode({
+    nodeSelector = { "workload-class" = "system" }
+    tolerations = [
+      { key = "workload-class", operator = "Equal", value = "system", effect = "NoSchedule" },
+    ]
+  })
 }
 
 # ── VPC 디스커버리 (독립 배포의 핵심) ──────────────────────────────────────────
@@ -342,6 +357,21 @@ module "eks" {
       #     --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/arm64/standard/recommended/release_version
       # ⚠️ kubernetes_version 을 올리면 이 값도 함께 갱신한다.
       ami_release_version = "1.35.6-20260728"
+
+      # Karpenter + Cluster Autoscaler 동시 운영을 위한 taint 전략(모듈 repo
+      # docs/07-runbooks.md "Karpenter + Cluster Autoscaler 동시 운영" 절)의 밀어내기 축이다.
+      # 끌어당기기 축(nodeSelector)은 이 노드그룹에 뜨는 addon·컨트롤러·OSS 쪽이 각자 건다.
+      # ⛔ NodePool 쪽에는 대응 taint를 두지 않는다(app 워크로드가 toleration을 몰라도 되게).
+      labels = {
+        "workload-class" = "system"
+      }
+      taints = [
+        {
+          key    = "workload-class"
+          value  = "system"
+          effect = "NO_SCHEDULE"
+        },
+      ]
     }
   }
 
@@ -368,12 +398,25 @@ module "eks" {
   #    (실측 차이: coredns 기본 v1.13.2-eksbuild.11 ≠ 최신 v1.14.3-eksbuild.3)
   cluster_addons = {
     # ── baseline 6종 (버전만 override) ──────────────────────────────────────
-    "vpc-cni"                = { addon_version = "v1.22.3-eksbuild.1" }
-    "coredns"                = { addon_version = "v1.13.2-eksbuild.11" }
+    "vpc-cni" = { addon_version = "v1.22.3-eksbuild.1" }
+    "coredns" = {
+      addon_version = "v1.13.2-eksbuild.11"
+      configuration = local.workload_class_toleration
+    }
     "kube-proxy"             = { addon_version = "v1.35.3-eksbuild.17" }
     "eks-pod-identity-agent" = { addon_version = "v1.3.10-eksbuild.3" }
-    "aws-ebs-csi-driver"     = { addon_version = "v1.63.1-eksbuild.1" }
-    "metrics-server"         = { addon_version = "v0.9.0-eksbuild.5" }
+    "aws-ebs-csi-driver" = {
+      addon_version = "v1.63.1-eksbuild.1"
+      # tolerations 배열이 아니라 불리언을 쓴다 — 기본 toleration은 effect:NoExecute만
+      # 커버해 우리가 부여한 NoSchedule을 통과하지 못한다(모듈 repo 문서 실측).
+      configuration = jsonencode({
+        node = { tolerateAllTaints = true }
+      })
+    }
+    "metrics-server" = {
+      addon_version = "v0.9.0-eksbuild.5"
+      configuration = local.workload_class_toleration
+    }
 
     # ── community tier (opt-in 추가) ────────────────────────────────────────
     # 컨트롤러+CRD 는 IaC addon, Issuer/Certificate CR 은 GitOps 소관이다.
