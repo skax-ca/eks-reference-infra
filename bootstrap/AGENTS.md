@@ -76,4 +76,4 @@ EXPECTED_ACCOUNT=123456789012 bash bootstrap.sh
 | `backend.hcl` 미관여 | Backend 버킷이 bootstrap이 만드는 것이다. 달걀 역전 불가 |
 
 <!-- MANUAL: 2026-08-04 — D27-1 AWSAFTExecution 경고 명시 · 부정 테스트 실측 기록 -->
-<!-- MANUAL: 2026-08-13 — workload ref→demo 갱신(§2 기대상태표 실측) -->
+<!-- MANUAL: 2026-08-13 — workload ref→demo 갱신(「2. 기대 상태 (SSOT)」 표 실측) -->

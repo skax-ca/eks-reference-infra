@@ -5,7 +5,7 @@ EKS 클러스터 하나를 배포하는 루트다. 모듈은 `iac-module-library
 독립된 state**(`dev/eks.tfstate`)를 쓴다.
 
 > ⚠️ 이 디렉토리도 코드만 보고는 어느 버킷·어느 계정을 가리키는지 알 수 없다(D25). 그 대가로
-> 이 README 가 **주입 변수명을 명시할 의무**를 진다(§1). networking 의 README 와 같은 규약이다.
+> 이 README 가 **주입 변수명을 명시할 의무**를 진다(「1. 주입되는 값 — 코드에 없는 것들」). networking 의 README 와 같은 규약이다.
 
 ---
 
@@ -19,8 +19,9 @@ EKS 클러스터 하나를 배포하는 루트다. 모듈은 `iac-module-library
 | 노드 서브넷 | `data.aws_subnets` — `vpc-id` + `tag:SubnetGroup = node-uniq` (vpc-v0.3.0 D13) |
 | Pod 서브넷 | `data.aws_subnets` — `vpc-id` + `tag:SubnetGroup = pod-dup` |
 
-- **remote_state 를 쓰지 않는다.** 네이밍이 결정적이라 태그 조회가 예측 가능하다(모듈 repo 03 §3.1,
-  networking `outputs.tf` 주석). remote_state 는 두 루트를 state 수준에서 묶어 독립성을 깬다.
+- **remote_state 를 쓰지 않는다.** 네이밍이 결정적이라 태그 조회가 예측 가능하다(모듈 repo
+  `docs/03-new-project.md`의 「2. 배포 저장소 만들기」, networking `outputs.tf` 주석). remote_state 는
+  두 루트를 state 수준에서 묶어 독립성을 깬다.
 - **배포 순서**: networking 이 먼저다. VPC·서브넷·태그가 없으면 이 루트의 data source 가 빈 결과를
   내고 plan 이 **명확히 실패**한다(조용한 오작동이 아니다). 파기는 역순 — eks 를 먼저 파기한다.
 - 🔑 **공유하는 것은 state 가 아니라 클러스터 이름이라는 상수**다: `eks-ref-dev-an2-main-01`.
@@ -42,7 +43,7 @@ EKS 클러스터 하나를 배포하는 루트다. 모듈은 `iac-module-library
 repo 변수를 함께 걷어냈다 — public 이 꺼지면 EKS 가 그 값을 무시하므로 남겨 두면
 *"좁혀 두었다"* 는 착시만 만든다.
 
-- `backend.hcl`·backend 규약은 networking README §1 과 **동일**하다(CI 는 `assume_role` 포함, 로컬은 제외).
+- `backend.hcl`·backend 규약은 networking README의 「1. 주입되는 값 — 코드에 없는 것들」과 **동일**하다(CI 는 `assume_role` 포함, 로컬은 제외).
   차이는 **state key 하나**(`dev/eks.tfstate`)뿐이다.
 
 ---
@@ -60,7 +61,7 @@ tofu -chdir=live/dev/eks validate
 tofu -chdir=live/dev/eks plan   # → AccessDenied. plan 은 CI 에서만 돈다.
 ```
 
-결함이 아니라 신뢰 경계다(networking README §2 와 동일).
+결함이 아니라 신뢰 경계다(networking README의 「2. 로컬에서 할 수 있는 것 / 없는 것」과 동일).
 
 ---
 
@@ -81,7 +82,8 @@ tofu -chdir=live/dev/eks plan   # → AccessDenied. plan 은 CI 에서만 돈다
 | **workbench** | **ON** — `vm-uniq` private 서브넷, **`t4g.small`(arm64, 2GB — 모듈 기본값)**, SSM 전용(인바운드 0). 도구: `kubectl v1.35.7` · `helm v3.21.3` · `argocd v3.5.0` · `git`(변수 없이 항상). 워크벤치 모듈 태그는 `main.tf` 참조. 🔴 **핀을 올리면 인스턴스가 교체된다**(`user_data_replace_on_change`). ⚠️ `t4g.nano` 로 내리면 부팅 중 `dnf` 가 OOM 으로 죽어 `git` 이 빠진다(2026-08-10 실측) |
 
 이 루트가 만들지 **않는** 것: helm 릴리스 · NodePool/NodeClass · Issuer/Certificate CR ·
-external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계). 이 루트는 그 전제(클러스터·IAM)만 만든다.
+external-dns 애노테이션. 전부 GitOps(pull) 소관이다(모듈 repo `docs/01-architecture.md`의
+「3. 계층 1과 2의 경계 — 컨트롤러와 설정을 가른다」). 이 루트는 그 전제(클러스터·IAM)만 만든다.
 
 ---
 
@@ -117,7 +119,7 @@ external-dns 애노테이션. 전부 GitOps(pull) 소관이다(설계 §1 경계
 > 다시 되는 것이 그 배제의 유일한 방법이다.
 
 ⛔ **이제 workbench 가 유일한 도달 지점이다.** 접근이 필요하면 public 을 다시 여는 것이 아니라
-workbench 를 고친다 — 여는 것은 설계 목적(모듈 repo `40 §1`)을 되돌리는 결정이다.
+workbench 를 고친다 — 여는 것은 설계 목적(모듈 repo `docs/05-modules.md`의 「workbench」 절)을 되돌리는 결정이다.
 
 ③ 이 실패할 때 증상으로 층을 특정한다 — 세 층 중 무엇이 빠졌는지가 에러 형태로 갈린다:
 
@@ -127,9 +129,10 @@ workbench 를 고친다 — 여는 것은 설계 목적(모듈 repo `40 §1`)을
 | `401 Unauthorized` | 2층 Access Entry | eks 모듈 `access_entries` |
 | `dial tcp …: i/o timeout` | 3층 cluster SG ingress 443 | eks 모듈 `cluster_security_group_additional_rules` |
 
-⚠️ timeout 은 **인증 계층에 닿지도 못했다**는 뜻이다. PoC 는 앞의 두 층만 갖추고 여기서 막혔다(모듈 repo 40 §3).
+⚠️ timeout 은 **인증 계층에 닿지도 못했다**는 뜻이다. PoC 는 앞의 두 층만 갖추고 여기서 막혔다
+(모듈 repo `docs/05-modules.md`의 「클러스터 접근 3층 — 누가 무엇을 소유하는가」).
 
-### 🔄 버전을 올릴 때 함께 고치는 것 (묶음이 깨지면 apply 가 죽는다)
+### 버전을 올릴 때 함께 고치는 것 (묶음이 깨지면 apply 가 죽는다)
 
 `kubernetes_version` 을 올리면 **아래가 한 커밋 안에서 같이** 움직여야 한다:
 
@@ -142,7 +145,7 @@ workbench 를 고친다 — 여는 것은 설계 목적(모듈 repo `40 §1`)을
 `instance_types` 의 아키텍처를 바꿀 때는 **`ami_type` 과 `ami_release_version` 을 함께** 고친다.
 이 불일치는 plan 에서 잡히지 않는다(AWS 도 노드그룹 생성 시점에야 거부한다).
 
-### 💰 비용 (enterprise 프로파일)
+### 비용 (enterprise 프로파일)
 
 EKS 컨트롤플레인 ~$73/월 + system 노드 2×t4g.medium ~$48/월 + workbench t4g.nano ~$3/월 + 컨트롤플레인 로그.
 networking 의 NAT ~$43/월 위에 얹힌다.

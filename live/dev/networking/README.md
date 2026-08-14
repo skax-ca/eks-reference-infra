@@ -3,7 +3,7 @@
 VPC 하나를 배포하는 루트다. 모듈은 `iac-module-library` 에서 **git tag 로 소싱**한다(D20).
 
 > ⚠️ **이 디렉토리는 코드만 보고는 어느 버킷·어느 계정을 가리키는지 알 수 없다.** 의도된 것이고
-> (D25), 그 대가로 이 README 가 **주입 변수명을 명시할 의무**를 진다. 아래 §1 이 그 이행이다.
+> (D25), 그 대가로 이 README 가 **주입 변수명을 명시할 의무**를 진다. 아래 「1. 주입되는 값 — 코드에 없는 것들」이 그 이행이다.
 
 ---
 
@@ -32,7 +32,7 @@ depth 에서 잡히고, pre-commit 훅 1단계가 staged 여부를 별도로 검
 provider 설정과 **독립적으로** 해결된다고 명시한다. CI 의 환경 자격증명은 입구 Role 인데
 그 권한은 `sts:AssumeRole` 하나뿐이라(D27-1), backend 에 따로 assume 을 걸지 않으면
 state 를 읽다가 **403** 이 난다. 실제로 첫 CI run 이 그렇게 실패했다
-(`docs/deployment-facts.md` §5.4).
+(`docs/deployment-facts.md`의 「5.4 backend는 provider의 assume_role을 쓰지 않는다」).
 
 로컬에는 넣지 않는다 — 개인 IAM user 는 실행 Role 을 assume 할 수 없고(신뢰가 입구 Role 뿐),
 버킷 자체는 그 user 권한으로 읽힌다.
@@ -106,8 +106,8 @@ TGW·attachment · 온프레미스 대역 라우트 · prefix list · KMS 키. �
 
 ## 4. 이 루트가 판정하는 것 / 판정하지 못하는 것
 
-⚠️ **판정표는 `docs/deployment-facts.md` §5 가 SSOT 다.** 여기 요약을 복제하지 않는다 —
-두 곳에 적으면 곧 갈라진다. `apply` 결과를 서술할 때는 그 표에 기록된 것만 쓴다(CLAUDE.md §7).
+⚠️ **판정표는 `docs/deployment-facts.md`의 「5. 배포 루트 live/dev/networking — 형상과 CI 제약」이 SSOT 다.** 여기 요약을 복제하지 않는다 —
+두 곳에 적으면 곧 갈라진다. `apply` 결과를 서술할 때는 그 표에 기록된 것만 쓴다(CLAUDE.md 「7. 과잉 주장 금지」).
 
 ---
 
