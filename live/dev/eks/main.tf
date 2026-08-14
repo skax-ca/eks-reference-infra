@@ -407,10 +407,13 @@ module "eks" {
     "eks-pod-identity-agent" = { addon_version = "v1.3.10-eksbuild.3" }
     "aws-ebs-csi-driver" = {
       addon_version = "v1.63.1-eksbuild.1"
-      # tolerations 배열이 아니라 불리언을 쓴다 — 기본 toleration은 effect:NoExecute만
-      # 커버해 우리가 부여한 NoSchedule을 통과하지 못한다(모듈 repo 문서 실측).
+      # node(DaemonSet)·controller(Deployment) 스키마가 완전히 분리돼 있다 — 하나만
+      # 고치면 나머지가 무제약 상태로 남아 taint 적용 시 Karpenter로 밀려난다(실측,
+      # 모듈 repo 문서 참조). node는 tolerateAllTaints 불리언, controller는 그런
+      # 불리언이 없어 coredns·metrics-server와 같은 nodeSelector+toleration으로 고정한다.
       configuration = jsonencode({
-        node = { tolerateAllTaints = true }
+        node       = { tolerateAllTaints = true }
+        controller = jsondecode(local.workload_class_toleration)
       })
     }
     "metrics-server" = {
