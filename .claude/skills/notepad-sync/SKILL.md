@@ -31,9 +31,17 @@ opencode 플러그인(`.opencode/plugins/notepad.ts`)용으로 설계됨). 파�
 `iac-module-library`식 "Edit 직접 prepend 금지" 규칙이 **적용되지 않는다** — 애초에 그 규칙이
 막으려던 MCP 브리지 자체가 이 repo에서 동작하지 않기 때문이다.
 
-opencode 세션에서는 `.opencode/plugins/notepad.ts`의 커스텀 툴(`notepad_write_working` 등)이
-1순위다 — 그 플러그인은 이 repo 안에서 직접 동작하므로 위 MCP 브리지 문제가 없다. 툴이 로드
-안 됐으면(재시작 필요) Claude Code와 같은 방식(Edit 직접 prepend)으로 대체한다.
+opencode 세션에서는 `.opencode/plugins/notepad.ts`의 커스텀 툴이 1순위다 — 그 플러그인은 이 repo
+안에서 직접 동작하므로 위 MCP 브리지 문제가 없다. 이 repo 전용 3툴(iac-module-library의
+`notepad_write_working`과 이름·동작이 다르다 — 이 repo는 3단 구조가 아니므로):
+- `notepad_read(section)` — `recent`(최근 2항목)·`priority`(하단 Priority Context)·`all`
+- `notepad_write_session(title, content)` — 최상단에 `## <날짜> — <title>` 항목 prepend
+- `notepad_write_priority(content)` — `## Priority Context` 섹션 본문만 교체(500자 제약 없음)
+
+세 툴 모두 "파싱 후 전체 재조립"을 하지 않고 문자열 삽입/치환만 하므로 하단 아카이브를 파괴하지
+않는다(무손실은 `plugins/notepad.test.ts`가 실제 notepad.md로 검증). 플러그인은 `.omc/notepad.md`
+직접 `edit`/`write`를 가드로 차단한다. 툴이 로드 안 됐으면(opencode 재시작 필요) Claude Code와
+같은 방식(Edit 직접 prepend)으로 대체한다.
 
 ## 세션 시작 시 (session-start 3번에서 호출됨, 가드 통과 후)
 

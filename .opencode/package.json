@@ -1,0 +1,7 @@
+{
+  "name": "iac-reference-infra-opencode",
+  "private": true,
+  "dependencies": {
+    "@opencode-ai/plugin": "1.18.16"
+  }
+}
