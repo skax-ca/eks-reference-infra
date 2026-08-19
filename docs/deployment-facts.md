@@ -205,6 +205,29 @@ get-caller-identity --profile team`이 가리키는 계정이 `live/dev`가 이�
 `tofu init -migrate-state`로 hub 전용 버킷으로 옮기지 않은 것이다 — 옮긴 뒤에는 hub 버킷에
 있어야 정상이다. `live/hub/*/backend.hcl`의 `bucket` 값이 현재 사실이다.
 
+### 5.7 workbench — 클러스터 운영 접근(SSM 경유)
+
+hub 클러스터에 `kubectl`로 접근하는 운영 인스턴스는 `Name = ec2-demo-hub-an2-workbench-01`
+이다(private-only, 퍼블릭 IP 없음 — SSM Session Manager/RunShellScript로만 도달).
+
+⚠️ **인스턴스 ID를 어디에도 하드코딩하지 않는다.** workbench는 교체되면 ID가 바뀌므로
+ID를 박아 두면 곧 stale해진다 — 안정적 식별자는 결정적 `Name` 태그뿐이다(네이밍 규약이
+보장하는 값이라 교체돼도 불변). ID는 그 Name으로 조회한다:
+
+```bash
+aws ec2 describe-instances --profile team --region ap-northeast-2 \
+  --filters "Name=tag:Name,Values=ec2-demo-hub-an2-workbench-01" \
+            "Name=instance-state-name,Values=running" \
+  --query 'Reservations[].Instances[].InstanceId' --output text
+```
+
+⚠️ SSM `AWS-RunShellScript`는 로그인 셸이 아니라 `$HOME`이 없다 — 명령 첫 줄에
+`export HOME=/root`와 `export KUBECONFIG=/root/.kube/config`를 넣지 않으면 kubectl이
+kubeconfig를 찾지 못한다. `--parameters`는 인라인 배열이 개행을 뭉개므로 JSON 파일
+(`file://...`)로 넘긴다.
+
+> dev·spoke도 같은 규칙이며 `Name`의 env 토큰만 다르다: `ec2-demo-<env>-an2-workbench-01`.
+
 ---
 
 ## 6. apply 판정표
