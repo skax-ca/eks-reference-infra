@@ -74,15 +74,17 @@ export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다
 | **입구** `iamr-demo-dev-an2-gha-entry-01` | OIDC provider + `aud` + **`sub` 3패턴** | inline `…-policy`: 실행 Role `sts:AssumeRole` **하나뿐** |
 | **실행** `iamr-demo-dev-an2-gha-exec-01` | **입구 Role만** (계정 루트 아님) | `AdministratorAccess` |
 
-`sub` 3패턴 (근거: `docs/deployment-facts.md`):
+`sub` 4패턴 (근거: `docs/deployment-facts.md`):
 
 ```
 repo:skax-ca@310520211/iac-reference-infra@1316830050:pull_request
 repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main
 repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev
+repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:hub
 ```
 
-- ⚠️ **`environment`를 선언한 job만 `:environment:`를 받는다.** 하나로 뭉칠 수 없다.
+- ⚠️ **`environment`를 선언한 job만 `:environment:`를 받는다.** 하나로 뭉칠 수 없다 —
+  GitHub Environment 이름마다(`dev`·`hub`) 패턴이 하나씩 늘어난다(2026-08-19, hub 신설).
 - ⛔ **와일드카드로 넓히지 않는다.** `repo:…*`로 쓰면 org 내 **다른 repo**가 이 Role을 assume한다.
 - 실행 Role의 신뢰를 계정 루트(`arn:aws:iam::<acct>:root`)로 두면 **계정 내 누구나** assume할 수
   있다. 공용 계정이므로 특히 안 된다 — 입구 Role 하나로 못박는다.

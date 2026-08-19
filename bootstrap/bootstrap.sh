@@ -131,7 +131,7 @@ case "$(check_role_trust "$ENTRY_ROLE" "$(entry_trust_policy)")" in
   drift)
     aws_ iam update-assume-role-policy --role-name "$ENTRY_ROLE" \
       --policy-document "$(entry_trust_policy)"
-    changed "입구 Role 신뢰 정책 갱신 (sub 3패턴)"
+    changed "입구 Role 신뢰 정책 갱신 (sub 4패턴)"
     ;;
   ok) ok "입구 Role 신뢰 정책" ;;
 esac
