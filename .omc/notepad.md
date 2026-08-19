@@ -1,6 +1,12 @@
 # Notepad — iac-reference-infra
 
-## 2026-08-19 (이어서 2) — hub ArgoCD 실제 seed 완료, GitOps baseline fan-out 일반화
+## Priority Context
+
+레퍼런스 소비 repo — iac-module-library의 모듈을 git tag로 소싱하는 배포 루트(소비 경로 리허설, 실 고객사 배포 아님). ⛔ 설계 SSOT는 이 repo가 아니라 iac-module-library docs/design/50(D-CONSUME, D20~D30) — 재논의 전 필독. 🔑 backend는 부분설정(D25): 버킷명·계정ID·Role ARN 전부 git에 없음(로컬 backend.hcl/gitignore, CI는 repo 변수). 최신 모듈 핀·현재 형상은 main.tf·docs/deployment-facts.md 참조.
+
+## Working Memory
+
+### 2026-08-19 (이어서 2) — hub ArgoCD 실제 seed 완료, GitOps baseline fan-out 일반화
 
 이전 항목("hub 신설 apply 완료")의 후속 — "다음 세션 시작 시 착수 후보 1"(argocd-seed 재시딩)을
 완주했다. 이 세션은 `iac-platform-gitops`·`iac-module-library` 양쪽에 걸쳐 진행됐다.
@@ -52,7 +58,7 @@ SSM 세션) 전부 정리.
 
 ---
 
-## 2026-08-19 (이어서) — hub 신설 apply 완료, cert-manager 스케줄 문제 진단·수정
+### 2026-08-19 (이어서) — hub 신설 apply 완료, cert-manager 스케줄 문제 진단·수정
 
 이전 항목("hub-spoke 전환: live/dev 완전 teardown 완료, hub/spoke 신설 대기")의 후속.
 `.omc/plans/2026-08-19-live-hub-deployment-root.md` 계획을 세우고 0~4단계(bootstrap →
@@ -122,7 +128,7 @@ eks-pod-identity-agent·kube-proxy·metrics-server·vpc-cni).
 
 ---
 
-## 2026-08-19 — hub-spoke 전환: live/dev 완전 teardown 완료, hub/spoke 신설 대기
+### 2026-08-19 — hub-spoke 전환: live/dev 완전 teardown 완료, hub/spoke 신설 대기
 
 **배경**: `iac-module-library`에서 `cross-account-trust-role-v0.1.0`·`eks-cluster-v0.8.0` 릴리스
 (허브-스포크 크로스 계정 IAM 설계 구현) 완료 후, 이 소비 repo에 실제로 적용하는 작업.
@@ -176,7 +182,9 @@ JSON 파라미터 파일을 만드는 복합 스크립트는 Claude Code auto mo
 
 ---
 
-## ✅ **모듈 repo 문서 작성 규칙 이식 + 전 위반 정정 + ref→demo 사실 오류 발견·수정** (2026-08-14(2))
+## MANUAL
+
+### ✅ **모듈 repo 문서 작성 규칙 이식 + 전 위반 정정 + ref→demo 사실 오류 발견·수정** (2026-08-14(2))
 
 > 사용자 요청: "iac-module-library의 문서 컨벤션을 소비 repo에도 반드시 적용" +
 > "소비 repo에 코드 말고도 문서 컨벤션을 명문화".
@@ -234,7 +242,7 @@ JSON 파라미터 파일을 만드는 복합 스크립트는 Claude Code auto mo
 
 ---
 
-## ✅ **문서 정확성 감사 — 게이트 서술 오류 + 버전 drift 6곳 정정** (2026-08-14)
+### ✅ **문서 정확성 감사 — 게이트 서술 오류 + 버전 drift 6곳 정정** (2026-08-14)
 
 > ### ▶ 무엇을 했나 (커밋 `e168759`·`b4ddc62`, main 직접)
 >
@@ -271,7 +279,7 @@ JSON 파라미터 파일을 만드는 복합 스크립트는 Claude Code auto mo
 
 ---
 
-## ✅ **bootstrap 문서 실측 갱신 + 구 ref 부트스트랩 자원 정리 완료** (2026-08-13(3)) — **먼저 읽을 것**
+### ✅ **bootstrap 문서 실측 갱신 + 구 ref 부트스트랩 자원 정리 완료** (2026-08-13(3)) — **먼저 읽을 것**
 
 > ### ▶ 무엇을 했나
 >
@@ -304,7 +312,7 @@ JSON 파라미터 파일을 만드는 복합 스크립트는 Claude Code auto mo
 
 ---
 
-## ✅ **(과거 기록) workload ref→demo 전환 — L3(GitOps) 재구축 완료** (2026-08-13(2))
+### ✅ **(과거 기록) workload ref→demo 전환 — L3(GitOps) 재구축 완료** (2026-08-13(2))
 
 > ### ▶ 무엇을 했나
 >
@@ -338,7 +346,7 @@ JSON 파라미터 파일을 만드는 복합 스크립트는 Claude Code auto mo
 
 ---
 
-## ✅ **(과거 기록) workload ref→demo 전환 — 재구축 절반 완료, GitOps(L3)는 ESO 설계 결정 대기 중** (2026-08-13)
+### ✅ **(과거 기록) workload ref→demo 전환 — 재구축 절반 완료, GitOps(L3)는 ESO 설계 결정 대기 중** (2026-08-13)
 
 > ### ▶ 무엇을 했나
 >
@@ -392,7 +400,7 @@ JSON 파라미터 파일을 만드는 복합 스크립트는 Claude Code auto mo
 
 ---
 
-## 🔢 현행 모듈 핀 (2026-08-10 기준)
+### 🔢 현행 모듈 핀 (2026-08-10 기준)
 
 **`vpc-v0.3.0` · `eks-cluster-v0.4.0` · `workbench-v0.4.0`.**
 
@@ -549,7 +557,7 @@ JSON 파라미터 파일을 만드는 복합 스크립트는 Claude Code auto mo
   다른 머신은 `/Users/born2k/silverte/ai/iac-reference-infra`. `backend.hcl`·AWS 프로파일·게이트 도구와
   같은 부류로 **clone·머신 단위**라 git·dotfiles 로 따라오지 않는다 — 새 머신에서 먼저 확인한다.
 
-## 📍 지금 어디인가 (2026-07-31 기준)
+### 📍 지금 어디인가 (2026-07-31 기준)
 
 ```
 ✅1 골격+App소싱  ✅2 OIDC sub  ✅3 bootstrap  ✅4 apply(66개 생성)  ✅5 design/50 개정
@@ -580,32 +588,9 @@ PR#13(루트 신설) · **PR#12(D30-1)** · **PR#14**(graviton+핀+rename+§8) �
 
 ---
 
-## Priority Context
+---
 
-**레퍼런스 소비 repo** — 2026-07-30 신설. `skax-ca/iac-reference-infra`(private, Team `iac`/maintain).
-`iac-module-library`의 모듈을 **git tag로 소싱**하는 배포 루트. 실 고객사 배포가 아니라
-**소비 경로 리허설**이고, 통과한 형태를 고객사 repo로 복사해 준다.
-
-### ⛔ 설계는 이 repo에 없다
-
-| repo | 역할 |
-|------|------|
-| `iac-module-library` | 모듈·**설계** SSOT. `docs/design/50-reference-consumer-repo.md` = **D-CONSUME**(D20~D29) |
-| **이 repo** | D-CONSUME의 첫 이행 인스턴스. 배포 루트 + 배포 사실만 소유(D26) |
-| `terraform-enterprise-poc` | 2026-07-28 **동결**. 고치지 않는다 |
-
-- **D20~D29를 재논의하지 말 것.** 실측 근거와 기각 이유가 D-CONSUME에 다 있다. 특히
-  *"부트스트랩을 IaC로"*(D21) · *"버킷명에 계정 ID를"*(D25)는 **이미 값을 매겨 기각**했다.
-- 규약 변경은 **모듈 repo D-CONSUME을 고치고** 여기로 내려온다. 역방향은 drift.
-
-### 🔑 절대 잊지 말 것 — backend는 부분 설정이다 (D25)
-
-`backend.tf`는 **`terraform { backend "s3" {} }` 뿐**. **버킷명이 git에 없다.**
-- CI: repo 변수 `TF_STATE_BUCKET` / 로컬: **gitignore된** `backend.hcl`
-- `tofu init -backend-config=backend.hcl` 없이는 init이 실패한다 (버그가 아니다)
-- pre-commit 훅 1단계가 `backend.hcl` staged 여부를 검사한다 — `--no-verify`로 뚫지 말 것
-- **계정 ID·Role ARN도 git에 두지 않는다** (D25 근거의 연장, 커밋 `cfb575a`에서 확정).
-  `docs/deployment-facts.md`는 **값이 아니라 포인터**를 기록한다.
+### 📌 아카이브 — Phase 1~5 완료 상세 (2026-07-30~07-31, 구 Priority Context 본문)
 
 ### ✅ Phase 1 완료분 (2026-07-30, 커밋 `cfb575a`)
 
@@ -776,7 +761,7 @@ D25 연장·D26 둘 다와 어긋나지만 단순 삭제하면 실측 provenance
 
 ---
 
-## Phase 6 — 3항목 (사용자가 "1,2,3을 차례대로" 지시, 순서는 2 → 3 → 1)
+### Phase 6 — 3항목 (사용자가 "1,2,3을 차례대로" 지시, 순서는 2 → 3 → 1)
 
 ### ✅ 6-2 계정 정보 정리 **완료** (2026-07-31)
 
@@ -878,7 +863,7 @@ PR은 merge 없이 닫음(자산 유지). run [`30605752914`](https://github.com
 
 ---
 
-## ✅ vpc-v1.2.0 승격 — 첫 마이너 버전 반영 사이클 실증 (2026-08-03)
+### ✅ vpc-v1.2.0 승격 — 첫 마이너 버전 반영 사이클 실증 (2026-08-03)
 
 **미해결 항목 아님 — D20 소싱 규약의 정상 운영을 처음으로 한 바퀴 돌렸다.** 모듈 repo가
 `vpc-v1.2.0`(D13 SubnetGroup 태그, `feat 4f44dd8`)를 릴리스 → 소비 루트에 반영.
@@ -907,7 +892,7 @@ PR은 merge 없이 닫음(자산 유지). run [`30605752914`](https://github.com
 
 ---
 
-## 🆕 live/dev/eks 배포 루트 (2026-08-03) — vpc·eks 독립 배포, 코드만 추가
+### 🆕 live/dev/eks 배포 루트 (2026-08-03) — vpc·eks 독립 배포, 코드만 추가
 
 **사용자 결정**: vpc·eks 독립 배포 · enterprise 프로파일 · public-restricted · **코드만 추가(EKS apply 안 함)**.
 소비 [PR#13](https://github.com/skax-ca/iac-reference-infra/pull/13) **merge됨**(`c09e6fc`, 2026-08-03).
@@ -1097,7 +1082,7 @@ Plan: 0 to add, 0 to change, 1 to destroy.
 ⭐ 세 번째 항목이 `eks-cluster-v0.3.0` 이 출력 설명을 정정한 이유의 **실물 확인**이다 —
 3층 규칙이 붙은 SG 가 실제로 apiserver ENI 에 적용된다. 다른 SG 였다면 `i/o timeout` 이다.
 
-## 💰 현재 진행 중 비용
+### 💰 현재 진행 중 비용
 
 | 루트 | 상태 | 월 비용 |
 |------|------|---------|
@@ -1113,7 +1098,7 @@ Plan: 0 to add, 0 to change, 1 to destroy.
 **실제 파기는 안 했다** — teardown 2단계(`deletion_protection=false` → `vpc_enabled=false`)는
 자산 정리를 결정할 때 밟는다.
 
-## 🎉 2026-08-06 — workbench 배선·개명·**private-only 전환 완결**
+### 🎉 2026-08-06 — workbench 배선·개명·**private-only 전환 완결**
 
 **✅ ①apply ②SSM ③kubectl ④public 차단 — 4단계 전부 끝났다.**
 
@@ -1230,7 +1215,7 @@ aws ssm start-session --profile team --region ap-northeast-2 --target i-04ac14a6
 
 ⚠️ GitHub **repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 는 콘솔에서 지워야 한다**(코드 밖 작업, 미완).
 
-## 💰 현재 진행 중 비용
+### 💰 현재 진행 중 비용
 
 | 루트 | 상태 | 월 비용 |
 |------|------|---------|
@@ -1246,7 +1231,7 @@ aws ssm start-session --profile team --region ap-northeast-2 --target i-04ac14a6
 **실제 파기는 안 했다** — teardown 2단계(`deletion_protection=false` → `vpc_enabled=false`)는
 자산 정리를 결정할 때 밟는다.
 
-## 🎉 2026-08-06 — workbench 배선·개명·**private-only 전환 완결**
+### 🎉 2026-08-06 — workbench 배선·개명·**private-only 전환 완결**
 
 **✅ ①apply ②SSM ③kubectl ④public 차단 — 4단계 전부 끝났다.**
 
@@ -1345,7 +1330,7 @@ kubectl       Client Version: v1.35.7          ← 클러스터 1.35 와 마이�
 
 ⚠️ **apply 는 사람이 `Run workflow` 를 누르는 것이 승인 게이트다**(D30-1). merge 만으로는 안 돈다.
 
-## 🎉 2026-08-11 — **workbench 핀 `v0.6.0` apply 완료** (PR [#23](https://github.com/skax-ca/iac-reference-infra/pull/23) `9387201`)
+### 🎉 2026-08-11 — **workbench 핀 `v0.6.0` apply 완료** (PR [#23](https://github.com/skax-ca/iac-reference-infra/pull/23) `9387201`)
 
 `workbench-v0.4.0` → **`v0.6.0`**(두 릴리스 동시 흡수). 모듈 repo 설계 `40 §4.3-1`·`§4.3-2`.
 
@@ -1379,7 +1364,7 @@ kubectl       Client Version: v1.35.7          ← 클러스터 1.35 와 마이�
 > 자동화(`send-command`)는 여전히 `export HOME=/root; export KUBECONFIG=/root/.kube/config` 가 필요하다
 > — 비로그인 셸은 `/etc/profile.d` 를 읽지 않는다(모듈 repo `40 §6`).
 
-## 미결 항목
+### 미결 항목
 
 - ⚠️ **이 notepad 에 중복 구간이 있다** — 「💰 현재 진행 중 비용」·「🎉 2026-08-06 …」이 두 벌.
   2026-08-11 에 뒤쪽 사본의 stale 한 "다음 태스크 ④"를 정정했다. **정리 대상**(중복은 곧 stale 이다).

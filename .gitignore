@@ -55,5 +55,7 @@ terraform.rc
 /.omc/*
 # 크로스머신(집↔회사 Mac) 핸드오프용 — 유일한 세션 인계 SSOT
 !/.omc/notepad.md
+# 구조화된 영구 사실(open-items 등) — notepad.md와 함께 크로스머신 SSOT
+!/.omc/project-memory.json
 # 프로젝트 스코프 스킬 (OMC 규약상 커밋 대상)
 !/.omc/skills/

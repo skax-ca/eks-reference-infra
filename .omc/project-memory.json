@@ -1,0 +1,23 @@
+{
+  "techStack": "OpenTofu(terraform 명령 아님) + GitHub Actions OIDC + S3 backend. 모듈은 iac-module-library를 git tag로 소싱(D20). GitOps는 iac-platform-gitops(self-managed ArgoCD, helm) 소관.",
+  "build": "로컬 게이트(git hook, core.hooksPath=.githooks): pre-commit(backend.hcl 유출 검사+fmt+tflint+trivy), pre-push(validate, live/ 변경 시). 문서 파일 staged 시 별도 갈래로 validate-doc-conventions.py 실행(§8 규칙: 절 번호 인용 금지·비표준 이모지 금지·400줄 제한).",
+  "conventions": "설계 SSOT는 이 repo가 아니라 iac-module-library docs/design/50(D-CONSUME, D20~D30) — 재논의 전 필독. workload=demo(2026-08-13 ref→demo 전환 완료). 버킷명·계정ID·Role ARN은 git에 두지 않는다(D25) — repo 변수/gitignore된 backend.hcl로만.",
+  "structure": "hub(team 계정 533616270150, live/hub/{networking,eks}, ArgoCD control-plane 영구 거처) / spoke(asset 계정 614054776208, 미부트스트랩) / 폐기 예정 dev(live/dev/{networking,eks}, 인프라는 이미 teardown됨, 코드만 남음). GitOps 매니페스트는 이 repo가 아니라 iac-platform-gitops 소관.",
+  "version": "1.0.0",
+  "lastScanned": 1787101000000,
+  "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
+  "customNotes": [
+    {
+      "timestamp": 1787101000000,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-19 — hub ArgoCD 실제 seed 완료(iac-platform-gitops PR #17~#19 머지, 8개 Application Synced/Healthy). 다음 착수 후보(우선순위 순): (1) spoke(asset 계정 614054776208) 부트스트랩 — bootstrap/bootstrap.sh 신규 실행 대상(hub와 달리 진짜 새 계정). (2) spoke 배포 — live/<spoke-env>/{networking,eks} + cross-account-trust-role 모듈. (3) 배선 — spoke 신뢰 Role ARN을 hub eks의 argocd_hub_assumable_role_arns에 추가, enable_argocd_hub_pod_identity=true로 전환(현재 false). (4) 검증 — hub ArgoCD가 spoke EKS에 실제로 크로스 계정 인증되는지. (5) live/dev/{networking,eks} 죽은 .tf 코드 폐기 여부(사용자 미확답, 인프라는 이미 파기됨)."
+    },
+    {
+      "timestamp": 1787101000001,
+      "source": "manual",
+      "category": "notepad-migration",
+      "content": "2026-08-19 — 이 repo의 notepad.md를 날짜별 prepend 방식(2026-08-19 신설했다가 같은 세션에 폐기)에서 iac-module-library와 동일한 OMC 3단 구조(Priority/Working/MANUAL)로 전환. 사용자 의도가 '동일 메커니즘 관리'였음을 뒤늦게 확인 — mcp__t__notepad_*가 다른 프로젝트에 못 쓰는 원인은 OMC의 의도된 worktree 격리(세션 시작 시점 trustedRoot에 고정)였으므로, 커스텀 MCP 서버(.mcp/notepad-server.ts 등, 같은 세션에 신설했다가 삭제)는 불필요했다 — 이 repo를 프로젝트 루트로 하는 별도 세션에서는 mcp__t__notepad_*가 iac-module-library와 완전히 동일하게 동작한다. 마이그레이션 시 원본 1392줄 전부 보존(무손실 스크립트 검증) — 최근 3개(2026-08-19) 항목만 Working Memory로, 나머지 전부 MANUAL로 이관. 과거 flat-file 형식 설명 원문은 git 이력(migrate 커밋 직전)에 남아 있다."
+    }
+  ]
+}

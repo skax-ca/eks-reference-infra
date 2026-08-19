@@ -1,8 +1,0 @@
-{
-  "name": "iac-reference-infra-mcp",
-  "private": true,
-  "dependencies": {
-    "@modelcontextprotocol/server": "2.0.0",
-    "zod": "^4.2.0"
-  }
-}
