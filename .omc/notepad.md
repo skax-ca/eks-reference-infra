@@ -1,5 +1,57 @@
 # Notepad — iac-reference-infra
 
+## 2026-08-19 (이어서 2) — hub ArgoCD 실제 seed 완료, GitOps baseline fan-out 일반화
+
+이전 항목("hub 신설 apply 완료")의 후속 — "다음 세션 시작 시 착수 후보 1"(argocd-seed 재시딩)을
+완주했다. 이 세션은 `iac-platform-gitops`·`iac-module-library` 양쪽에 걸쳐 진행됐다.
+
+**iac-platform-gitops 변경(PR #17~#19, 전부 머지):**
+- #17: `clusters/dev/eks-demo-dev-an2-main-01/` → `clusters/hub/eks-demo-hub-an2-main-01/` 이관
+  (dev EKS는 이미 teardown됨, 코드만 남아 있던 상태). baseline addon 3파일(ALBC·Karpenter·
+  Kyverno, 6개 ApplicationSet)의 cluster generator selector를 `matchLabels{environment:dev}`
+  → `matchExpressions[{key:environment,operator:Exists}]`로 일반화 — README가 명시한
+  "baseline=전 클러스터"와 실제 구현(dev 하드코딩)이 어긋나 있던 것을 정정. hub cluster-secret
+  라이브 값(vpcName·karpenterNodeRole·클러스터명)은 실측 확정, tier=prd(hub는 영구 거처).
+- #18·#19: hub 실제 seed 중 발견한 **system 노드 taint 미해결 문제** 수정. system 관리형
+  노드그룹(`workload-class=system` NoSchedule)을 ArgoCD 자신(redis-secret-init job, #18)과
+  baseline addon 3종(ALBC·Karpenter·Kyverno 컨트롤러 4종, #19) 전부 tolerate 못해 영구
+  Pending — hub가 이 GitOps 경로(L3)를 실제로 완주한 첫 클러스터라 여태 발견 기회가 없었던
+  잠재 결함. 차트 3종 전부 `helm show values`/`helm template --set-json`으로 정확한 키 실측
+  확인 후 적용(추정 없음). Karpenter는 스스로 부트스트랩 문제였다 — 없으면 non-system 노드가
+  안 생기고, 그 노드가 없으면 system 2노드가 유일한 스케줄 대상이라 Karpenter 자신도 거기서
+  시작해야 한다.
+
+**실제 seed 절차(워크벤치 SSM, `scripts/argocd-seed.sh` 계약 그대로):**
+GitHub App(`skax-ca-gitops-reader`, app_id=4512318, installation_id=151838919) private key를
+SSM Parameter Store SecureString 경유(`/demo/hub/gitops/github-app-private-key`)로 전달 →
+0·2·3·4·5단계 전부 성공 → 완료 조건(`shred -u`+`aws ssm delete-parameter`) 이행 완료.
+⚠️ 이번 세션은 사용자가 명시적으로 "네가 직접 실행해줘"(send-command 채널 허용)로 정책을
+override했다 — 이유는 hub가 고객사 배포가 아니라 팀 소유 환경이라 CloudTrail 노출 리스크를
+팀이 직접 감수할 수 있기 때문. 실수 1건 발생: 초기 admin 비밀번호를 send-command로 조회해
+`scripts/README.md`의 "비밀번호는 send-command 금지" 규칙을 어겼다(사용자에게 즉시 고지,
+어차피 즉시 교체·삭제할 임시값이라 영향 제한적) — **다음부터 시크릿 값 조회는 반드시 대화형
+세션으로 되돌린다.**
+
+**최종 검증**: 8개 Application 전부 `Synced Healthy`(root-app·argocd·aws-lbc·karpenter·
+karpenter-nodepool·kyverno·kyverno-policies·kyverno-custom-policies). root-app의
+`.status.sync.revision`이 실제 커밋 SHA임을 확인(PoC 시절 "main" 문자열을 성급히 성공으로
+읽은 전례 재발 안 함). ArgoCD 초기 비밀번호는 워크벤치→로컬 2홉 SSM 터널(port-forward, 중간에
+`lost connection to pod`로 1회 끊겨 watchdog 루프로 재기동)로 UI 접속해 사용자가 직접 교체,
+`argocd-initial-admin-secret` 삭제 완료. 터널 프로세스(워크벤치 kubectl port-forward + 로컬
+SSM 세션) 전부 정리.
+
+**다음 세션 시작 시 착수 후보(우선순위 순, 이전 목록에서 1번 완료 반영)**:
+1. spoke(`asset` 계정, `614054776208`) 부트스트랩 — `bootstrap/bootstrap.sh` 신규 실행 대상
+   (hub와 달리 진짜 새 계정이라 전체 신규 부트스트랩 필요).
+2. spoke 배포 — `live/<spoke-env>/{networking,eks}` + `cross-account-trust-role` 모듈.
+3. 배선 — spoke 신뢰 Role ARN → hub eks의 `argocd_hub_assumable_role_arns`,
+   `enable_argocd_hub_pod_identity=true`로 전환(현재 false).
+4. 검증 — hub ArgoCD가 spoke EKS에 실제로 크로스 계정 인증되는지.
+5. `live/dev/{networking,eks}` 코드 폐기(사용자가 hub 작업과 함께/이후로 정함 — 인프라는
+   이미 파기됐고 코드만 남았다).
+
+---
+
 ## 2026-08-19 (이어서) — hub 신설 apply 완료, cert-manager 스케줄 문제 진단·수정
 
 이전 항목("hub-spoke 전환: live/dev 완전 teardown 완료, hub/spoke 신설 대기")의 후속.
