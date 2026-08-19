@@ -175,39 +175,100 @@ module "vpc" {
   deletion_protection = false
 }
 
-# ── 크로스 계정 네트워크 경로 — 허브가 요청자다 (모듈 repo docs/02-choose-your-path.md
-#    「네트워크 경로」 절, 2026-08-19 신설) ────────────────────────────────────────
+# ── 크로스 계정 네트워크 경로 — Transit Gateway (모듈 repo docs/02-choose-your-path.md
+#    「네트워크 경로」 절, 2026-08-19) ───────────────────────────────────────────────
 #
 # IAM 신뢰(live/dev/eks 의 cross-account-trust-role)는 "누가 인증되는가"만 답한다.
 # private-only 엔드포인트에서 허브 ArgoCD 가 spoke API 서버에 패킷을 보낼 경로 자체가
-# 없으면 인증이 성립해도 도달하지 못한다 — 이 리소스가 그 경로다.
+# 없으면 인증이 성립해도 도달하지 못한다 — 이 리소스들이 그 경로다.
 #
-# ⚠️ **재사용 모듈이 아니다.** peering 은 정확히 2개 VPC 사이의 1:1 관계라 vpc/eks-cluster급
-#    재사용 가치가 없다(설계 문서 근거 그대로) — 배포 루트가 vanilla 리소스로 직접 연결한다.
-resource "aws_vpc_peering_connection" "spoke_dev" {
-  vpc_id        = module.vpc.vpc_id
-  peer_vpc_id   = var.spoke_vpc_id
-  peer_owner_id = var.spoke_account_id
+# ⛔ **VPC Peering 이 아니다.** 처음엔 Peering 을 시도했으나 AWS 가
+#    "Failed due to ... overlapping CIDR range" 로 즉시 거부했다(2026-08-19 실측) — 이
+#    VPC 의 pod-dup 대역(100.64.0.0/16)을 모든 스포크가 그대로 재사용하는 설계라, 실제
+#    라우팅 대상(uniq 대역)이 안 겹쳐도 dup 대역이 겹치는 것만으로 peering 자체가 거부된다.
+#    자세한 근거는 모듈 repo 문서 참조.
+resource "aws_ec2_transit_gateway" "hub" {
+  description = "hub-spoke ArgoCD 크로스 계정 라우팅"
 
-  # 수락은 spoke 계정의 provider 로 별도 apply 한다(live/dev/networking 의
-  # aws_vpc_peering_connection_accepter) — 여기서 auto_accept 를 쓰지 않는다.
-  # auto_accept 는 **같은 계정** 안에서만 동작한다(AWS 제약).
+  # 자동 전파를 끈다 — 자동 전파는 attachment 의 VPC 전 CIDR(uniq+dup)을 그대로 전파해
+  # peering 과 같은 dup 대역 충돌이 TGW 라우트테이블 안에서 재현된다. 그래서 uniq 대역만
+  # aws_ec2_transit_gateway_route 로 명시한다(자동 전파를 쓰지 않는다).
+  default_route_table_association = "enable"
+  default_route_table_propagation = "disable"
+
+  # RAM 공유로 들어오는 attachment 를 자동 수락한다 — RAM principal association 이 이미
+  # 정확한 계정으로 좁혀 놓았으므로(아래) 자동 수락이 신뢰 경계를 넓히지 않는다.
+  auto_accept_shared_attachments = "enable"
 
   tags = {
-    Name = "pcx-${var.workload}-${var.env}-${var.region_code}-to-dev"
+    Name = "tgw-${var.workload}-${var.env}-${var.region_code}-hub"
   }
 }
 
-# 허브 ArgoCD(argocd-application-controller)가 도는 노드 서브넷의 라우트테이블에
-# spoke 의 node-uniq CIDR(10.51.0.0/16, live/dev/networking 의 cidr_uniq)로 가는 경로를 얹는다.
-# ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별 RT 리스트다(private 그룹) — 전부에 건다.
+# ── RAM 공유 — spoke 계정만 정확히 지정한다(IAM 신뢰와 같은 "정확한 대상만" 원칙) ──────
+resource "aws_ram_resource_share" "tgw" {
+  name = "ram-${var.workload}-${var.env}-${var.region_code}-tgw-share"
+
+  # 조직(o-rs1oivwow6) 밖 계정은 허용하지 않는다 — hub·spoke(asset) 둘 다 같은 조직 소속이라
+  # 필요 없다. true 로 두면 조직 밖 계정도 원칙적으로 초대할 수 있게 돼 경계가 넓어진다.
+  allow_external_principals = false
+
+  tags = {
+    Name = "ram-${var.workload}-${var.env}-${var.region_code}-tgw-share"
+  }
+}
+
+resource "aws_ram_resource_association" "tgw" {
+  resource_arn       = aws_ec2_transit_gateway.hub.arn
+  resource_share_arn = aws_ram_resource_share.tgw.arn
+}
+
+resource "aws_ram_principal_association" "spoke_dev" {
+  principal          = var.spoke_account_id
+  resource_share_arn = aws_ram_resource_share.tgw.arn
+}
+
+# ── 허브 자신의 attachment — ArgoCD(argocd-application-controller)가 도는 서브넷 ──────
+resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
+  vpc_id             = module.vpc.vpc_id
+  subnet_ids         = module.vpc.subnet_ids_by_group["node-uniq"]
+  transit_gateway_id = aws_ec2_transit_gateway.hub.id
+
+  tags = {
+    Name = "tgwa-${var.workload}-${var.env}-${var.region_code}-main"
+  }
+}
+
+# 허브 VPC 라우트테이블(node-uniq)에 spoke 의 node-uniq CIDR(10.51.0.0/16, live/dev/networking
+# 의 cidr_uniq) 로 가는 경로를 얹는다. ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별
+# RT 리스트다(private 그룹) — 전부에 건다.
 resource "aws_route" "to_spoke_dev" {
   for_each = toset(module.vpc.route_table_ids_by_group["node-uniq"])
 
   route_table_id = each.value
   # 🔑 spoke 의 cidr_uniq 값이다(live/dev/networking/main.tf 참조) — 결정적 상수라 하드코딩한다.
-  #    CIDR 은 계정 식별 정보가 아니다(이미 그 파일에 평문으로 커밋돼 있다) — 계정 ID·VPC ID 와
+  #    CIDR 은 계정 식별 정보가 아니다(이미 그 파일에 평문으로 커밋돼 있다) — 계정 ID 와
   #    다르게 var 로 빼지 않는다.
-  destination_cidr_block    = "10.51.0.0/16"
-  vpc_peering_connection_id = aws_vpc_peering_connection.spoke_dev.id
+  destination_cidr_block = "10.51.0.0/16"
+  transit_gateway_id     = aws_ec2_transit_gateway.hub.id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.hub]
 }
+
+# ── TGW 라우트테이블 — hub 가 소유한다(TGW owner 만 자기 라우트테이블에 라우트를
+#    넣을 수 있다는 AWS 제약, 모듈 repo 설계 문서 참조). 자동 전파를 껐으므로(위) 두
+#    방향 모두 정적 라우트로 명시해야 한다.
+#
+# hub CIDR → hub 자신의 attachment. 이 값은 이미 hub state 안에 있어 지금 바로 만들 수
+# 있다(spoke → hub 방향이 이 apply 로 뚫린다).
+resource "aws_ec2_transit_gateway_route" "hub_via_hub_attachment" {
+  destination_cidr_block         = "10.53.0.0/16" # hub 자신의 cidr_uniq — 위 locals 참조
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway.hub.association_default_route_table_id
+}
+
+# ⚠️ **반대 방향(hub → spoke)은 여기서 끝나지 않는다.** "spoke CIDR → spoke 의
+#    attachment" 라우트가 남아 있는데, spoke 의 attachment ID 는 spoke 가 자기 계정에서
+#    attachment 를 만들어야 나온다(AWS 무작위 부여, 결정적 합성 불가) — spoke apply 후
+#    그 값을 받아 별도 커밋(aws_ec2_transit_gateway_route.spoke_via_spoke_attachment 류)
+#    으로 추가한다. 그 전까지는 spoke → hub 방향만 뚫려 있다.

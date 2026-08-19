@@ -54,14 +54,14 @@ output "nat_gateway_ids" {
   value       = module.vpc.nat_gateway_ids
 }
 
-output "vpc_peering_connection_id" {
+output "transit_gateway_id" {
   description = <<-EOT
-    spoke(dev)로 향하는 VPC Peering Connection ID(pcx-...). 이 값은 AWS 가 생성 시점에
-    무작위로 부여해 결정적 합성이 불가능하다 — apply 후 이 출력을 그대로 GitHub repo 변수
-    HUB_VPC_PEERING_CONNECTION_ID 에 옮겨 적는다(live/dev/networking 의
-    aws_vpc_peering_connection_accepter 가 소비한다).
+    spoke 로 향하는 Transit Gateway ID(tgw-...). 이 값은 AWS 가 생성 시점에 무작위로
+    부여해 결정적 합성이 불가능하다 — apply 후 이 출력을 그대로 GitHub repo 변수
+    HUB_TRANSIT_GATEWAY_ID 에 옮겨 적는다(live/dev/networking 의
+    aws_ec2_transit_gateway_vpc_attachment 가 소비한다).
   EOT
-  value       = aws_vpc_peering_connection.spoke_dev.id
+  value       = aws_ec2_transit_gateway.hub.id
 }
 
 output "flow_log_group_name" {

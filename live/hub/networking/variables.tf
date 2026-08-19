@@ -63,25 +63,11 @@ variable "execution_role_arn" {
 
 variable "spoke_account_id" {
   description = <<-EOT
-    spoke(dev, asset 계정)의 12자리 계정 ID. VPC Peering 요청(aws_vpc_peering_connection의
-    peer_owner_id)에만 쓴다 — 모듈 repo docs/02-choose-your-path.md 「네트워크 경로」 절.
+    spoke(dev, asset 계정)의 12자리 계정 ID. Transit Gateway RAM 공유(aws_ram_principal_association의
+    principal)에만 쓴다 — 모듈 repo docs/02-choose-your-path.md 「네트워크 경로」 절.
 
     ⛔ 기본값을 두지 않는다 — 계정 ID라 git 에 두지 않는다. 주입 경로: CI 는 repo 변수
        DEV_ACCOUNT_ID → TF_VAR_spoke_account_id, 로컬은 export TF_VAR_spoke_account_id=...
-  EOT
-  type        = string
-}
-
-variable "spoke_vpc_id" {
-  description = <<-EOT
-    spoke(dev)의 VPC ID. VPC Peering 요청(peer_vpc_id)에만 쓴다.
-
-    ⛔ 기본값을 두지 않는다 — 다른 계정의 리소스 식별자라 git 에 두지 않는다(계정 ID와
-       같은 이유, CLAUDE.md 「1」의 연장). 주입 경로: CI 는 repo 변수 DEV_VPC_ID →
-       TF_VAR_spoke_vpc_id, 로컬은 export TF_VAR_spoke_vpc_id=...
-
-    ⚠️ hub 루트는 spoke 계정에 접근할 수 없어 data source 로 조회할 수 없다 — spoke
-       networking apply 후 출력값(vpc_id)을 그대로 옮겨 적는다.
   EOT
   type        = string
 }
