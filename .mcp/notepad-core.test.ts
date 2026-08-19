@@ -9,11 +9,13 @@ import {
   readSection,
   prependSession,
   replacePriority,
-} from "./notepad"
+} from "./notepad-core"
 
 // 실제 notepad.md를 fixture로 사용한다 — 이 repo의 진짜 구조(날짜 prepend + 중간 Priority
 // Context + 하단 아카이브 + 중복 항목)에 대해 무손실을 검증하는 게 이 테스트의 존재 이유다.
-const NOTEPAD = readFileSync(join(import.meta.dir, "..", "..", ".omc", "notepad.md"), "utf8")
+// 이 코어는 opencode 플러그인과 Claude Code용 MCP 서버 양쪽이 공유하므로, 여기 한 곳만
+// 테스트하면 둘 다 커버된다.
+const NOTEPAD = readFileSync(join(import.meta.dir, "..", ".omc", "notepad.md"), "utf8")
 
 test("fixture: 실제 notepad는 헤더로 시작하고 Priority Context 섹션을 가진다", () => {
   expect(NOTEPAD.startsWith(HEADER)).toBe(true)

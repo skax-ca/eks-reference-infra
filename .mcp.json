@@ -35,6 +35,15 @@
         "AWS_API_MCP_PROFILE_NAME": "team",
         "READ_OPERATIONS_ONLY": "true"
       }
+    },
+    "notepad-local": {
+      "type": "stdio",
+      "command": "bun",
+      "args": [
+        "run",
+        "${CLAUDE_PROJECT_DIR:-.}/.mcp/notepad-server.ts"
+      ],
+      "env": {}
     }
   }
 }
