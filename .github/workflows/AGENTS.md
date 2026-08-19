@@ -10,8 +10,8 @@
 
 | 파일 | 목적 |
 |------|------|
-| `deploy-network.yml` | `live/dev/networking` — push → plan / dispatch → apply |
-| `deploy-eks.yml` | `live/dev/eks` — push → plan / dispatch → apply |
+| `deploy-dev-network.yml` | `live/dev/networking` — push → plan / dispatch → apply |
+| `deploy-dev-eks.yml` | `live/dev/eks` — push → plan / dispatch → apply |
 
 ## 워크플로 구조
 
@@ -40,7 +40,7 @@ workflow_dispatch  →  plan job  →  apply job
 ## AI 에이전트 가이드
 
 ### 새 워크플로 추가
-1. `deploy-network.yml`을 템플릿으로 사용
+1. `deploy-dev-network.yml`을 템플릿으로 사용
 2. `needs:`로 plan → apply를 **같은 run** 안에서 연결 (cross-run artifact 가져오기禁止)
 3. `environment: dev`는 apply job에만 추가 (plan job에는 금지 — D28)
 4. 루트별로 concurrency group 설정, `cancel-in-progress: false`
@@ -66,3 +66,5 @@ workflow_dispatch  →  plan job  →  apply job
 execution Role을 assume하는 것은 `environment:dev` job뿐이다.
 
 <!-- MANUAL: 2026-08-04 — PR#12 merge 후 rename: deploy.yml → deploy-network.yml -->
+<!-- MANUAL: 2026-08-19 — hub 워크플로(deploy-hub-*.yml)와의 접두어 비대칭 정정:
+     deploy-network.yml → deploy-dev-network.yml · deploy-eks.yml → deploy-dev-eks.yml -->

@@ -56,6 +56,24 @@ variable "execution_role_arn" {
   type        = string
 }
 
+variable "hub_account_id" {
+  description = <<-EOT
+    hub(team 계정)의 12자리 계정 ID. 스포크가 소유하는 cross-account-trust-role 모듈의
+    trusted_principal_arns를 결정적으로 합성하는 데만 쓴다
+    (arn:aws:iam::<hub_account_id>:role/iamr-demo-hub-an2-argocd-hub — eks-cluster 모듈
+    iam.tf의 name_mid 네이밍과 정확히 같아야 한다).
+
+    ⛔ 기본값을 두지 않는다 — 계정 ID라 git 에 두지 않는다(CLAUDE.md 「1」의 연장).
+       주입 경로: CI 는 repo 변수 HUB_ACCOUNT_ID → TF_VAR_hub_account_id, 로컬은
+       export TF_VAR_hub_account_id=...
+
+    ⚠️ hub의 enable_argocd_hub_pod_identity 가 아직 false 라 이 ARN 의 실물 Role은 없다.
+       AWS는 크로스 계정 trust policy 의 Principal 존재를 생성 시점에 검증하지 않으므로
+       문제가 되지 않는다 — hub 쪽이 나중에(notepad 우선순위 후속 항목) 켜진다.
+  EOT
+  type        = string
+}
+
 # ⛔ **`public_access_cidrs` 는 삭제됐다**(private-only 전환).
 #    public 엔드포인트가 꺼지면 EKS 가 이 값을 무시한다 — 남겨 두면 *"좁혀 두었다"* 는 착시만
 #    만드는 죽은 설정이다. 되살리는 것은 설계 목적(모듈 repo의 워크벤치 설계 문서)을 되돌리는

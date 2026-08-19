@@ -1,12 +1,12 @@
 # live/dev/eks — plan → (사람이 실행) → plan → apply
 #
-# networking 의 deploy.yml 과 **같은 규약**을 EKS 루트에 적용한다. 독립 배포를 위해 셋을 분리한다:
+# networking 의 deploy-dev-network.yml 과 **같은 규약**을 EKS 루트에 적용한다. 독립 배포를 위해 셋을 분리한다:
 #   · 경로 필터    : live/dev/eks/** (networking 변경은 이 워크플로를 트리거하지 않는다)
 #   · state 키     : dev/eks.tfstate (backend 조립 step)
 #   · concurrency  : live-dev-eks (두 루트의 apply 가 서로를 취소하지 않는다)
 #
 # ── D30-1 형태(2026-08-03): PR plan 제거 + apply 는 workflow_dispatch 전용 ─────
-# 이유는 deploy.yml 상단과 같다: PR/merge 에서 plan 을 두 번 도는 낭비를 없앴고, free 플랜이라
+# 이유는 deploy-dev-network.yml 상단과 같다: PR/merge 에서 plan 을 두 번 도는 낭비를 없앴고, free 플랜이라
 # environment 에 required reviewers 를 못 걸어 **dispatch 를 누르는 행위가 승인을 대신한다**.
 # ⚠️ merge 만으로는 apply 되지 않는다 — plan 요약(destroy/replace)을 읽고 Run workflow 를 누른다.
 #
@@ -35,7 +35,7 @@ on:
     branches: [main]
     paths:
       - live/dev/eks/**
-      - .github/workflows/deploy-eks.yml
+      - .github/workflows/deploy-dev-eks.yml
   # merge 후 plan 까지만 자동으로 돈다(요약은 run Summary 탭). apply 는 아래 dispatch 로만.
   workflow_dispatch:
     inputs:
@@ -157,6 +157,9 @@ jobs:
         env:
           # 2단째 assume 대상. ARN 에 계정 ID 가 있어 코드에 두지 않는다(D25 의 연장).
           TF_VAR_execution_role_arn: ${{ vars.DEV_AWS_EXEC_ROLE_ARN }}
+          # 허브 ArgoCD 크로스 계정 신뢰 Role ARN 을 결정적으로 합성하는 데만 쓴다 — 계정 ID 라
+          # 코드에 두지 않는다(D25 의 연장, execution_role_arn 과 같은 이유).
+          TF_VAR_hub_account_id: ${{ vars.HUB_ACCOUNT_ID }}
           # ⛔ `TF_VAR_public_access_cidrs` 는 **삭제됐다**(2026-08-06, private-only 전환).
           #    변수가 사라졌으니 주입 지점도 함께 지운다 — 죽은 경로를 남기지 않는다.
           #    repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 자체도 정리 대상이다(GitHub 설정 쪽).
@@ -238,7 +241,7 @@ jobs:
     name: apply
     needs: plan
     # 🔑 상위 요금제 구독 시: 조건을 (push || workflow_dispatch)로 되돌리고 environment dev 에
-    #    required reviewers 를 건다(deploy.yml 상단 "되돌릴 것"과 동일).
+    #    required reviewers 를 건다(deploy-dev-network.yml 상단 "되돌릴 것"과 동일).
     if: >-
       github.event_name == 'workflow_dispatch'
       && github.ref == 'refs/heads/main'

@@ -45,6 +45,13 @@ locals {
   cluster_name = "eks-${var.workload}-${var.env}-${var.region_code}-${local.cluster_purpose}-${local.cluster_serial}"
   cluster_arn  = "arn:${data.aws_partition.current.partition}:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${local.cluster_name}"
 
+  # ── 허브 ArgoCD Pod Identity Role ARN — 결정적으로 조합한다 ──────────────────
+  # hub 는 별도 계정·별도 state 라 module 출력을 참조할 수 없다(workbench↔eks 순환 해소와
+  # 같은 이유 — "결정적 네이밍으로 값 구성", 모듈 repo 규약의 1순위 결합 방식).
+  # 이름 형태는 eks-cluster 모듈 iam.tf 의 name_mid 네이밍과 정확히 같아야 한다:
+  #   iamr-${workload}-${env}-${region_code}-argocd-hub → iamr-demo-hub-an2-argocd-hub
+  hub_argocd_role_arn = "arn:aws:iam::${var.hub_account_id}:role/iamr-demo-hub-an2-argocd-hub"
+
   # 우리 VPC 를 식별하는 Name 태그. networking 루트가 vpc 모듈에 purpose="main" 으로 넘긴 결과다.
   vpc_name = "vpc-${var.workload}-${var.env}-${var.region_code}-main"
 
@@ -240,6 +247,26 @@ module "workbench" {
   eks_cluster_arn = local.cluster_arn
 }
 
+# ── 크로스 계정 신뢰 Role — 스포크가 소유한다 (모듈 repo docs/02-choose-your-path.md 질문 D) ──
+#
+# 허브의 self-managed ArgoCD(argocd-application-controller)가 이 Role 을 assume 해 이 클러스터에
+# 도달한다. IAM 정책은 "assume 가능"뿐이고, 실제 K8s 권한은 아래 eks 블록의 access_entries가
+# kubernetes_groups(RBAC)로 매핑한다 — IAM 과 K8s RBAC 두 층을 분리하는 것이 최소 권한 설계다.
+#
+# ⛔ vpc/eks-cluster/workbench 체인과 독립이다 — naming 만 공유하고 다른 모듈 출력을 참조하지 않는다.
+module "argocd_trust" {
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/cross-account-trust-role?ref=cross-account-trust-role-v0.1.0&depth=1"
+
+  naming = {
+    workload    = var.workload
+    env         = var.env
+    region_code = var.region_code
+  }
+  purpose = "argocd-hub"
+
+  trusted_principal_arns = [local.hub_argocd_role_arn]
+}
+
 module "eks" {
   source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.7.0&depth=1"
 
@@ -305,6 +332,14 @@ module "eks" {
           access_scope = { type = "cluster" }
         }
       }
+    }
+
+    # 허브 ArgoCD 크로스 계정 접근 — AWS 관리형 access policy 가 아니라 kubernetes_groups 로
+    # 매핑한다. 실제 ClusterRoleBinding(그룹 "argocd-hub" → 권한)은 iac-platform-gitops 소관이다
+    # (모듈 repo 설계 계획 .omc/plans/2026-08-19-cross-account-trust-role.md 「C. 연결」 그대로).
+    argocd_hub = {
+      principal_arn     = module.argocd_trust.role_arn
+      kubernetes_groups = ["argocd-hub"]
     }
   }
 

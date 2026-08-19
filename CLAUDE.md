@@ -119,7 +119,7 @@ module "vpc" {
 **한 워크플로 두 job**으로 만족시킨다. 별도 워크플로로 쪼개면 artifact를 run 경계 밖에서 찾아야 하고
 **그 조회 지점이 곧 구멍**이다.
 
-**배포 루트마다 워크플로 하나**다 — `deploy-network.yml`(networking) · `deploy-eks.yml`(eks).
+**배포 루트마다 워크플로 하나**다 — `deploy-dev-network.yml`(networking) · `deploy-dev-eks.yml`(eks).
 경로 필터·state 키·`concurrency` 그룹을 분리해 **두 루트가 서로를 트리거하거나 취소하지 않게** 한다.
 
 | 항목 | 규칙 |

@@ -45,7 +45,7 @@ networking이 apply되지 않으면 eks plan이 빈 결과를 반환한다 (에�
 
 ### 새 루트 추가
 1. `live/dev/<name>/` 디렉토리를 표준 IaC 파일로 생성
-2. `deploy-network.yml` 패턴을 따라 `deploy-<name>.yml` 워크플로 생성
+2. `deploy-dev-network.yml` 패턴을 따라 `deploy-dev-<name>.yml` 워크플로 생성
 3. 별도 concurrency group과 state key 설정
 4. notepad.md Phase 기록에 추가
 

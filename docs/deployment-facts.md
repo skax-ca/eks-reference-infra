@@ -62,6 +62,7 @@ App은 이 repo 하나에만 `contents: read`+`metadata: read`로 설치되어 �
 | 실행 Role ARN(dev) | 비노출 | repo 변수 `DEV_AWS_EXEC_ROLE_ARN` | provider `assume_role.role_arn`(`TF_VAR_execution_role_arn` 경유) |
 | GitHub App private key | 비밀 | repo secret `MODULE_READER_KEY` | `create-github-app-token` |
 | GitHub App Client ID | 이식성 | repo 변수 `MODULE_READER_CLIENT_ID` | `create-github-app-token`의 `client-id` |
+| hub 계정 ID | 비노출 | repo 변수 `HUB_ACCOUNT_ID` | `live/dev/eks` provider `TF_VAR_hub_account_id` — `cross-account-trust-role` 모듈의 `trusted_principal_arns`를 결정적으로 합성하는 데만 쓴다(모듈 repo 규약) |
 
 Client ID는 비밀이 아니다 — public `/apps/{slug}` 엔드포인트로 조회되고 워크플로 로그에도 찍힌다.
 변수로 두는 이유는 이식성이다: 고객사는 자기 App을 만들고 변수만 바꾸면 워크플로를 안 고친다.
@@ -202,6 +203,16 @@ OIDC provider도 계정마다 각자 가진다. AWS가 URL당 계정에 정확�
 ⚠️ **`hub/{networking,eks}.tfstate` 위치**: 이 상태 파일들이 dev 버킷에 있으면 아직
 `tofu init -migrate-state`로 hub 전용 버킷으로 옮기지 않은 것이다 — 옮긴 뒤에는 hub 버킷에
 있어야 정상이다. `live/hub/*/backend.hcl`의 `bucket` 값이 현재 사실이다.
+
+### 5.6-1 크로스 계정 IAM 경계 — 현재 어느 쪽이 서 있나
+
+`live/dev/eks`가 `cross-account-trust-role`(스포크 소유)을 이미 사용한다. `live/hub/eks`는
+아직 `enable_argocd_hub_pod_identity = false`다 — 두 IAM 실체(스포크 신뢰 Role · 허브 Pod
+Identity Role) 중 스포크 쪽만 apply되면, 허브 쪽 ARN은 결정적 네이밍으로 미리 합성한 문자열일
+뿐 실물이 없는 상태가 된다(AWS가 크로스 계정 trust policy의 Principal 존재를 생성 시점에
+검증하지 않으므로 무해). 허브 쪽을 켜는 것(`argocd_hub_assumable_role_arns` 채우기 +
+`enable_argocd_hub_pod_identity = true`)은 별도 커밋 — 스포크의 `cross-account-trust-role.role_arn`
+실제 출력값을 확인한 뒤 진행한다.
 
 ### 5.7 workbench — 클러스터 운영 접근(SSM 경유)
 
