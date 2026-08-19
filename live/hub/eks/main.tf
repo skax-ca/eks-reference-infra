@@ -46,6 +46,17 @@ locals {
   cluster_name = "eks-${var.workload}-${var.env}-${var.region_code}-${local.cluster_purpose}-${local.cluster_serial}"
   cluster_arn  = "arn:${data.aws_partition.current.partition}:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${local.cluster_name}"
 
+  # ── spoke(dev)의 cross-account-trust-role ARN — 결정적으로 조합한다 ──────────
+  # spoke 는 별도 계정·별도 state 라 module 출력을 참조할 수 없다(cluster_arn 과 같은 패턴).
+  # 이름 형태는 cross-account-trust-role 모듈의 naming+purpose="argocd-hub" 조합과 정확히
+  # 같아야 한다: iamr-${workload}-${env}-${region_code}-argocd-hub → iamr-demo-dev-an2-argocd-hub.
+  #
+  # ⚠️ **순서가 반대여야 한다** — trust policy(스포크가 소유)는 Principal 대상이 실제로 존재해야
+  #    AWS 가 정책 생성을 허용한다("Invalid principal in policy" 로 즉시 거부, 실측 2026-08-19).
+  #    반면 이 값을 소비하는 아래 argocd_hub_pod_identity 는 **permission policy**(sts:AssumeRole
+  #    on resource)라 대상 존재를 검증하지 않는다 — 그래서 허브를 먼저 켜도 안전하다.
+  spoke_argocd_trust_role_arn = "arn:aws:iam::${var.spoke_account_id}:role/iamr-demo-dev-an2-argocd-hub"
+
   # 우리 VPC 를 식별하는 Name 태그. networking 루트가 vpc 모듈에 purpose="main" 으로 넘긴 결과다.
   vpc_name = "vpc-${var.workload}-${var.env}-${var.region_code}-main"
 
@@ -483,11 +494,11 @@ module "eks" {
 
   # ── 크로스 계정 확장 — 허브 ArgoCD → 스포크 EKS (eks-cluster-v0.8.0 신설) ──────
   # docs/02-choose-your-path.md 질문 D · docs/05-modules.md 「크로스 계정 확장」의 구현.
-  # ⛔ 지금은 false 로 둔다 — 스포크(`cross-account-trust-role`)가 아직 없다.
-  #    argocd_hub_assumable_role_arns 가 비어 있으면 모듈 validation 이 plan 을 막는다
-  #    (Resource="*" 인 sts:AssumeRole 정책을 AWS 가 거부하므로 plan 단계에서 미리 잡는다).
-  #    스포크가 서고 신뢰 Role ARN 이 생기면(notepad 우선순위 4~5번) 그 값을 채워
-  #    별도 커밋으로 true 전환한다. argocd_namespace 는 기본값 "argocd" 를 그대로 쓴다 —
-  #    scripts/argocd-seed.sh 의 ARGOCD_NAMESPACE 기본값과 일치해야 한다(모듈 repo 규약).
-  enable_argocd_hub_pod_identity = false
+  # spoke(dev) 의 cross-account-trust-role 을 먼저 세우려다 "Invalid principal in policy" 로
+  # 실패했다(2026-08-19 실측) — trust policy 는 대상 Principal 이 존재해야 하고, 그 대상이
+  # 바로 이 값(허브의 argocd_hub_pod_identity Role)이었다. 순서를 뒤집어 허브를 먼저 켠다.
+  # argocd_namespace 는 기본값 "argocd" 를 그대로 쓴다 — scripts/argocd-seed.sh 의
+  # ARGOCD_NAMESPACE 기본값과 일치해야 한다(모듈 repo 규약).
+  enable_argocd_hub_pod_identity = true
+  argocd_hub_assumable_role_arns = [local.spoke_argocd_trust_role_arn]
 }

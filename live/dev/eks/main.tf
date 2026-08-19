@@ -458,7 +458,25 @@ module "eks" {
 
     # ── community tier (opt-in 추가) ────────────────────────────────────────
     # 컨트롤러+CRD 는 IaC addon, Issuer/Certificate CR 은 GitOps 소관이다.
-    "cert-manager" = { addon_version = "v1.21.0-eksbuild.3" }
+    #
+    # 🔴 **coredns·metrics-server·ebs-csi와 달리 최상위 toleration만으로는 부족하다.**
+    #    cert-manager 차트는 컨트롤러·cainjector·webhook 세 개의 독립된 Deployment로 구성되고
+    #    (`aws eks describe-addon-configuration` 스키마 실측 확인) 각각 자기 nodeSelector·
+    #    tolerations를 따로 받는다. 최상위만 주면 cainjector·webhook은 여전히 스케줄되지
+    #    않는다. Karpenter 노드가 아직 없는 상태(GitOps 미시딩)에서 system 관리형 노드그룹의
+    #    workload-class=system taint를 넘지 못해 전 컴포넌트가 DEGRADED로 멈춘다
+    #    (live/hub/eks 에서 실측된 것과 동일한 실패 모드 — `InsufficientNumberOfReplicas`,
+    #    0/2 노드 스케줄 가능, untolerated taint. hub 의 PR#37 수정을 여기 그대로 반영한다).
+    "cert-manager" = {
+      addon_version = "v1.21.0-eksbuild.3"
+      configuration = jsonencode(merge(
+        jsondecode(local.workload_class_toleration),
+        {
+          cainjector = jsondecode(local.workload_class_toleration)
+          webhook    = jsondecode(local.workload_class_toleration)
+        }
+      ))
+    }
     # ⛔ external-dns 는 **싣지 않는다.** 아래 enable_external_dns_iam 과 한 쌍이다 —
     #    IAM 없이 컨트롤러만 돌면 Route53 에 아무것도 쓰지 못하는 파드가 남는다(죽은 경로).
     #    되켤 때는 addon 과 IAM 을 **함께** 켠다.

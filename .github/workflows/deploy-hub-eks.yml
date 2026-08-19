@@ -158,6 +158,9 @@ jobs:
         env:
           # 2단째 assume 대상. ARN 에 계정 ID 가 있어 코드에 두지 않는다(D25 의 연장).
           TF_VAR_execution_role_arn: ${{ vars.HUB_AWS_EXEC_ROLE_ARN }}
+          # argocd_hub_assumable_role_arns 를 결정적으로 합성하는 데만 쓴다 — 계정 ID 라
+          # 코드에 두지 않는다(D25 의 연장, execution_role_arn 과 같은 이유).
+          TF_VAR_spoke_account_id: ${{ vars.DEV_ACCOUNT_ID }}
           # ⛔ `TF_VAR_public_access_cidrs` 는 **삭제됐다**(2026-08-06, private-only 전환).
           #    변수가 사라졌으니 주입 지점도 함께 지운다 — 죽은 경로를 남기지 않는다.
           #    repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 자체도 정리 대상이다(GitHub 설정 쪽).

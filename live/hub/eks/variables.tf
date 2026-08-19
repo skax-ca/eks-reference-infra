@@ -59,6 +59,17 @@ variable "execution_role_arn" {
   type        = string
 }
 
+variable "spoke_account_id" {
+  description = <<-EOT
+    spoke(dev, asset 계정)의 12자리 계정 ID. argocd_hub_assumable_role_arns 를 결정적으로
+    합성하는 데만 쓴다(cross-account-trust-role 모듈 규약 — iamr-demo-dev-an2-argocd-hub).
+
+    ⛔ 기본값을 두지 않는다 — 계정 ID라 git 에 두지 않는다. 주입 경로: CI 는 repo 변수
+       DEV_ACCOUNT_ID → TF_VAR_spoke_account_id, 로컬은 export TF_VAR_spoke_account_id=...
+  EOT
+  type        = string
+}
+
 # ⛔ **`public_access_cidrs` 는 삭제됐다**(private-only 전환).
 #    public 엔드포인트가 꺼지면 EKS 가 이 값을 무시한다 — 남겨 두면 *"좁혀 두었다"* 는 착시만
 #    만드는 죽은 설정이다. 되살리는 것은 설계 목적(모듈 repo의 워크벤치 설계 문서)을 되돌리는
