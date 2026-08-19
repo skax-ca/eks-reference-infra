@@ -72,11 +72,14 @@ readonly GH_ORG_ID="310520211"
 readonly GH_REPO_ID="1316830050"
 readonly SUB_BASE="repo:skax-ca@${GH_ORG_ID}/iac-reference-infra@${GH_REPO_ID}"
 
-# ⚠️ 3패턴이다. environment 를 선언한 job 만 :environment: 를 받는다(D28, 실측).
+# ⚠️ 4패턴이다. environment 를 선언한 job 만 :environment: 를 받는다(D28, 실측).
 #    ⛔ 와일드카드로 뭉치지 않는다 — org 내 다른 repo 가 assume 할 수 있게 된다.
+#    ⚠️ environment 패턴은 GitHub Environment 이름마다 하나씩 늘어난다 — dev·hub 둘 다
+#       apply job 에서 그 이름을 선언하므로 신뢰 정책도 그만큼 늘어난다(2026-08-19, hub 신설).
 readonly SUB_PR="${SUB_BASE}:pull_request"
 readonly SUB_MAIN="${SUB_BASE}:ref:refs/heads/main"
-readonly SUB_ENV="${SUB_BASE}:environment:dev"
+readonly SUB_ENV_DEV="${SUB_BASE}:environment:dev"
+readonly SUB_ENV_HUB="${SUB_BASE}:environment:hub"
 
 # ── D29: lock 객체 버전 폭증 방어 ───────────────────────────────────────────
 readonly NONCURRENT_DAYS=7
@@ -145,7 +148,8 @@ entry_trust_policy() {
           "${OIDC_URL}:sub": [
             "${SUB_PR}",
             "${SUB_MAIN}",
-            "${SUB_ENV}"
+            "${SUB_ENV_DEV}",
+            "${SUB_ENV_HUB}"
           ]
         }
       }
