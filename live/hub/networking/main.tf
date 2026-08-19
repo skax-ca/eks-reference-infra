@@ -188,7 +188,8 @@ module "vpc" {
 #    라우팅 대상(uniq 대역)이 안 겹쳐도 dup 대역이 겹치는 것만으로 peering 자체가 거부된다.
 #    자세한 근거는 모듈 repo 문서 참조.
 resource "aws_ec2_transit_gateway" "hub" {
-  description = "hub-spoke ArgoCD 크로스 계정 라우팅"
+  # description 은 AWS API 가 ASCII 만 허용한다(2026-08-20 실측: InvalidParameterValue).
+  description = "hub-spoke cross-account routing for ArgoCD"
 
   # 자동 전파를 끈다 — 자동 전파는 attachment 의 VPC 전 CIDR(uniq+dup)을 그대로 전파해
   # peering 과 같은 dup 대역 충돌이 TGW 라우트테이블 안에서 재현된다. 그래서 uniq 대역만
@@ -209,9 +210,12 @@ resource "aws_ec2_transit_gateway" "hub" {
 resource "aws_ram_resource_share" "tgw" {
   name = "ram-${var.workload}-${var.env}-${var.region_code}-tgw-share"
 
-  # 조직(o-rs1oivwow6) 밖 계정은 허용하지 않는다 — hub·spoke(asset) 둘 다 같은 조직 소속이라
-  # 필요 없다. true 로 두면 조직 밖 계정도 원칙적으로 초대할 수 있게 돼 경계가 넓어진다.
-  allow_external_principals = false
+  # true — hub·spoke(asset) 둘 다 조직(o-rs1oivwow6) 소속이지만, 초대 없는 조직 내부 공유는
+  # 조직 관리 계정(694171854892, 우리는 멤버 계정)에서 enable-sharing-with-aws-organization을
+  # 먼저 실행해야 켜진다(2026-08-20 실측: 그 상태로 apply 시 RAM AssociateResourceShare가
+  # "Principal ... is not in your AWS organization"으로 거부). 관리 계정 권한이 없으므로
+  # 표준 계정 간 공유(초대)로 간다 — spoke가 aws_ram_resource_share_accepter로 수락해야 한다.
+  allow_external_principals = true
 
   tags = {
     Name = "ram-${var.workload}-${var.env}-${var.region_code}-tgw-share"

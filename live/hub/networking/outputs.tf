@@ -64,6 +64,16 @@ output "transit_gateway_id" {
   value       = aws_ec2_transit_gateway.hub.id
 }
 
+output "tgw_resource_share_arn" {
+  description = <<-EOT
+    TGW 를 spoke 에 공유하는 RAM resource share ARN. allow_external_principals = true 라 spoke
+    쪽에서 초대를 명시적으로 수락해야 한다(live/dev/networking 의
+    aws_ram_resource_share_accepter 가 소비) — 이 값을 GitHub repo 변수
+    HUB_TGW_RESOURCE_SHARE_ARN 에 옮겨 적는다.
+  EOT
+  value       = aws_ram_resource_share.tgw.arn
+}
+
 output "flow_log_group_name" {
   description = <<-EOT
     VPC Flow Logs 가 기록되는 CloudWatch 로그 그룹 이름.
