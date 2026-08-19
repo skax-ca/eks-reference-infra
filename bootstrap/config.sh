@@ -7,10 +7,20 @@
 # ⛔ AWSAFTExecution 은 이 파일 어디에도 등장하지 않는다. D27-1 로 실행 Role 이
 #    신설로 바뀌었고, 공용 계정(F13)에서 남의 Role 을 건드리지 않기로 했다.
 #
-# ── 2026-08-19: hub 신설 후 정정 — dev·hub 는 Role/버킷을 공유하지 않는다 ──────
-# 이 계정(team)은 hub 의 영구 거처이고 dev 는 향후 별도 계정으로 이전한다(사용자 결정) —
-# "같은 계정 = 공유해도 된다"가 아니다. OIDC provider 만 AWS 제약(URL 당 계정에 1개)으로
-# 불가피하게 공유되고, 나머지(Role·버킷)는 dev/hub 각자 소유한다.
+# ── 2026-08-19: hub-spoke 토폴로지 확정 ─────────────────────────────────────
+# 이 계정(team) 은 hub 의 영구 거처다(단일, 고정). dev 는 team 계정을 완전히 떠나
+# 별도 계정(asset)으로 옮기며, "spoke" 토폴로지의 **첫 인스턴스**가 된다 — spoke 는
+# 새 네이밍 토큰이 아니라 **역할**(허브가 아닌 클러스터군)이고, 그 아래 여러 환경/서비스가
+# 붙을 수 있어야 한다. 그래서 spoke 쪽 네이밍은 고정 상수가 아니라 `SPOKE_ENV`(기본값
+# "dev")로 매개변수화한다 — 다음 spoke 인스턴스(예: stage, 서비스별 env)를 추가할 때
+# 이 파일을 다시 고치지 않고 `SPOKE_ENV=<이름>`만 바꿔 같은 스크립트를 재사용한다.
+#
+# hub 는 계정마다 정확히 하나뿐이라는 성격상(team 계정의 영구 거처) 고정 상수로 남긴다 —
+# spoke 처럼 여러 인스턴스가 필요하지 않다.
+#
+# team 계정에 남아 있던 옛 dev Role/버킷(iamr-demo-dev-an2-gha-*, s3-demo-dev-an2-tfstate-*)은
+# 대상이 사라진 채 orphan 으로 남았던 것을 이번에 정리한다(bootstrap 스크립트가 아니라
+# 1회성 수동 조치 — README.md 「6」 참조).
 
 set -euo pipefail
 
@@ -59,27 +69,26 @@ readonly EXPECTED_ACCOUNT
 
 # ── 네이밍 토큰 (모듈 repo architecture/02) ─────────────────────────────────
 readonly WORKLOAD="demo"      # D24
-readonly ENV="dev"
 readonly REGION_CODE="an2"
 
-readonly BUCKET_PREFIX="s3-${WORKLOAD}-${ENV}-${REGION_CODE}-tfstate-"
-readonly ENTRY_ROLE="iamr-${WORKLOAD}-${ENV}-${REGION_CODE}-gha-entry-01"
-readonly EXEC_ROLE="iamr-${WORKLOAD}-${ENV}-${REGION_CODE}-gha-exec-01"
-# 종속 객체는 약어를 새로 만들지 않고 부모 이름을 상속한다.
-# ⚠️ inline 정책은 tags 미지원 → 이것은 Name 태그가 아니라 name 인자(=식별자)다.
-readonly ENTRY_POLICY="${ENTRY_ROLE}-policy"
-
-# ── hub 전용 자원 (2026-08-19 신설) ─────────────────────────────────────────
-# dev 와 **같은 계정**이지만 별도 소유 — Role·버킷은 공유하지 않는다(위 정정 참조).
+# ── hub (단일, 고정 — team 계정의 영구 거처) ────────────────────────────────
 readonly HUB_ENV="hub"
 readonly HUB_BUCKET_PREFIX="s3-${WORKLOAD}-${HUB_ENV}-${REGION_CODE}-tfstate-"
 readonly HUB_ENTRY_ROLE="iamr-${WORKLOAD}-${HUB_ENV}-${REGION_CODE}-gha-entry-01"
 readonly HUB_EXEC_ROLE="iamr-${WORKLOAD}-${HUB_ENV}-${REGION_CODE}-gha-exec-01"
 readonly HUB_ENTRY_POLICY="${HUB_ENTRY_ROLE}-policy"
 
-# OIDC provider 는 URL 당 계정에 1개만 허용된다(AWS 제약) — dev·hub 가 이 계정에 공존하는 한
-# **원천적으로 나눌 수 없다.** Name 태그에서만 env 토큰을 뺐다 — 계정 레벨 공유 자원이라는
-# 뜻을 정확히 반영한다(2026-08-19 정정 전에는 iamoidc-demo-dev-an2-gha 로 dev 전용처럼 보였다).
+# ── spoke (다수 — SPOKE_ENV 로 인스턴스를 고른다, 기본값 "dev") ────────────
+# ⚠️ 이 값이 곧 그 spoke 인스턴스의 계정 안에서 쓰일 env 토큰이다. 새 spoke(예: stage,
+#    서비스별 env)를 부트스트랩할 때는 이 파일을 고치지 말고 SPOKE_ENV=<이름>으로 넘긴다.
+readonly SPOKE_ENV="${SPOKE_ENV:-dev}"
+readonly SPOKE_BUCKET_PREFIX="s3-${WORKLOAD}-${SPOKE_ENV}-${REGION_CODE}-tfstate-"
+readonly SPOKE_ENTRY_ROLE="iamr-${WORKLOAD}-${SPOKE_ENV}-${REGION_CODE}-gha-entry-01"
+readonly SPOKE_EXEC_ROLE="iamr-${WORKLOAD}-${SPOKE_ENV}-${REGION_CODE}-gha-exec-01"
+readonly SPOKE_ENTRY_POLICY="${SPOKE_ENTRY_ROLE}-policy"
+
+# OIDC provider 는 URL 당 계정에 1개만 허용된다(AWS 제약). hub(team)·spoke(각자 별도 계정)는
+# 서로 다른 계정이라 공유가 애초에 불가능하지도 필요하지도 않다 — 각 계정 안에서 각자 만든다.
 readonly OIDC_NAME="iamoidc-${WORKLOAD}-${REGION_CODE}-gha"
 
 # ── OIDC (Phase 2 실측 — docs/deployment-facts.md §3) ───────────────────────
@@ -89,17 +98,12 @@ readonly GH_ORG_ID="310520211"
 readonly GH_REPO_ID="1316830050"
 readonly SUB_BASE="repo:skax-ca@${GH_ORG_ID}/iac-reference-infra@${GH_REPO_ID}"
 
-# dev 입구 Role 신뢰 — 3패턴, hub 신설 전과 동일하게 복원(2026-08-19: hub 를 여기 얹으려던
-# 시도를 되돌렸다 — hub 는 아래 별도 Role 을 쓴다).
 # ⛔ 와일드카드로 뭉치지 않는다 — org 내 다른 repo 가 assume 할 수 있게 된다.
-readonly SUB_PR="${SUB_BASE}:pull_request"
+# 두 패턴만 쓴다(pull_request 없음) — 이 repo 워크플로는 애초에 PR 트리거가 없다(CLAUDE.md 「4」).
+# SUB_MAIN 은 hub·spoke 가 **값이 같다**(같은 repo·브랜치 — sub 는 env 가 아니라 ref 로 갈린다).
 readonly SUB_MAIN="${SUB_BASE}:ref:refs/heads/main"
-readonly SUB_ENV_DEV="${SUB_BASE}:environment:dev"
-
-# hub 입구 Role 신뢰 — 2패턴만. hub workflow 는애초에 pull_request 트리거가 없으므로
-# (이 repo CLAUDE.md 「4」) 쓰이지 않는 패턴을 만들어 두지 않는다("죽은 경로를 남기지 않는다").
-# SUB_MAIN 은 dev 와 **값이 같다**(같은 repo·브랜치 — sub 는 env 가 아니라 ref 로 갈린다) → 재사용.
-readonly SUB_ENV_HUB="${SUB_BASE}:environment:hub"
+readonly SUB_ENV_HUB="${SUB_BASE}:environment:${HUB_ENV}"
+readonly SUB_ENV_SPOKE="${SUB_BASE}:environment:${SPOKE_ENV}"
 
 # ── D29: lock 객체 버전 폭증 방어 ───────────────────────────────────────────
 readonly NONCURRENT_DAYS=7
@@ -108,8 +112,9 @@ readonly ABORT_MPU_DAYS=7
 # ── 거버넌스 태그 (architecture/02 §1.1) ────────────────────────────────────
 # 이 리소스들은 IaC 밖이라 provider default_tags 가 없다 → 스크립트가 직접 붙인다.
 # ManagedBy=bootstrap.sh 가 "이건 tofu 가 관리하지 않는다"는 표시다.
+# ⚠️ Environment 태그값은 고정 상수가 아니라 bootstrap.sh 가 호출부에서 넘긴다
+#    (hub 실행이면 HUB_ENV, spoke 실행이면 SPOKE_ENV) — 대상마다 다르기 때문이다.
 readonly TAG_WORKLOAD="$WORKLOAD"
-readonly TAG_ENV="$ENV"
 readonly TAG_MANAGED_BY="bootstrap.sh"
 readonly TAG_OWNER="cloud-architect"
 readonly TAG_COST_CENTER="internal-poc"
@@ -137,7 +142,7 @@ assert_account() {
     || die "계정 불일치: 기대 $EXPECTED_ACCOUNT, 실제 $actual — 공용 계정이므로 중단한다"
 }
 
-# state 버킷을 prefix 로 찾는다(dev·hub 공용 헬퍼 — prefix 만 다르게 넘긴다).
+# state 버킷을 prefix 로 찾는다(hub·spoke 공용 헬퍼 — prefix 만 다르게 넘긴다).
 # ⚠️ 버킷명은 git 에 없다(D25). 그래서 "이름을 아는 것"이 아니라 "찾는 것"이 멱등성의 기반이다.
 find_bucket_by_prefix() {
   local prefix="$1" found
@@ -150,71 +155,14 @@ find_bucket_by_prefix() {
     *) die "prefix '${prefix}' 버킷이 ${#names[@]}개다: ${names[*]} — 사람이 정리해야 한다" ;;
   esac
 }
-find_bucket()     { find_bucket_by_prefix "$BUCKET_PREFIX"; }
-find_hub_bucket() { find_bucket_by_prefix "$HUB_BUCKET_PREFIX"; }
+find_hub_bucket()   { find_bucket_by_prefix "$HUB_BUCKET_PREFIX"; }
+find_spoke_bucket() { find_bucket_by_prefix "$SPOKE_BUCKET_PREFIX"; }
 
 account_id() { echo "$EXPECTED_ACCOUNT"; }
 oidc_arn()   { echo "arn:aws:iam::${EXPECTED_ACCOUNT}:oidc-provider/${OIDC_URL}"; }
 role_arn()   { echo "arn:aws:iam::${EXPECTED_ACCOUNT}:role/$1"; }
 
-# ── 기대 정책 문서 (생성·비교 양쪽이 같은 것을 쓴다) ────────────────────────
-entry_trust_policy() {
-  cat <<JSON
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": { "Federated": "$(oidc_arn)" },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": { "${OIDC_URL}:aud": "${OIDC_AUD}" },
-        "StringLike": {
-          "${OIDC_URL}:sub": [
-            "${SUB_PR}",
-            "${SUB_MAIN}",
-            "${SUB_ENV_DEV}"
-          ]
-        }
-      }
-    }
-  ]
-}
-JSON
-}
-
-exec_trust_policy() {
-  cat <<JSON
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": { "AWS": "$(role_arn "$ENTRY_ROLE")" },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-JSON
-}
-
-# 입구 Role 의 권한은 "실행 Role assume" 하나뿐이다. 넓히지 않는다.
-entry_permission_policy() {
-  cat <<JSON
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "sts:AssumeRole",
-      "Resource": "$(role_arn "$EXEC_ROLE")"
-    }
-  ]
-}
-JSON
-}
-
-# ── hub 전용 정책 문서 (dev 와 같은 형태, Role·sub 패턴만 다르다) ────────────
+# ── 기대 정책 문서 (생성·비교 양쪽이 같은 것을 쓴다) — hub·spoke 같은 형태다 ─
 hub_entry_trust_policy() {
   cat <<JSON
 {
@@ -254,6 +202,7 @@ hub_exec_trust_policy() {
 JSON
 }
 
+# 입구 Role 의 권한은 "실행 Role assume" 하나뿐이다. 넓히지 않는다.
 hub_entry_permission_policy() {
   cat <<JSON
 {
@@ -263,6 +212,60 @@ hub_entry_permission_policy() {
       "Effect": "Allow",
       "Action": "sts:AssumeRole",
       "Resource": "$(role_arn "$HUB_EXEC_ROLE")"
+    }
+  ]
+}
+JSON
+}
+
+spoke_entry_trust_policy() {
+  cat <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Federated": "$(oidc_arn)" },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": { "${OIDC_URL}:aud": "${OIDC_AUD}" },
+        "StringLike": {
+          "${OIDC_URL}:sub": [
+            "${SUB_MAIN}",
+            "${SUB_ENV_SPOKE}"
+          ]
+        }
+      }
+    }
+  ]
+}
+JSON
+}
+
+spoke_exec_trust_policy() {
+  cat <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "AWS": "$(role_arn "$SPOKE_ENTRY_ROLE")" },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+JSON
+}
+
+spoke_entry_permission_policy() {
+  cat <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "$(role_arn "$SPOKE_EXEC_ROLE")"
     }
   ]
 }
@@ -344,18 +347,18 @@ check_role_trust() {
   json_eq "$actual" "$expected" && echo ok || echo drift
 }
 
-check_entry_inline_policy() {
-  local actual
-  actual="$(aws_ iam get-role-policy --role-name "$ENTRY_ROLE" --policy-name "$ENTRY_POLICY" \
-    --query 'PolicyDocument' --output json 2>/dev/null)" || { echo absent; return; }
-  json_eq "$actual" "$(entry_permission_policy)" && echo ok || echo drift
-}
-
 check_hub_entry_inline_policy() {
   local actual
   actual="$(aws_ iam get-role-policy --role-name "$HUB_ENTRY_ROLE" --policy-name "$HUB_ENTRY_POLICY" \
     --query 'PolicyDocument' --output json 2>/dev/null)" || { echo absent; return; }
   json_eq "$actual" "$(hub_entry_permission_policy)" && echo ok || echo drift
+}
+
+check_spoke_entry_inline_policy() {
+  local actual
+  actual="$(aws_ iam get-role-policy --role-name "$SPOKE_ENTRY_ROLE" --policy-name "$SPOKE_ENTRY_POLICY" \
+    --query 'PolicyDocument' --output json 2>/dev/null)" || { echo absent; return; }
+  json_eq "$actual" "$(spoke_entry_permission_policy)" && echo ok || echo drift
 }
 
 check_exec_admin_attached() {
