@@ -18,6 +18,14 @@
       "source": "manual",
       "category": "notepad-migration",
       "content": "2026-08-19 — 이 repo의 notepad.md를 날짜별 prepend 방식(2026-08-19 신설했다가 같은 세션에 폐기)에서 iac-module-library와 동일한 OMC 3단 구조(Priority/Working/MANUAL)로 전환. 사용자 의도가 '동일 메커니즘 관리'였음을 뒤늦게 확인 — mcp__t__notepad_*가 다른 프로젝트에 못 쓰는 원인은 OMC의 의도된 worktree 격리(세션 시작 시점 trustedRoot에 고정)였으므로, 커스텀 MCP 서버(.mcp/notepad-server.ts 등, 같은 세션에 신설했다가 삭제)는 불필요했다 — 이 repo를 프로젝트 루트로 하는 별도 세션에서는 mcp__t__notepad_*가 iac-module-library와 완전히 동일하게 동작한다. 마이그레이션 시 원본 1392줄 전부 보존(무손실 스크립트 검증) — 최근 3개(2026-08-19) 항목만 Working Memory로, 나머지 전부 MANUAL로 이관. 과거 flat-file 형식 설명 원문은 git 이력(migrate 커밋 직전)에 남아 있다."
+    },
+    {
+      "timestamp": 1787183106864,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-19 — spoke(dev) networking+eks apply 완료(66개+클러스터/노드그룹/7addon 전부 ACTIVE), cross-account-trust-role도 생성 완료. VPC Peering은 AWS가 구조적으로 거부(hub·spoke가 공유하는 pod-dup CIDR 100.64.0.0/16 때문)해 완전 폐기하고 Transit Gateway로 설계 전환(모듈 repo docs 3커밋 반영 완료). 이 repo는 TGW hub쪽 1단계 코드만 push(commit 0e81675, plan 확인됨: 8 to add 0 destroy) — apply(workflow_dispatch)는 아직 실행 안 함. 다음 착수 순서: (1) hub networking TGW apply dispatch → transit_gateway_id를 repo변수 HUB_TRANSIT_GATEWAY_ID로 수동 등록 (2) live/dev/networking에 TGW attachment+라우트 신설·apply → attachment ID를 DEV_TGW_ATTACHMENT_ID로 수동 등록 (3) hub networking에 TGW RT의 spoke행 라우트 추가·apply로 양방향 완성 (4) live/dev/eks SG에 허브발 443 인바운드 추가 (5) 별도 미해결: live/hub/networking의 deletion_protection=false가 커밋된 채 방치, docs/deployment-facts.md는 true라고 잘못 기록됨(drift) — 안전 사안이라 확인 필요 (6) 위 완료 후 iac-platform-gitops에 spoke cluster-secret.yaml 등록해 hub ArgoCD의 spoke 크로스 계정 인증 검증."
     }
-  ]
+  ],
+  "userDirectives": [],
+  "hotPaths": []
 }
