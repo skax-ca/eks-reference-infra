@@ -191,6 +191,10 @@ jobs:
         env:
           # 2단째 assume 대상. ARN 에 계정 ID 가 있어 코드에 두지 않는다(D25 의 연장).
           TF_VAR_execution_role_arn: ${{ vars.HUB_AWS_EXEC_ROLE_ARN }}
+          # VPC Peering 요청(peer_owner_id·peer_vpc_id)에만 쓴다 — 계정 ID·타 계정 리소스
+          # 식별자라 코드에 두지 않는다(D25 의 연장, execution_role_arn 과 같은 이유).
+          TF_VAR_spoke_account_id: ${{ vars.DEV_ACCOUNT_ID }}
+          TF_VAR_spoke_vpc_id: ${{ vars.DEV_VPC_ID }}
         run: |
           # -detailed-exitcode: 0=변경없음 · 1=오류 · 2=변경있음.
           # "두 번째 apply 가 No changes 인가"(ignore_tags 판정)를 사람 눈이 아니라

@@ -174,3 +174,40 @@ module "vpc" {
   # ⛔ false 로 바꾼 커밋을 main 에 남겨두지 않는다 — 파기가 끝나면 즉시 되돌린다.
   deletion_protection = false
 }
+
+# ── 크로스 계정 네트워크 경로 — 허브가 요청자다 (모듈 repo docs/02-choose-your-path.md
+#    「네트워크 경로」 절, 2026-08-19 신설) ────────────────────────────────────────
+#
+# IAM 신뢰(live/dev/eks 의 cross-account-trust-role)는 "누가 인증되는가"만 답한다.
+# private-only 엔드포인트에서 허브 ArgoCD 가 spoke API 서버에 패킷을 보낼 경로 자체가
+# 없으면 인증이 성립해도 도달하지 못한다 — 이 리소스가 그 경로다.
+#
+# ⚠️ **재사용 모듈이 아니다.** peering 은 정확히 2개 VPC 사이의 1:1 관계라 vpc/eks-cluster급
+#    재사용 가치가 없다(설계 문서 근거 그대로) — 배포 루트가 vanilla 리소스로 직접 연결한다.
+resource "aws_vpc_peering_connection" "spoke_dev" {
+  vpc_id        = module.vpc.vpc_id
+  peer_vpc_id   = var.spoke_vpc_id
+  peer_owner_id = var.spoke_account_id
+
+  # 수락은 spoke 계정의 provider 로 별도 apply 한다(live/dev/networking 의
+  # aws_vpc_peering_connection_accepter) — 여기서 auto_accept 를 쓰지 않는다.
+  # auto_accept 는 **같은 계정** 안에서만 동작한다(AWS 제약).
+
+  tags = {
+    Name = "pcx-${var.workload}-${var.env}-${var.region_code}-to-dev"
+  }
+}
+
+# 허브 ArgoCD(argocd-application-controller)가 도는 노드 서브넷의 라우트테이블에
+# spoke 의 node-uniq CIDR(10.51.0.0/16, live/dev/networking 의 cidr_uniq)로 가는 경로를 얹는다.
+# ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별 RT 리스트다(private 그룹) — 전부에 건다.
+resource "aws_route" "to_spoke_dev" {
+  for_each = toset(module.vpc.route_table_ids_by_group["node-uniq"])
+
+  route_table_id = each.value
+  # 🔑 spoke 의 cidr_uniq 값이다(live/dev/networking/main.tf 참조) — 결정적 상수라 하드코딩한다.
+  #    CIDR 은 계정 식별 정보가 아니다(이미 그 파일에 평문으로 커밋돼 있다) — 계정 ID·VPC ID 와
+  #    다르게 var 로 빼지 않는다.
+  destination_cidr_block    = "10.51.0.0/16"
+  vpc_peering_connection_id = aws_vpc_peering_connection.spoke_dev.id
+}
