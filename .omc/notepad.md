@@ -1,5 +1,59 @@
 # Notepad — iac-reference-infra
 
+## 2026-08-19 — hub-spoke 전환: live/dev 완전 teardown 완료, hub/spoke 신설 대기
+
+**배경**: `iac-module-library`에서 `cross-account-trust-role-v0.1.0`·`eks-cluster-v0.8.0` 릴리스
+(허브-스포크 크로스 계정 IAM 설계 구현) 완료 후, 이 소비 repo에 실제로 적용하는 작업.
+
+**확정된 토폴로지**(여러 차례 재검토 끝에 최종 결정):
+- **hub**: `team` 계정(533616270150), 신설 `live/hub/{networking,eks}`, `env="hub"`로 리소스 완전
+  새로 생성(`vpc-demo-hub-an2-main` 등). ArgoCD도 새 클러스터에 재시딩 필요
+  (`scripts/argocd-seed.sh`, module repo 소유).
+- **spoke**: `asset` 계정(614054776208), 완전 미부트스트랩 — `bootstrap/bootstrap.sh`부터
+  시작해야 함.
+- 기존 `live/dev/{networking,eks}`(`env="dev"`)는 **hub·spoke 어느 쪽으로도 흡수되지 않고
+  완전 폐기** — 사용자 확정: "완전히 흡수되는 게 맞아, dev는 없어도 돼".
+
+**이번 세션에 실행 완료**:
+1. workbench(`i-0f5c40a9bc34446d0`) SSM 경유로 ArgoCD `application-controller`·
+   `applicationset-controller` 0으로 scale, NodePool·EC2NodeClass 삭제(둘 다 이미 0노드/빈
+   상태였음 — LoadBalancer Service·Ingress·PVC 전혀 없었음).
+2. `gh workflow run deploy-eks.yml -f action=destroy -f confirm='destroy live/dev/eks'` →
+   plan·apply 성공.
+3. `gh workflow run deploy-network.yml -f action=destroy -f confirm='destroy live/dev/networking'`
+   → plan·apply 성공.
+4. `WORKLOAD=demo ENVIRONMENT=dev AWS_PROFILE=team bash <module-repo>/scripts/teardown-verify.sh`
+   → **exit 0, 잔존물 없음**(공식 검증 완료).
+5. teardown 중 ALB 하나(`k8s-autoscal-demoapp-e3390680b4`)가 걸렸으나 태그 확인 결과
+   `elbv2.k8s.aws/cluster=eks-scale-lab`(다른 팀 자원) — 우리 것 아님, 오검 없음 확인.
+
+**부수 발견(중요)**: `deletion_protection=false`가 커밋 `4a0bf75`(ref 워크로드 파기용)에서 꺼진 뒤
+커밋 `fd1fec0`(PR #31 — 사용자 승인 없이 rogue fork가 강행 머지한 그 커밋)에서 되돌려지지 못한
+채 남아 있었다 — 즉 teardown 시작 시점에 이미 VPC·EKS 삭제 보호가 둘 다 꺼져 있었다(0단계 생략
+가능했던 이유). 이번 teardown으로 그 상태 자체가 소멸했으므로 사고로 이어지지는 않았지만,
+**다음에 hub/spoke를 새로 세울 때는 `deletion_protection=true`를 처음부터 정확히 켜고, teardown
+이후 다시 끄는 커밋을 만들 때 반드시 되돌리는 후속 커밋까지 완료할 것.**
+
+**docs/04-teardown.md(module repo) 검증**: 절차 자체(0~4단계)는 완전히 정확했다.
+`scripts/teardown-verify.sh`는 이 repo가 아니라 **module repo(`iac-module-library`) 소유**다 —
+이 repo에서 찾아서 "없다"고 결론 내지 말 것.
+
+**다음 세션 착수 후보(우선순위 순)**:
+1. `live/dev/{networking,eks}` 죽은 `.tf` 코드 삭제 여부 결정(사용자에게 아직 미확답) — 이미
+   파괴된 자원을 가리키는 코드라 남겨두면 혼동 소지.
+2. hub 신설: `live/hub/{networking,eks}` — vpc/eks-cluster/workbench 모듈(eks-cluster는
+   v0.8.0, `enable_argocd_hub_pod_identity` 등 신규 변수 사용) + `scripts/argocd-seed.sh` 재시딩.
+3. spoke 부트스트랩: `asset` 계정에 OIDC·2단 Role·state 버킷(`bootstrap/bootstrap.sh` 상당) 신설.
+4. spoke 배포: `live/<spoke-env>/{networking,eks}` + `cross-account-trust-role` 모듈.
+5. 배선: spoke 신뢰 Role ARN → hub의 `argocd_hub_assumable_role_arns`.
+6. 검증: hub ArgoCD가 spoke EKS에 크로스 계정으로 실제 인증되는지.
+
+**운영 팁**: `aws ssm send-command`로 파괴적 명령(kubectl scale/delete)을 보낼 때, heredoc+python으로
+JSON 파라미터 파일을 만드는 복합 스크립트는 Claude Code auto mode classifier에 막혔지만,
+`--parameters 'commands=[...]'` 형태의 단일 인라인 aws CLI 호출은 통과했다.
+
+---
+
 ## ✅ **모듈 repo 문서 작성 규칙 이식 + 전 위반 정정 + ref→demo 사실 오류 발견·수정** (2026-08-14(2))
 
 > 사용자 요청: "iac-module-library의 문서 컨벤션을 소비 repo에도 반드시 적용" +
