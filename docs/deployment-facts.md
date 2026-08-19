@@ -23,9 +23,9 @@
 | 이 repo 숫자 ID | `1316830050` | OIDC `sub` 조립(D28) |
 | 모듈 repo | `skax-ca/iac-module-library` | 소싱 대상 |
 | workload code | `demo` (D24) | `Name` 태그 2번째 토큰 |
-| env | `dev` · `hub`(2026-08-19 신설, **같은 계정이지만 별도 소유** — 아래 「5.6 hub 환경」) | — |
+| env | `dev`(spoke 첫 인스턴스) · `hub`(team 계정의 단일 고정 거처) | — |
 | region / regioncode | `ap-northeast-2` / `an2` | — |
-| OIDC 발급자 | `token.actions.githubusercontent.com` | provider URL(계정에 이미 존재 — 신규 생성 아님, dev·hub **공유** — AWS가 URL당 계정 1개로 제한) |
+| OIDC 발급자 | `token.actions.githubusercontent.com` | provider URL(계정마다 URL당 1개 — hub와 spoke는 계정이 달라 각자 가진다) |
 | OIDC audience | `sts.amazonaws.com` | `aws-actions/configure-aws-credentials` 기본값 |
 | 실행 Role **이름** | `iamr-demo-dev-an2-gha-exec-01`(dev) · `iamr-demo-hub-an2-gha-exec-01`(hub) | ARN은 아래 「2」. **각자 소유**, 공유 아님 |
 | 입구 Role **이름** | `iamr-demo-dev-an2-gha-entry-01`(dev) · `iamr-demo-hub-an2-gha-entry-01`(hub) | ARN은 아래 「2」. **각자 소유**, 공유 아님 |
@@ -56,10 +56,10 @@ App은 이 repo 하나에만 `contents: read`+`metadata: read`로 설치되어 �
 
 | 항목 | 이유 | 저장 위치 | 주입 경로 |
 |------|------|----------|----------|
-| state 버킷명 | 비노출 | repo 변수 `TF_STATE_BUCKET` / 로컬 gitignore된 `backend.hcl` | `tofu init -backend-config="bucket=..."` |
-| AWS 계정 ID | 비노출 | 입구 Role ARN에 포함 → repo 변수 `AWS_ENTRY_ROLE_ARN` | `configure-aws-credentials`의 `role-to-assume` |
-| 입구 Role ARN | 비노출 | repo 변수 `AWS_ENTRY_ROLE_ARN` | 동일 |
-| 실행 Role ARN | 비노출 | repo 변수 `AWS_EXEC_ROLE_ARN` | provider `assume_role.role_arn`(`TF_VAR_execution_role_arn` 경유) |
+| state 버킷명(dev) | 비노출 | repo 변수 `DEV_TF_STATE_BUCKET` / 로컬 gitignore된 `backend.hcl` | `tofu init -backend-config="bucket=..."` |
+| AWS 계정 ID(dev) | 비노출 | 입구 Role ARN에 포함 → repo 변수 `DEV_AWS_ENTRY_ROLE_ARN` | `configure-aws-credentials`의 `role-to-assume` |
+| 입구 Role ARN(dev) | 비노출 | repo 변수 `DEV_AWS_ENTRY_ROLE_ARN` | 동일 |
+| 실행 Role ARN(dev) | 비노출 | repo 변수 `DEV_AWS_EXEC_ROLE_ARN` | provider `assume_role.role_arn`(`TF_VAR_execution_role_arn` 경유) |
 | GitHub App private key | 비밀 | repo secret `MODULE_READER_KEY` | `create-github-app-token` |
 | GitHub App Client ID | 이식성 | repo 변수 `MODULE_READER_CLIENT_ID` | `create-github-app-token`의 `client-id` |
 
@@ -69,7 +69,7 @@ Client ID는 비밀이 아니다 — public `/apps/{slug}` 엔드포인트로 �
 버킷명 형식은 `s3-demo-dev-an2-tfstate-<guid12>`(D25). GUID는 `bootstrap.sh`가 생성하고
 실행자에게 출력한다 — 이 문서에 적지 않는다.
 
-**검증**: `git grep -c "$TF_STATE_BUCKET"` → 0이어야 한다(D25 수용 기준).
+**검증**: 실제 버킷명 문자열로 `git grep`했을 때 0이어야 한다(D25 수용 기준).
 
 `EXPECTED_ACCOUNT`는 기본값 없는 환경변수로 부트스트랩에 요구된다(`EXPECTED_ACCOUNT=<12자리>
 bash bootstrap/bootstrap.sh`) — 안전장치가 값을 소비하는 함수(`oidc_arn()`·`role_arn()`)에
@@ -87,7 +87,6 @@ policy가 대신 그 자리를 맡는다 — 아래 「5」).
 "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
 "StringLike": {
   "token.actions.githubusercontent.com:sub": [
-    "repo:skax-ca@310520211/iac-reference-infra@1316830050:pull_request",
     "repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main",
     "repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev"
   ]
@@ -107,10 +106,10 @@ policy가 대신 그 자리를 맡는다 — 아래 「5」).
 
 | 리소스 | 이름 | 값의 소재 |
 |--------|------|----------|
-| state 버킷 | `s3-demo-dev-an2-tfstate-<guid12>`(버저닝·SSE·퍼블릭차단·lifecycle) | repo 변수 `TF_STATE_BUCKET` / 로컬 `backend.hcl` |
-| OIDC provider | `Name` 태그 `iamoidc-demo-dev-an2-gha`(계정에 하나뿐, 식별자는 URL) | 이름이 곧 값 |
-| **입구** Role | `iamr-demo-dev-an2-gha-entry-01` | ARN은 repo 변수 `AWS_ENTRY_ROLE_ARN` |
-| **실행** Role | `iamr-demo-dev-an2-gha-exec-01`(D27-1) | ARN은 repo 변수 `AWS_EXEC_ROLE_ARN` |
+| state 버킷(dev) | `s3-demo-dev-an2-tfstate-<guid12>`(버저닝·SSE·퍼블릭차단·lifecycle) | repo 변수 `DEV_TF_STATE_BUCKET` / 로컬 `backend.hcl` |
+| OIDC provider | `Name` 태그 `iamoidc-demo-an2-gha`(계정에 하나뿐, 식별자는 URL) | 이름이 곧 값 |
+| **입구** Role(dev) | `iamr-demo-dev-an2-gha-entry-01` | ARN은 repo 변수 `DEV_AWS_ENTRY_ROLE_ARN` |
+| **실행** Role(dev) | `iamr-demo-dev-an2-gha-exec-01`(D27-1) | ARN은 repo 변수 `DEV_AWS_EXEC_ROLE_ARN` |
 
 `AWSAFTExecution`은 손대지 않는다 — 신뢰 정책이 깨진 채로 남아 있고, 우리 자산이 아니므로
 우리 문제가 아니다(D27-1).
@@ -184,22 +183,21 @@ GitHub은 **secret만 마스킹**한다. repo 변수(`vars.*`)는 마스킹 대�
 plan artifact(`retention-days: 1`)와 노출 대상이 같으므로 현재는 수용한다 — 완화하려면 첫
 스텝에서 `::add-mask::`를 쓰거나 값을 secret으로 옮긴다(열린 항목, 아래 「9」).
 
-### 5.6 hub 환경 — 같은 계정, 별도 소유
+### 5.6 hub/spoke 부트스트랩 소유
 
-`live/hub/{networking,eks}`는 `live/dev`와 **같은 AWS 계정**을 쓴다(실측: `aws sts
-get-caller-identity --profile team`이 가리키는 계정이 `live/dev`가 이미 배포된 공용 개발
-계정과 동일). 그러나 **"같은 계정 = 공유"가 아니다** — 이 계정은 hub의 영구 거처이고 dev는
-향후 별도 계정으로 이전할 예정이라, dev·hub는 부트스트랩 자원(state 버킷·입구/실행 Role)을
-**각자** 갖는다:
+`live/hub/{networking,eks}`는 team 계정의 단일 고정 거처다. `live/dev/{networking,eks}`는
+spoke의 첫 인스턴스로 asset 계정에 다시 배포한다. 따라서 hub와 dev는 부트스트랩 자원(state
+버킷·입구/실행 Role)을 **각자** 갖는다:
 
 | 자원 | dev | hub |
 |------|-----|-----|
 | state 버킷 | `s3-demo-dev-an2-tfstate-*` | `s3-demo-hub-an2-tfstate-*`(별도) |
 | 입구/실행 Role | `iamr-demo-dev-an2-gha-{entry,exec}-01` | `iamr-demo-hub-an2-gha-{entry,exec}-01`(별도) |
-| Role 신뢰 sub 패턴 | 3패턴(`pull_request`·`ref:refs/heads/main`·`environment:dev`) | 2패턴(`ref:refs/heads/main`·`environment:hub`, `pull_request` 없음 — hub workflow에 PR 트리거가 없다) |
+| Role 신뢰 sub 패턴 | 2패턴(`ref:refs/heads/main`·`environment:dev`, `pull_request` 없음) | 2패턴(`ref:refs/heads/main`·`environment:hub`, `pull_request` 없음) |
 
-**공유하는 유일한 예외는 OIDC provider다** — AWS가 URL당 계정에 정확히 1개만 허용해 원천적으로
-나눌 수 없다. `Name` 태그에서 env 토큰을 뺐다(`iamoidc-demo-an2-gha`, `bootstrap/config.sh` 참조).
+OIDC provider도 계정마다 각자 가진다. AWS가 URL당 계정에 정확히 1개만 허용하므로, 같은 계정 안에서
+나눌 수 없다는 제약은 그대로다. `Name` 태그에서 env 토큰을 뺐다(`iamoidc-demo-an2-gha`,
+`bootstrap/config.sh` 참조).
 
 ⚠️ **`hub/{networking,eks}.tfstate` 위치**: 이 상태 파일들이 dev 버킷에 있으면 아직
 `tofu init -migrate-state`로 hub 전용 버킷으로 옮기지 않은 것이다 — 옮긴 뒤에는 hub 버킷에

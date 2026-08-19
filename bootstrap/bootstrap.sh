@@ -290,27 +290,26 @@ cat <<OUT
 OUT
 if [[ "$SPOKE_ENV" == dev ]]; then
 cat <<OUT
-⚠️ 이 값들은 team 계정을 가리키던 기존 TF_STATE_BUCKET·AWS_ENTRY_ROLE_ARN·AWS_EXEC_ROLE_ARN
-   repo 변수를 **덮어써서** asset 계정을 가리키게 한다 — 변수 이름은 그대로다
-   (deploy-network.yml·deploy-eks.yml 이 이미 이 이름들을 쓴다).
+⚠️ dev 전용 repo 변수는 DEV_* prefix 를 쓴다. 기존 무접두 TF_STATE_BUCKET·AWS_* 변수는
+   삭제 대상이다 — dev/stg/prd 를 구분할 수 없기 때문이다.
 
-  [spoke:dev]  GitHub repo 변수  TF_STATE_BUCKET     = $SPOKE_BUCKET
-  [spoke:dev]  GitHub repo 변수  AWS_ENTRY_ROLE_ARN  = $(role_arn "$SPOKE_ENTRY_ROLE")
-  [spoke:dev]  GitHub repo 변수  AWS_EXEC_ROLE_ARN   = $(role_arn "$SPOKE_EXEC_ROLE")
+  [spoke:dev]  GitHub repo 변수  DEV_TF_STATE_BUCKET     = $SPOKE_BUCKET
+  [spoke:dev]  GitHub repo 변수  DEV_AWS_ENTRY_ROLE_ARN  = $(role_arn "$SPOKE_ENTRY_ROLE")
+  [spoke:dev]  GitHub repo 변수  DEV_AWS_EXEC_ROLE_ARN   = $(role_arn "$SPOKE_EXEC_ROLE")
 
   로컬 backend.hcl (live/dev/*, gitignore 됨):
     bucket = "$SPOKE_BUCKET"   key = "dev/<root>.tfstate"
     region = "$REGION"         use_lockfile = true
 
   변수 등록:
-    gh variable set TF_STATE_BUCKET    -R skax-ca/iac-reference-infra -b '$SPOKE_BUCKET'
-    gh variable set AWS_ENTRY_ROLE_ARN -R skax-ca/iac-reference-infra -b '$(role_arn "$SPOKE_ENTRY_ROLE")'
-    gh variable set AWS_EXEC_ROLE_ARN  -R skax-ca/iac-reference-infra -b '$(role_arn "$SPOKE_EXEC_ROLE")'
+    gh variable set DEV_TF_STATE_BUCKET    -R skax-ca/iac-reference-infra -b '$SPOKE_BUCKET'
+    gh variable set DEV_AWS_ENTRY_ROLE_ARN -R skax-ca/iac-reference-infra -b '$(role_arn "$SPOKE_ENTRY_ROLE")'
+    gh variable set DEV_AWS_EXEC_ROLE_ARN  -R skax-ca/iac-reference-infra -b '$(role_arn "$SPOKE_EXEC_ROLE")'
 OUT
 else
 cat <<OUT
 ⚠️ 이 spoke 인스턴스는 아직 워크플로 배선(repo 변수 이름·live/<env>/ 루트)이 없다 —
-   dev 가 TF_STATE_BUCKET/AWS_*_ROLE_ARN 이름을 이미 점유하므로, 두 번째 spoke 를 실제로
+   dev/stg/prd prefix 만으로는 같은 env 안의 다중 클러스터를 표현할 수 없으므로, 두 번째 spoke 를
    CI 에 연결하려면 워크플로 파일과 repo 변수 네이밍을 먼저 설계해야 한다(별도 작업).
 
   [spoke:$SPOKE_ENV]  버킷      = $SPOKE_BUCKET

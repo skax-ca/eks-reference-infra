@@ -1,8 +1,8 @@
 # live/hub/networking
 
 VPC 하나를 배포하는 허브 루트다. 모듈은 `iac-module-library` 에서 **git tag 로 소싱**한다(D20).
-`live/dev/networking` 과 **같은 계정·같은 실행 Role** 을 쓴다(2026-08-19 실측 — hub 대상 계정이
-`live/dev` 가 이미 배포된 공용 개발 계정과 동일). state key 와 CIDR·`env` 토큰으로만 dev 와 갈린다.
+team 계정의 hub 전용 부트스트랩 자원과 state key 를 쓴다. `live/dev` 는 spoke 첫 인스턴스로
+별도 계정에 배포되므로 hub 와 state 버킷·Role 을 공유하지 않는다.
 
 > ⚠️ **이 디렉토리는 코드만 보고는 어느 버킷·어느 계정을 가리키는지 알 수 없다.** 의도된 것이고
 > (D25), 그 대가로 이 README 가 **주입 변수명을 명시할 의무**를 진다. 아래 「1. 주입되는 값 — 코드에 없는 것들」이 그 이행이다.
@@ -13,11 +13,11 @@ VPC 하나를 배포하는 허브 루트다. 모듈은 `iac-module-library` 에�
 
 | 무엇 | 어디서 | 어떻게 |
 |------|--------|--------|
-| state 버킷명 | CI: repo 변수 `TF_STATE_BUCKET` · 로컬: gitignore 된 `backend.hcl` | `tofu init -backend-config=...` |
+| state 버킷명 | CI: repo 변수 `HUB_TF_STATE_BUCKET` · 로컬: gitignore 된 `backend.hcl` | `tofu init -backend-config=...` |
 | state key | 같음 (`hub/networking.tfstate`) | 동일 |
 | 리전 / `use_lockfile` | 같음 | 동일 |
-| **실행 Role ARN** | CI: repo 변수 `AWS_EXEC_ROLE_ARN` · 로컬: `TF_VAR_execution_role_arn` | provider `assume_role` |
-| 입구 Role ARN | CI: repo 변수 `AWS_ENTRY_ROLE_ARN` | `configure-aws-credentials` (워크플로) |
+| **실행 Role ARN** | CI: repo 변수 `HUB_AWS_EXEC_ROLE_ARN` · 로컬: `TF_VAR_execution_role_arn` | provider `assume_role` |
+| 입구 Role ARN | CI: repo 변수 `HUB_AWS_ENTRY_ROLE_ARN` | `configure-aws-credentials` (워크플로) |
 
 `backend.hcl` 은 **이 디렉토리에** 둔다. `.gitignore` 의 `backend.hcl` 패턴은 앵커가 없어 모든
 depth 에서 잡히고, pre-commit 훅 1단계가 staged 여부를 별도로 검사한다.

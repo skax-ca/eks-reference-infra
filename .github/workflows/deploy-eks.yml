@@ -116,7 +116,7 @@ jobs:
       - name: AWS 인증 (입구 Role)
         uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
-          role-to-assume: ${{ vars.AWS_ENTRY_ROLE_ARN }}
+          role-to-assume: ${{ vars.DEV_AWS_ENTRY_ROLE_ARN }}
           aws-region: ap-northeast-2
           role-session-name: gha-eks-plan-${{ github.run_id }}
 
@@ -128,13 +128,13 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}
         run: |
           cat > backend.hcl <<EOF
-          bucket       = "${{ vars.TF_STATE_BUCKET }}"
+          bucket       = "${{ vars.DEV_TF_STATE_BUCKET }}"
           key          = "dev/eks.tfstate"
           region       = "ap-northeast-2"
           use_lockfile = true
 
           assume_role = {
-            role_arn     = "${{ vars.AWS_EXEC_ROLE_ARN }}"
+            role_arn     = "${{ vars.DEV_AWS_EXEC_ROLE_ARN }}"
             session_name = "tofu-eks-backend-${{ github.run_id }}"
           }
           EOF
@@ -156,7 +156,7 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}
         env:
           # 2단째 assume 대상. ARN 에 계정 ID 가 있어 코드에 두지 않는다(D25 의 연장).
-          TF_VAR_execution_role_arn: ${{ vars.AWS_EXEC_ROLE_ARN }}
+          TF_VAR_execution_role_arn: ${{ vars.DEV_AWS_EXEC_ROLE_ARN }}
           # ⛔ `TF_VAR_public_access_cidrs` 는 **삭제됐다**(2026-08-06, private-only 전환).
           #    변수가 사라졌으니 주입 지점도 함께 지운다 — 죽은 경로를 남기지 않는다.
           #    repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 자체도 정리 대상이다(GitHub 설정 쪽).
@@ -276,7 +276,7 @@ jobs:
       - name: AWS 인증 (입구 Role)
         uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
-          role-to-assume: ${{ vars.AWS_ENTRY_ROLE_ARN }}
+          role-to-assume: ${{ vars.DEV_AWS_ENTRY_ROLE_ARN }}
           aws-region: ap-northeast-2
           role-session-name: gha-eks-apply-${{ github.run_id }}
 
@@ -284,13 +284,13 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}
         run: |
           cat > backend.hcl <<EOF
-          bucket       = "${{ vars.TF_STATE_BUCKET }}"
+          bucket       = "${{ vars.DEV_TF_STATE_BUCKET }}"
           key          = "dev/eks.tfstate"
           region       = "ap-northeast-2"
           use_lockfile = true
 
           assume_role = {
-            role_arn     = "${{ vars.AWS_EXEC_ROLE_ARN }}"
+            role_arn     = "${{ vars.DEV_AWS_EXEC_ROLE_ARN }}"
             session_name = "tofu-eks-backend-${{ github.run_id }}"
           }
           EOF

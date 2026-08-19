@@ -34,10 +34,10 @@ EKS 클러스터 하나를 배포하는 루트다. 모듈은 `iac-module-library
 
 | 무엇 | 어디서 | 어떻게 |
 |------|--------|--------|
-| state 버킷명 | CI: repo 변수 `TF_STATE_BUCKET` · 로컬: gitignore 된 `backend.hcl` | `tofu init -backend-config=...` |
+| state 버킷명 | CI: repo 변수 `DEV_TF_STATE_BUCKET` · 로컬: gitignore 된 `backend.hcl` | `tofu init -backend-config=...` |
 | state key | 같음 (**`dev/eks.tfstate`** — networking 과 다르다) | 동일 |
-| **실행 Role ARN** | CI: repo 변수 `AWS_EXEC_ROLE_ARN` · 로컬: `TF_VAR_execution_role_arn` | provider `assume_role` |
-| 입구 Role ARN | CI: repo 변수 `AWS_ENTRY_ROLE_ARN` | `configure-aws-credentials` (워크플로) |
+| **실행 Role ARN** | CI: repo 변수 `DEV_AWS_EXEC_ROLE_ARN` · 로컬: `TF_VAR_execution_role_arn` | provider `assume_role` |
+| 입구 Role ARN | CI: repo 변수 `DEV_AWS_ENTRY_ROLE_ARN` | `configure-aws-credentials` (워크플로) |
 
 ⛔ **`EKS_PUBLIC_ACCESS_CIDRS` 행은 삭제됐다**(2026-08-06, private-only 전환). 변수·주입 지점·
 repo 변수를 함께 걷어냈다 — public 이 꺼지면 EKS 가 그 값을 무시하므로 남겨 두면

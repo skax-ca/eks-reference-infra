@@ -23,8 +23,18 @@ state 버킷·OIDC provider·2단 Role을 **AWS CLI 스크립트로** 만든다.
 ```bash
 export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다 (아래)
 
-./bootstrap.sh      # 생성·수렴 (AWS_PROFILE 기본 team)
+./bootstrap.sh      # 생성·수렴 (BOOTSTRAP_TARGET 기본 hub, AWS_PROFILE 기본 team)
 ./verify.sh         # drift 확인만 (read-only). exit 0=일치 / 1=drift / 2=실행 불가
+```
+
+spoke 계정은 대상과 환경 토큰을 명시한다. 첫 spoke 인스턴스는 `dev`다.
+
+```bash
+BOOTSTRAP_TARGET=spoke SPOKE_ENV=dev AWS_PROFILE=asset \
+  EXPECTED_ACCOUNT=<asset 계정 ID> ./bootstrap.sh
+
+BOOTSTRAP_TARGET=spoke SPOKE_ENV=dev AWS_PROFILE=asset \
+  EXPECTED_ACCOUNT=<asset 계정 ID> ./verify.sh
 ```
 
 - ⛔ **`EXPECTED_ACCOUNT`에 기본값을 두지 않는다** — 계정 ID는 git에 남기지 않는다.
@@ -33,9 +43,10 @@ export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다
     소비하므로, 빠지면 부트스트랩 전체가 성립하지 않는다.
   - ⛔ *"해시로 저장해 비교하면 되지 않나"* 는 **이미 기각된 안**이다 — 계정 ID 공간이
     10¹²뿐이라 전수 해싱이 가능하다. **해시가 보호가 되지 않는다.**
-- ⚠️ **대상 계정은 공용 개발 계정이다**(`CLAUDE.md` 참조). 스크립트는 `sts get-caller-identity`로
-  실제 계정과 `EXPECTED_ACCOUNT`를 대조하고 다르면 즉시 중단한다 — 조용히 다른 계정을 치지 않게
-  하는 장치다. **필수 주입이 된 덕에 실행자가 매번 대상을 명시하게 되므로 이 방어가 강해졌다.**
+- ⚠️ **대상 계정은 실행마다 명시한다.** hub는 team 계정, spoke:dev는 asset 계정이다.
+  스크립트는 `sts get-caller-identity`로 실제 계정과 `EXPECTED_ACCOUNT`를 대조하고 다르면 즉시
+  중단한다 — 조용히 다른 계정을 치지 않게 하는 장치다. **필수 주입이 된 덕에 실행자가 매번 대상을
+  명시하게 되므로 이 방어가 강해졌다.**
 - ⛔ **`AWSAFTExecution`을 건드리지 않는다.** `update-assume-role-policy`가
   이 디렉토리에서 그 Role을 향하면 규약 위반이다.
 - 스크립트는 **bash 전용**이다(`config.sh`가 bash 배열을 쓴다). zsh에서 `source` 하지 않는다.
@@ -44,52 +55,48 @@ export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다
 
 `config.sh`가 코드 측면, 이 표가 문서 측면이다. **어긋나면 이 표를 고친다.**
 
-> **dev·hub는 이 계정(team) 안에서 별도 소유다.** 버킷·Role은 각자 갖는다 — dev가 향후 별도
-> 계정으로 이전할 예정이라, "지금 같은 계정이니 공유해도 된다"는 전제를 두지 않는다.
-> **OIDC provider만** AWS 제약(URL당 계정에 1개)으로 불가피하게 공유한다.
+> **hub는 team 계정의 단일 고정 거처이고, spoke는 별도 계정에 놓이는 여러 인스턴스다.** 첫 spoke
+> 인스턴스의 env 토큰은 `dev`다. `spoke`는 새 네이밍 토큰이 아니라 역할이므로, 이름에는
+> `SPOKE_ENV` 값(`dev`, 향후 `stage` 등)을 쓴다.
+> **OIDC provider는 계정마다 URL당 1개**만 만들 수 있다. hub와 spoke는 서로 다른 계정이므로 공유하지
+> 않고, 각 계정 안에서 하나씩 가진다.
 
-### S3 state 버킷 (dev·hub 각자)
+### S3 state 버킷 (target별 1개)
 
-| 항목 | dev | hub |
-|------|-----|-----|
-| 이름 | `s3-demo-dev-an2-tfstate-<guid12>` | `s3-demo-hub-an2-tfstate-<guid12>` |
-| **이름의 소재** | **git에 없다.** GitHub repo 변수 `TF_STATE_BUCKET` / 로컬 `backend.hcl` | 같은 방식, `HUB_TF_STATE_BUCKET` |
-| 태그 `Environment` | `dev` | `hub` |
+| 항목 | hub | spoke (`SPOKE_ENV=dev`) |
+|------|-----|-------------------------|
+| 실행 대상 | `BOOTSTRAP_TARGET=hub` (기본값) | `BOOTSTRAP_TARGET=spoke SPOKE_ENV=dev` |
+| 계정 | team 계정 | asset 계정 |
+| 이름 | `s3-demo-hub-an2-tfstate-<guid12>` | `s3-demo-dev-an2-tfstate-<guid12>` |
+| **이름의 소재** | **git에 없다.** GitHub repo 변수 `HUB_TF_STATE_BUCKET` / 로컬 `backend.hcl` | 같은 방식, `DEV_TF_STATE_BUCKET` |
+| 태그 `Environment` | `hub` | `dev` |
 
 공통(둘 다 동일): 버저닝 `Enabled`(state 손상 복구) · 암호화 `AES256`(SSE-S3, BucketKey on) ·
 퍼블릭 차단 4개 전부 `true` · **lifecycle** 비현행 버전 **7일**·불완전 MPU **7일**
 (`use_lockfile=true`가 lock 객체 버전을 폭증시킨다, AWS 공식 경고) · 태그 `Name`·`Workload=demo`·
 `ManagedBy=bootstrap.sh`·`Owner`·`CostCenter`(IaC 밖이라 `default_tags`가 없다 → 스크립트가 직접 붙인다).
 
-### OIDC provider (dev·hub 공유 — AWS 제약)
+### OIDC provider (각 계정에 1개 — AWS 제약)
 
 | 항목 | 기대값 |
 |------|--------|
 | URL | `token.actions.githubusercontent.com` |
 | client ID (`aud`) | `sts.amazonaws.com` |
 | thumbprint | **설정하지 않는다** — CLI에서 선택 인자임을 실측 확인했고, AWS가 2023년부터 알려진 IdP를 자체 신뢰 저장소로 검증한다. 지문을 박으면 만료 부채만 남는다 |
-| `Name` 태그 | `iamoidc-demo-an2-gha`(env 토큰 없음 — 계정 레벨 공유 자원이라는 뜻을 반영) |
+| `Name` 태그 | `iamoidc-demo-an2-gha`(env 토큰 없음 — 계정 레벨 자원이라는 뜻을 반영) |
 
 > ⚠️ 이 리소스는 **식별자가 URL**이라 `name` 인자가 없다 → 이름은 **`Name` 태그로만** 표현된다.
-> ⚠️ **새로 만들 수 없다** — AWS가 URL당 계정에 정확히 1개만 허용한다. dev·hub가 이 계정에
-> 공존하는 한 원천적으로 나눌 수 없는 유일한 예외다.
+> ⚠️ AWS가 URL당 계정에 정확히 1개만 허용한다. 같은 계정 안에서 두 target이 공존하면 나눌 수
+> 없지만, 현재 hub(team)와 spoke(asset)는 계정이 달라 각자 1개씩 만든다.
 
-### IAM Role 2단 (dev·hub 각자)
+### IAM Role 2단 (target별 1세트)
 
 | Role | 신뢰 | 권한 |
 |------|------|------|
-| **[dev] 입구** `iamr-demo-dev-an2-gha-entry-01` | OIDC provider + `aud` + **`sub` 3패턴**(아래) | inline: 실행 Role `sts:AssumeRole` **하나뿐** |
-| **[dev] 실행** `iamr-demo-dev-an2-gha-exec-01` | **dev 입구 Role만** | `AdministratorAccess` |
 | **[hub] 입구** `iamr-demo-hub-an2-gha-entry-01` | OIDC provider + `aud` + **`sub` 2패턴**(아래) | inline: hub 실행 Role `sts:AssumeRole` **하나뿐** |
 | **[hub] 실행** `iamr-demo-hub-an2-gha-exec-01` | **hub 입구 Role만** | `AdministratorAccess` |
-
-dev `sub` 3패턴 (근거: `docs/deployment-facts.md`):
-
-```
-repo:skax-ca@310520211/iac-reference-infra@1316830050:pull_request
-repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main
-repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev
-```
+| **[spoke:dev] 입구** `iamr-demo-dev-an2-gha-entry-01` | OIDC provider + `aud` + **`sub` 2패턴**(아래) | inline: spoke 실행 Role `sts:AssumeRole` **하나뿐** |
+| **[spoke:dev] 실행** `iamr-demo-dev-an2-gha-exec-01` | **spoke:dev 입구 Role만** | `AdministratorAccess` |
 
 hub `sub` 2패턴 — `pull_request`가 없다: hub workflow는 애초에 PR 트리거가 없다(`CLAUDE.md`
 「4」) — 쓰이지 않는 패턴을 만들어 두지 않는다:
@@ -99,8 +106,15 @@ repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main
 repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:hub
 ```
 
-> `ref:refs/heads/main` 값은 dev·hub가 **동일**하다 — 같은 repo·브랜치라 sub가 env가 아니라
-> ref로 갈리기 때문이다. 그래도 Role 자체는 dev/hub 각자 소유다(신뢰 정책만 이 패턴을 공유).
+spoke `sub` 2패턴 — `environment:` 값은 `SPOKE_ENV`다. `SPOKE_ENV=dev`일 때:
+
+```
+repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main
+repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev
+```
+
+> `ref:refs/heads/main` 값은 hub·spoke가 **동일**하다 — 같은 repo·브랜치라 sub가 env가 아니라
+> ref로 갈리기 때문이다. 그래도 Role 자체는 각 target 계정 안에서 따로 소유한다.
 
 - ⚠️ **`environment`를 선언한 job만 `:environment:`를 받는다.** 하나로 뭉칠 수 없다.
 - ⛔ **와일드카드로 넓히지 않는다.** `repo:…*`로 쓰면 org 내 **다른 repo**가 이 Role을 assume한다.
@@ -140,11 +154,11 @@ repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:hub
 완화책이 있다고 주장하려면 그것이 동작함을 보여야 한다. 다음을 실행해 재현한다.
 
 ```bash
-source ./config.sh; B="$(find_bucket)"        # ⚠️ bash 로 실행할 것
+source ./config.sh; B="$(find_hub_bucket)"        # ⚠️ bash 로 실행할 것
 
 # drift 주입 — 서로 다른 코드 경로 2개(S3 · IAM)
 aws_ s3api put-bucket-versioning --bucket "$B" --versioning-configuration Status=Suspended
-aws_ iam put-role-policy --role-name "$ENTRY_ROLE" --policy-name "$ENTRY_POLICY" \
+aws_ iam put-role-policy --role-name "$HUB_ENTRY_ROLE" --policy-name "$HUB_ENTRY_POLICY" \
   --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:AssumeRole","Resource":"*"}]}'
 
 ./verify.sh     # → DRIFT 2건, exit 1
@@ -164,6 +178,7 @@ aws_ iam put-role-policy --role-name "$ENTRY_ROLE" --policy-name "$ENTRY_POLICY"
 ```hcl
 # ⚠️ 버킷명은 git 에 없다 → var 로 받는다. 값을 여기 적으면 그 요건이 무의미해진다.
 variable "state_bucket" { type = string }
+variable "env" { type = string } # 예: hub 또는 dev
 
 import {
   to = aws_s3_bucket.tfstate
@@ -175,15 +190,15 @@ import {
 }
 import {
   to = aws_iam_role.gha_entry
-  id = "iamr-demo-dev-an2-gha-entry-01"
+  id = "iamr-demo-${var.env}-an2-gha-entry-01"
 }
 import {
   to = aws_iam_role.gha_exec
-  id = "iamr-demo-dev-an2-gha-exec-01"
+  id = "iamr-demo-${var.env}-an2-gha-exec-01"
 }
 import {
   to = aws_iam_role_policy.gha_entry          # inline 정책
-  id = "iamr-demo-dev-an2-gha-entry-01:iamr-demo-dev-an2-gha-entry-01-policy"
+  id = "iamr-demo-${var.env}-an2-gha-entry-01:iamr-demo-${var.env}-an2-gha-entry-01-policy"
 }
 ```
 
@@ -198,10 +213,15 @@ git에 두지 않는다는 요건의 연장이다.
 
 | 값 | 행선지 |
 |----|--------|
-| `TF_STATE_BUCKET`(dev) | GitHub repo 변수 |
-| `AWS_ENTRY_ROLE_ARN`·`AWS_EXEC_ROLE_ARN`(dev) | GitHub repo 변수 |
 | `HUB_TF_STATE_BUCKET`(hub) | GitHub repo 변수 |
 | `HUB_AWS_ENTRY_ROLE_ARN`·`HUB_AWS_EXEC_ROLE_ARN`(hub) | GitHub repo 변수 |
+| `DEV_TF_STATE_BUCKET`(spoke:dev) | GitHub repo 변수 |
+| `DEV_AWS_ENTRY_ROLE_ARN`·`DEV_AWS_EXEC_ROLE_ARN`(spoke:dev) | GitHub repo 변수 |
 | 로컬 `backend.hcl`(각 루트 디렉토리) | **gitignore 됨.** `tofu init -backend-config=backend.hcl` |
+
+기존 무접두 `TF_STATE_BUCKET`·`AWS_ENTRY_ROLE_ARN`·`AWS_EXEC_ROLE_ARN` repo 변수는 삭제 대상이다.
+`SPOKE_ENV=dev`가 아닌 spoke 인스턴스는 아직 워크플로 배선(repo 변수 이름·`live/<env>/` 루트)이
+없다. 또한 `DEV_*` 같은 env prefix 만으로는 같은 env 안의 다중 클러스터를 표현할 수 없으므로,
+실제 CI에 연결하려면 별도 설계가 먼저 필요하다.
 
 `docs/deployment-facts.md`는 **값이 아니라 "어디에 있는지"** 를 기록한다.

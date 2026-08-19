@@ -136,7 +136,7 @@ module "vpc" {
   가져오는 것이 더 나쁘므로 이 구조를 택했다. 상위 요금제로 올리면 required reviewers로 승인을
   **같은 run 안**에 넣어 이 간극도 사라진다.
 - ⚠️ **plan job과 apply job의 `sub`가 다르다** — `environment:`를 선언한 job만
-  `:environment:<name>`을 받는다. 신뢰 정책은 **3패턴**이다.
+  `:environment:<name>`을 받는다. 신뢰 정책은 **2패턴**(`ref:refs/heads/main` + `environment:<env>`)이다.
 - ⚠️ **plan artifact는 민감할 수 있다.** 리소스 속성이 평문으로 들어간다 → `retention-days: 1`.
 - ⚠️ 역할 체인 세션은 **최대 1시간**(연장 불가). apply job이 다시 인증하므로 승인 지연은 문제없지만,
   그 사이 state가 바뀌면 `apply`가 거부한다 — **정상 동작**이고 재-plan이 필요하다.
@@ -188,9 +188,9 @@ module "vpc" {
 
 | 리소스 | 이름 | 비고 |
 |--------|------|------|
-| S3 버킷 | `s3-demo-dev-an2-tfstate-<hex12>` | 버저닝·SSE·퍼블릭 차단 + **lifecycle** |
-| OIDC provider | `token.actions.githubusercontent.com` | `aud`=`sts.amazonaws.com`. `Name` 태그 `iamoidc-demo-dev-an2-gha` |
-| **입구** Role | `iamr-demo-dev-an2-gha-entry-01` | 신뢰=OIDC `sub` 3패턴. 권한=**실행 Role assume 하나뿐** |
+| S3 버킷 | `s3-demo-<env>-an2-tfstate-<hex12>` | 버저닝·SSE·퍼블릭 차단 + **lifecycle** |
+| OIDC provider | `token.actions.githubusercontent.com` | `aud`=`sts.amazonaws.com`. `Name` 태그 `iamoidc-demo-an2-gha` |
+| **입구** Role | `iamr-demo-<env>-an2-gha-entry-01` | 신뢰=OIDC `sub` 2패턴. 권한=**실행 Role assume 하나뿐** |
 | **실행** Role | `iamr-demo-dev-an2-gha-exec-01` | 신뢰=입구 Role만. 권한=`AdministratorAccess` |
 
 ⛔ **`AWSAFTExecution`은 생성 대상도 변경 대상도 아니다** — 「4-1. 대상 계정은 공용 개발 계정이다」 참조. `bootstrap.sh`에

@@ -140,7 +140,7 @@ jobs:
       - name: AWS 인증 (입구 Role)
         uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
-          role-to-assume: ${{ vars.AWS_ENTRY_ROLE_ARN }}
+          role-to-assume: ${{ vars.DEV_AWS_ENTRY_ROLE_ARN }}
           aws-region: ap-northeast-2
           role-session-name: gha-plan-${{ github.run_id }}
 
@@ -161,13 +161,13 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}
         run: |
           cat > backend.hcl <<EOF
-          bucket       = "${{ vars.TF_STATE_BUCKET }}"
+          bucket       = "${{ vars.DEV_TF_STATE_BUCKET }}"
           key          = "dev/networking.tfstate"
           region       = "ap-northeast-2"
           use_lockfile = true
 
           assume_role = {
-            role_arn     = "${{ vars.AWS_EXEC_ROLE_ARN }}"
+            role_arn     = "${{ vars.DEV_AWS_EXEC_ROLE_ARN }}"
             session_name = "tofu-backend-${{ github.run_id }}"
           }
           EOF
@@ -189,7 +189,7 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}
         env:
           # 2단째 assume 대상. ARN 에 계정 ID 가 있어 코드에 두지 않는다(D25 의 연장).
-          TF_VAR_execution_role_arn: ${{ vars.AWS_EXEC_ROLE_ARN }}
+          TF_VAR_execution_role_arn: ${{ vars.DEV_AWS_EXEC_ROLE_ARN }}
         run: |
           # -detailed-exitcode: 0=변경없음 · 1=오류 · 2=변경있음.
           # "두 번째 apply 가 No changes 인가"(ignore_tags 판정)를 사람 눈이 아니라
@@ -320,7 +320,7 @@ jobs:
       - name: AWS 인증 (입구 Role)
         uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
-          role-to-assume: ${{ vars.AWS_ENTRY_ROLE_ARN }}
+          role-to-assume: ${{ vars.DEV_AWS_ENTRY_ROLE_ARN }}
           aws-region: ap-northeast-2
           role-session-name: gha-apply-${{ github.run_id }}
 
@@ -329,13 +329,13 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}
         run: |
           cat > backend.hcl <<EOF
-          bucket       = "${{ vars.TF_STATE_BUCKET }}"
+          bucket       = "${{ vars.DEV_TF_STATE_BUCKET }}"
           key          = "dev/networking.tfstate"
           region       = "ap-northeast-2"
           use_lockfile = true
 
           assume_role = {
-            role_arn     = "${{ vars.AWS_EXEC_ROLE_ARN }}"
+            role_arn     = "${{ vars.DEV_AWS_EXEC_ROLE_ARN }}"
             session_name = "tofu-backend-${{ github.run_id }}"
           }
           EOF

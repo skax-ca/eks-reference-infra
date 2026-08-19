@@ -62,6 +62,7 @@ workflow_dispatch  →  plan job  →  apply job
 - plan: `repo:...:ref:refs/heads/main`
 - apply: `repo:...:environment:dev`
 
-입구 Role 신뢰 정책은 3패턴을 쓰고, execution Role을 assume하는 것은 `environment:dev` job뿐이다.
+입구 Role 신뢰 정책은 2패턴(`ref:refs/heads/main` + `environment:dev`)을 쓰고,
+execution Role을 assume하는 것은 `environment:dev` job뿐이다.
 
 <!-- MANUAL: 2026-08-04 — PR#12 merge 후 rename: deploy.yml → deploy-network.yml -->
