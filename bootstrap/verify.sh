@@ -9,6 +9,8 @@
 # ⚠️ 이 스크립트는 **음성 테스트로 증명해야 한다.** 리소스를 일부러 어긋나게 한 뒤
 #    exit 1 이 나오는 것을 보지 않으면, "완화책이 있다"는 착각만 남는다.
 #    증명 절차는 README.md §4 에 있다.
+#
+# 2026-08-19: dev·hub 각자 소유(버킷·Role) — 양쪽을 별도 블록으로 검사한다.
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 source ./config.sh
@@ -23,25 +25,37 @@ report() {  # report <이름> <상태>
   esac
 }
 
+verify_bucket() {  # verify_bucket <prefix> <label>
+  local prefix="$1" label="$2" bucket
+  bucket="$(find_bucket_by_prefix "$prefix")"
+  if [[ -z "$bucket" ]]; then
+    mismatch "[$label] state 버킷 — prefix '${prefix}' 로 찾을 수 없다"
+    return
+  fi
+  ok "[$label] state 버킷: $bucket"
+  report "  [$label] 버저닝"         "$(check_versioning "$bucket")"
+  report "  [$label] SSE(AES256)"    "$(check_encryption "$bucket")"
+  report "  [$label] 퍼블릭 차단"    "$(check_public_access_block "$bucket")"
+  report "  [$label] lifecycle(D29)" "$(check_lifecycle "$bucket")"
+}
+
 echo "=== verify (read-only · profile=$AWS_PROFILE) ==="
 assert_account
 
-BUCKET="$(find_bucket)"
-if [[ -z "$BUCKET" ]]; then
-  mismatch "state 버킷 — prefix '${BUCKET_PREFIX}' 로 찾을 수 없다"
-else
-  ok "state 버킷: $BUCKET"
-  report "  버저닝"        "$(check_versioning "$BUCKET")"
-  report "  SSE(AES256)"   "$(check_encryption "$BUCKET")"
-  report "  퍼블릭 차단"   "$(check_public_access_block "$BUCKET")"
-  report "  lifecycle(D29)" "$(check_lifecycle "$BUCKET")"
-fi
+verify_bucket "$BUCKET_PREFIX" "dev"
+verify_bucket "$HUB_BUCKET_PREFIX" "hub"
 
-report "OIDC provider ($OIDC_URL)" "$(check_oidc_provider)"
-report "입구 Role 신뢰 정책 ($ENTRY_ROLE)" "$(check_role_trust "$ENTRY_ROLE" "$(entry_trust_policy)")"
-report "입구 Role inline 정책"              "$(check_entry_inline_policy)"
-report "실행 Role 신뢰 정책 ($EXEC_ROLE)"   "$(check_role_trust "$EXEC_ROLE" "$(exec_trust_policy)")"
-report "실행 Role AdministratorAccess"      "$(check_exec_admin_attached)"
+report "OIDC provider ($OIDC_URL, dev·hub 공유)" "$(check_oidc_provider)"
+
+report "[dev] 입구 Role 신뢰 정책 ($ENTRY_ROLE)" "$(check_role_trust "$ENTRY_ROLE" "$(entry_trust_policy)")"
+report "[dev] 입구 Role inline 정책"              "$(check_entry_inline_policy)"
+report "[dev] 실행 Role 신뢰 정책 ($EXEC_ROLE)"   "$(check_role_trust "$EXEC_ROLE" "$(exec_trust_policy)")"
+report "[dev] 실행 Role AdministratorAccess"      "$(check_exec_admin_attached "$EXEC_ROLE")"
+
+report "[hub] 입구 Role 신뢰 정책 ($HUB_ENTRY_ROLE)" "$(check_role_trust "$HUB_ENTRY_ROLE" "$(hub_entry_trust_policy)")"
+report "[hub] 입구 Role inline 정책"                  "$(check_hub_entry_inline_policy)"
+report "[hub] 실행 Role 신뢰 정책 ($HUB_EXEC_ROLE)"   "$(check_role_trust "$HUB_EXEC_ROLE" "$(hub_exec_trust_policy)")"
+report "[hub] 실행 Role AdministratorAccess"          "$(check_exec_admin_attached "$HUB_EXEC_ROLE")"
 
 echo
 if [[ "$DRIFTS" -gt 0 ]]; then

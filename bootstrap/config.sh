@@ -6,6 +6,11 @@
 #
 # ⛔ AWSAFTExecution 은 이 파일 어디에도 등장하지 않는다. D27-1 로 실행 Role 이
 #    신설로 바뀌었고, 공용 계정(F13)에서 남의 Role 을 건드리지 않기로 했다.
+#
+# ── 2026-08-19: hub 신설 후 정정 — dev·hub 는 Role/버킷을 공유하지 않는다 ──────
+# 이 계정(team)은 hub 의 영구 거처이고 dev 는 향후 별도 계정으로 이전한다(사용자 결정) —
+# "같은 계정 = 공유해도 된다"가 아니다. OIDC provider 만 AWS 제약(URL 당 계정에 1개)으로
+# 불가피하게 공유되고, 나머지(Role·버킷)는 dev/hub 각자 소유한다.
 
 set -euo pipefail
 
@@ -58,12 +63,24 @@ readonly ENV="dev"
 readonly REGION_CODE="an2"
 
 readonly BUCKET_PREFIX="s3-${WORKLOAD}-${ENV}-${REGION_CODE}-tfstate-"
-readonly OIDC_NAME="iamoidc-${WORKLOAD}-${ENV}-${REGION_CODE}-gha"
 readonly ENTRY_ROLE="iamr-${WORKLOAD}-${ENV}-${REGION_CODE}-gha-entry-01"
 readonly EXEC_ROLE="iamr-${WORKLOAD}-${ENV}-${REGION_CODE}-gha-exec-01"
 # 종속 객체는 약어를 새로 만들지 않고 부모 이름을 상속한다.
 # ⚠️ inline 정책은 tags 미지원 → 이것은 Name 태그가 아니라 name 인자(=식별자)다.
 readonly ENTRY_POLICY="${ENTRY_ROLE}-policy"
+
+# ── hub 전용 자원 (2026-08-19 신설) ─────────────────────────────────────────
+# dev 와 **같은 계정**이지만 별도 소유 — Role·버킷은 공유하지 않는다(위 정정 참조).
+readonly HUB_ENV="hub"
+readonly HUB_BUCKET_PREFIX="s3-${WORKLOAD}-${HUB_ENV}-${REGION_CODE}-tfstate-"
+readonly HUB_ENTRY_ROLE="iamr-${WORKLOAD}-${HUB_ENV}-${REGION_CODE}-gha-entry-01"
+readonly HUB_EXEC_ROLE="iamr-${WORKLOAD}-${HUB_ENV}-${REGION_CODE}-gha-exec-01"
+readonly HUB_ENTRY_POLICY="${HUB_ENTRY_ROLE}-policy"
+
+# OIDC provider 는 URL 당 계정에 1개만 허용된다(AWS 제약) — dev·hub 가 이 계정에 공존하는 한
+# **원천적으로 나눌 수 없다.** Name 태그에서만 env 토큰을 뺐다 — 계정 레벨 공유 자원이라는
+# 뜻을 정확히 반영한다(2026-08-19 정정 전에는 iamoidc-demo-dev-an2-gha 로 dev 전용처럼 보였다).
+readonly OIDC_NAME="iamoidc-${WORKLOAD}-${REGION_CODE}-gha"
 
 # ── OIDC (Phase 2 실측 — docs/deployment-facts.md §3) ───────────────────────
 readonly OIDC_URL="token.actions.githubusercontent.com"
@@ -72,13 +89,16 @@ readonly GH_ORG_ID="310520211"
 readonly GH_REPO_ID="1316830050"
 readonly SUB_BASE="repo:skax-ca@${GH_ORG_ID}/iac-reference-infra@${GH_REPO_ID}"
 
-# ⚠️ 4패턴이다. environment 를 선언한 job 만 :environment: 를 받는다(D28, 실측).
-#    ⛔ 와일드카드로 뭉치지 않는다 — org 내 다른 repo 가 assume 할 수 있게 된다.
-#    ⚠️ environment 패턴은 GitHub Environment 이름마다 하나씩 늘어난다 — dev·hub 둘 다
-#       apply job 에서 그 이름을 선언하므로 신뢰 정책도 그만큼 늘어난다(2026-08-19, hub 신설).
+# dev 입구 Role 신뢰 — 3패턴, hub 신설 전과 동일하게 복원(2026-08-19: hub 를 여기 얹으려던
+# 시도를 되돌렸다 — hub 는 아래 별도 Role 을 쓴다).
+# ⛔ 와일드카드로 뭉치지 않는다 — org 내 다른 repo 가 assume 할 수 있게 된다.
 readonly SUB_PR="${SUB_BASE}:pull_request"
 readonly SUB_MAIN="${SUB_BASE}:ref:refs/heads/main"
 readonly SUB_ENV_DEV="${SUB_BASE}:environment:dev"
+
+# hub 입구 Role 신뢰 — 2패턴만. hub workflow 는애초에 pull_request 트리거가 없으므로
+# (이 repo CLAUDE.md 「4」) 쓰이지 않는 패턴을 만들어 두지 않는다("죽은 경로를 남기지 않는다").
+# SUB_MAIN 은 dev 와 **값이 같다**(같은 repo·브랜치 — sub 는 env 가 아니라 ref 로 갈린다) → 재사용.
 readonly SUB_ENV_HUB="${SUB_BASE}:environment:hub"
 
 # ── D29: lock 객체 버전 폭증 방어 ───────────────────────────────────────────
@@ -98,8 +118,11 @@ readonly TAG_COST_CENTER="internal-poc"
 readonly C_OK=$'\033[32m'; readonly C_CHG=$'\033[33m'
 readonly C_ERR=$'\033[31m'; readonly C_OFF=$'\033[0m'
 
-ok()      { printf '%s  ok%s      %s\n' "$C_OK" "$C_OFF" "$*"; }
-changed() { printf '%s changed%s  %s\n' "$C_CHG" "$C_OFF" "$*"; CHANGES=$((CHANGES + 1)); }
+# ⚠️ stderr로 보낸다 — mismatch()·die()와 통일. converge_bucket() 처럼 "로그를 찍으면서
+#    값도 $(...)로 반환"하는 함수가 생기면, stdout에 섞이는 순간 반환값이 로그와 뒤섞여
+#    깨진다(2026-08-19 실측: hub 버킷 부트스트랩 때 $BUCKET에 로그 텍스트가 섞여 들어갔다).
+ok()      { printf '%s  ok%s      %s\n' "$C_OK" "$C_OFF" "$*" >&2; }
+changed() { printf '%s changed%s  %s\n' "$C_CHG" "$C_OFF" "$*" >&2; CHANGES=$((CHANGES + 1)); }
 mismatch(){ printf '%s  DRIFT%s   %s\n' "$C_ERR" "$C_OFF" "$*" >&2; DRIFTS=$((DRIFTS + 1)); }
 die()     { printf '%s  ERROR%s   %s\n' "$C_ERR" "$C_OFF" "$*" >&2; exit 2; }
 
@@ -114,19 +137,21 @@ assert_account() {
     || die "계정 불일치: 기대 $EXPECTED_ACCOUNT, 실제 $actual — 공용 계정이므로 중단한다"
 }
 
-# state 버킷을 prefix 로 찾는다.
+# state 버킷을 prefix 로 찾는다(dev·hub 공용 헬퍼 — prefix 만 다르게 넘긴다).
 # ⚠️ 버킷명은 git 에 없다(D25). 그래서 "이름을 아는 것"이 아니라 "찾는 것"이 멱등성의 기반이다.
-find_bucket() {
-  local found
+find_bucket_by_prefix() {
+  local prefix="$1" found
   found="$(aws_ s3api list-buckets \
-    --query "Buckets[?starts_with(Name, \`${BUCKET_PREFIX}\`)].Name" --output text)"
+    --query "Buckets[?starts_with(Name, \`${prefix}\`)].Name" --output text)"
   local -a names=($found)
   case "${#names[@]}" in
     0) echo "" ;;
     1) echo "${names[0]}" ;;
-    *) die "prefix '${BUCKET_PREFIX}' 버킷이 ${#names[@]}개다: ${names[*]} — 사람이 정리해야 한다" ;;
+    *) die "prefix '${prefix}' 버킷이 ${#names[@]}개다: ${names[*]} — 사람이 정리해야 한다" ;;
   esac
 }
+find_bucket()     { find_bucket_by_prefix "$BUCKET_PREFIX"; }
+find_hub_bucket() { find_bucket_by_prefix "$HUB_BUCKET_PREFIX"; }
 
 account_id() { echo "$EXPECTED_ACCOUNT"; }
 oidc_arn()   { echo "arn:aws:iam::${EXPECTED_ACCOUNT}:oidc-provider/${OIDC_URL}"; }
@@ -148,8 +173,7 @@ entry_trust_policy() {
           "${OIDC_URL}:sub": [
             "${SUB_PR}",
             "${SUB_MAIN}",
-            "${SUB_ENV_DEV}",
-            "${SUB_ENV_HUB}"
+            "${SUB_ENV_DEV}"
           ]
         }
       }
@@ -190,6 +214,61 @@ entry_permission_policy() {
 JSON
 }
 
+# ── hub 전용 정책 문서 (dev 와 같은 형태, Role·sub 패턴만 다르다) ────────────
+hub_entry_trust_policy() {
+  cat <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Federated": "$(oidc_arn)" },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": { "${OIDC_URL}:aud": "${OIDC_AUD}" },
+        "StringLike": {
+          "${OIDC_URL}:sub": [
+            "${SUB_MAIN}",
+            "${SUB_ENV_HUB}"
+          ]
+        }
+      }
+    }
+  ]
+}
+JSON
+}
+
+hub_exec_trust_policy() {
+  cat <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "AWS": "$(role_arn "$HUB_ENTRY_ROLE")" },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+JSON
+}
+
+hub_entry_permission_policy() {
+  cat <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "$(role_arn "$HUB_EXEC_ROLE")"
+    }
+  ]
+}
+JSON
+}
+
 lifecycle_config() {
   cat <<JSON
 {
@@ -216,10 +295,6 @@ json_eq() { [[ "$(jq -cS . <<<"$1")" == "$(jq -cS . <<<"$2")" ]]; }
 #
 # 각 check_* 는 stdout 에 absent | ok | drift 중 하나를 낸다.
 # ─────────────────────────────────────────────────────────────────────────────
-
-check_bucket_exists() {
-  [[ -n "$(find_bucket)" ]] && echo ok || echo absent
-}
 
 check_versioning() {
   local b="$1" v
@@ -276,9 +351,16 @@ check_entry_inline_policy() {
   json_eq "$actual" "$(entry_permission_policy)" && echo ok || echo drift
 }
 
+check_hub_entry_inline_policy() {
+  local actual
+  actual="$(aws_ iam get-role-policy --role-name "$HUB_ENTRY_ROLE" --policy-name "$HUB_ENTRY_POLICY" \
+    --query 'PolicyDocument' --output json 2>/dev/null)" || { echo absent; return; }
+  json_eq "$actual" "$(hub_entry_permission_policy)" && echo ok || echo drift
+}
+
 check_exec_admin_attached() {
-  local arns
-  arns="$(aws_ iam list-attached-role-policies --role-name "$EXEC_ROLE" \
+  local role="$1" arns
+  arns="$(aws_ iam list-attached-role-policies --role-name "$role" \
     --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null)" || { echo absent; return; }
   [[ "$arns" == *"arn:aws:iam::aws:policy/AdministratorAccess"* ]] && echo ok || echo drift
 }

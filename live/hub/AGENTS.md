@@ -7,7 +7,9 @@
 허브 배포 루트. `live/dev`를 템플릿으로 신설했다(2026-08-19, 허브-스포크 크로스 계정 IAM
 설계 구현 1단계) — 각 하위 디렉토리가 고유한 state와 워크플로를 가진 독립 배포 단위인 점은
 `live/dev`와 같다. **같은 AWS 계정**을 쓴다(실측: `live/dev`가 이미 배포된 공용 개발 계정과
-동일) — 계정 분리가 아니라 state key·CIDR·`env` 토큰으로 dev/hub를 가른다.
+동일)지만 **소유는 별도**다 — dev가 향후 별도 계정으로 이전할 예정이라, state 버킷·입구/실행
+Role은 dev·hub 각자 갖는다(공유하는 유일한 예외는 OIDC provider — AWS 제약). CIDR·`env`
+토큰도 당연히 다르다.
 
 ## 하위 디렉토리
 
@@ -36,7 +38,9 @@ data "aws_vpc" "this" {
 networking이 apply되지 않으면 eks plan이 빈 결과를 반환한다(에러가 아니라 조용히 실패 — 주의).
 
 ### State 격리
-- 각 루트가 S3에 고유한 state 파일을 가진다(버킷은 `live/dev`와 **공유**, 키만 다름)
+- 각 루트가 S3에 고유한 state 파일을 가진다. **버킷도 `live/dev`와 별도**(`s3-demo-hub-an2-tfstate-*`) —
+  같은 계정이지만 dev·hub는 부트스트랩 자원(버킷·입구/실행 Role)을 공유하지 않는다
+  (`bootstrap/README.md` 참조. OIDC provider만 AWS 제약으로 불가피하게 공유)
 - 루트 사이에 `terraform_remote_state` 데이터 소스 없음
 - 결합은 **태그 규약으로만** 이루어진다(클러스터명 상수 `eks-demo-hub-an2-main-01`)
 

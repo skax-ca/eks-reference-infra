@@ -41,10 +41,11 @@ tofu apply tfplan   # "tofu apply"(재-plan) 금지 — 다른 plan이 적용됨
 ```
 
 ### Backend 설정 (D25)
-`backend.hcl`은 **gitignored**. `live/dev/networking`과 **같은 버킷**, key만 다르다:
+`backend.hcl`은 **gitignored**. `live/dev/networking`과 **별도 버킷**이다(`bootstrap/README.md`
+「5.6」참조 — dev·hub는 부트스트랩 자원을 공유하지 않는다):
 ```hcl
-bucket = "s3-demo-dev-an2-tfstate-<guid12>"   # dev와 공유
-key    = "hub/networking.tfstate"              # dev는 dev/networking.tfstate
+bucket = "s3-demo-hub-an2-tfstate-<guid12>"   # hub 전용, dev와 다른 버킷
+key    = "hub/networking.tfstate"
 region = "ap-northeast-2"
 ```
 

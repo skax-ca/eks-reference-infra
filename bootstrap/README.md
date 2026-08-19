@@ -44,47 +44,65 @@ export EXPECTED_ACCOUNT=<12자리 계정 ID>   # ⛔ 필수. 기본값이 없다
 
 `config.sh`가 코드 측면, 이 표가 문서 측면이다. **어긋나면 이 표를 고친다.**
 
-### S3 state 버킷
+> **dev·hub는 이 계정(team) 안에서 별도 소유다.** 버킷·Role은 각자 갖는다 — dev가 향후 별도
+> 계정으로 이전할 예정이라, "지금 같은 계정이니 공유해도 된다"는 전제를 두지 않는다.
+> **OIDC provider만** AWS 제약(URL당 계정에 1개)으로 불가피하게 공유한다.
 
-| 항목 | 기대값 | 근거 |
-|------|--------|------|
-| 이름 | `s3-demo-dev-an2-tfstate-<guid12>` | 네이밍 규약 + AWS가 예측 불가능한 이름을 권장 |
-| **이름의 소재** | **git에 없다.** 실물은 GitHub repo 변수 `TF_STATE_BUCKET` / 로컬 `backend.hcl` | |
-| 버저닝 | `Enabled` | state 손상 복구 |
-| 암호화 | `AES256` (SSE-S3, BucketKey on) | 기본값이지만 명시적으로 검사한다 |
-| 퍼블릭 차단 | 4개 전부 `true` | |
-| **lifecycle** | 비현행 버전 **7일** · 불완전 MPU **7일** | `use_lockfile=true`가 lock 객체 버전을 폭증시킨다(AWS 공식 경고) |
-| 태그 | `Name` `Workload=demo` `Environment=dev` `ManagedBy=bootstrap.sh` `Owner` `CostCenter` | IaC 밖이라 `default_tags`가 없다 → 스크립트가 직접 붙인다 |
+### S3 state 버킷 (dev·hub 각자)
 
-### OIDC provider
+| 항목 | dev | hub |
+|------|-----|-----|
+| 이름 | `s3-demo-dev-an2-tfstate-<guid12>` | `s3-demo-hub-an2-tfstate-<guid12>` |
+| **이름의 소재** | **git에 없다.** GitHub repo 변수 `TF_STATE_BUCKET` / 로컬 `backend.hcl` | 같은 방식, `HUB_TF_STATE_BUCKET` |
+| 태그 `Environment` | `dev` | `hub` |
+
+공통(둘 다 동일): 버저닝 `Enabled`(state 손상 복구) · 암호화 `AES256`(SSE-S3, BucketKey on) ·
+퍼블릭 차단 4개 전부 `true` · **lifecycle** 비현행 버전 **7일**·불완전 MPU **7일**
+(`use_lockfile=true`가 lock 객체 버전을 폭증시킨다, AWS 공식 경고) · 태그 `Name`·`Workload=demo`·
+`ManagedBy=bootstrap.sh`·`Owner`·`CostCenter`(IaC 밖이라 `default_tags`가 없다 → 스크립트가 직접 붙인다).
+
+### OIDC provider (dev·hub 공유 — AWS 제약)
 
 | 항목 | 기대값 |
 |------|--------|
 | URL | `token.actions.githubusercontent.com` |
 | client ID (`aud`) | `sts.amazonaws.com` |
 | thumbprint | **설정하지 않는다** — CLI에서 선택 인자임을 실측 확인했고, AWS가 2023년부터 알려진 IdP를 자체 신뢰 저장소로 검증한다. 지문을 박으면 만료 부채만 남는다 |
-| `Name` 태그 | `iamoidc-demo-dev-an2-gha` |
+| `Name` 태그 | `iamoidc-demo-an2-gha`(env 토큰 없음 — 계정 레벨 공유 자원이라는 뜻을 반영) |
 
 > ⚠️ 이 리소스는 **식별자가 URL**이라 `name` 인자가 없다 → 이름은 **`Name` 태그로만** 표현된다.
+> ⚠️ **새로 만들 수 없다** — AWS가 URL당 계정에 정확히 1개만 허용한다. dev·hub가 이 계정에
+> 공존하는 한 원천적으로 나눌 수 없는 유일한 예외다.
 
-### IAM Role 2단
+### IAM Role 2단 (dev·hub 각자)
 
 | Role | 신뢰 | 권한 |
 |------|------|------|
-| **입구** `iamr-demo-dev-an2-gha-entry-01` | OIDC provider + `aud` + **`sub` 3패턴** | inline `…-policy`: 실행 Role `sts:AssumeRole` **하나뿐** |
-| **실행** `iamr-demo-dev-an2-gha-exec-01` | **입구 Role만** (계정 루트 아님) | `AdministratorAccess` |
+| **[dev] 입구** `iamr-demo-dev-an2-gha-entry-01` | OIDC provider + `aud` + **`sub` 3패턴**(아래) | inline: 실행 Role `sts:AssumeRole` **하나뿐** |
+| **[dev] 실행** `iamr-demo-dev-an2-gha-exec-01` | **dev 입구 Role만** | `AdministratorAccess` |
+| **[hub] 입구** `iamr-demo-hub-an2-gha-entry-01` | OIDC provider + `aud` + **`sub` 2패턴**(아래) | inline: hub 실행 Role `sts:AssumeRole` **하나뿐** |
+| **[hub] 실행** `iamr-demo-hub-an2-gha-exec-01` | **hub 입구 Role만** | `AdministratorAccess` |
 
-`sub` 4패턴 (근거: `docs/deployment-facts.md`):
+dev `sub` 3패턴 (근거: `docs/deployment-facts.md`):
 
 ```
 repo:skax-ca@310520211/iac-reference-infra@1316830050:pull_request
 repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main
 repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev
+```
+
+hub `sub` 2패턴 — `pull_request`가 없다: hub workflow는 애초에 PR 트리거가 없다(`CLAUDE.md`
+「4」) — 쓰이지 않는 패턴을 만들어 두지 않는다:
+
+```
+repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main
 repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:hub
 ```
 
-- ⚠️ **`environment`를 선언한 job만 `:environment:`를 받는다.** 하나로 뭉칠 수 없다 —
-  GitHub Environment 이름마다(`dev`·`hub`) 패턴이 하나씩 늘어난다(2026-08-19, hub 신설).
+> `ref:refs/heads/main` 값은 dev·hub가 **동일**하다 — 같은 repo·브랜치라 sub가 env가 아니라
+> ref로 갈리기 때문이다. 그래도 Role 자체는 dev/hub 각자 소유다(신뢰 정책만 이 패턴을 공유).
+
+- ⚠️ **`environment`를 선언한 job만 `:environment:`를 받는다.** 하나로 뭉칠 수 없다.
 - ⛔ **와일드카드로 넓히지 않는다.** `repo:…*`로 쓰면 org 내 **다른 repo**가 이 Role을 assume한다.
 - 실행 Role의 신뢰를 계정 루트(`arn:aws:iam::<acct>:root`)로 두면 **계정 내 누구나** assume할 수
   있다. 공용 계정이므로 특히 안 된다 — 입구 Role 하나로 못박는다.
@@ -109,10 +127,13 @@ repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:hub
 
 ### 4-1. 멱등성
 
-```
-1회차: 변경 6건 (버킷·버저닝·lifecycle·OIDC·Role 2개·정책)
-2회차: 변경 0건  → "이미 기대 상태다 (멱등 확인)"
-```
+재실행 시 이미 존재하는 항목은 전부 `ok`로 표시되고 `=== 변경 0건 ===`·"이미 기대 상태다"가
+출력되어야 한다 — 그렇지 않으면 `check_*` 함수와 실제 AWS 상태가 어긋난 것이다.
+
+⚠️ **로그를 찍으면서 값도 `$(...)`로 반환하는 함수(예: `converge_bucket()`)를 추가할 때는
+`ok()`/`changed()`가 stderr로 나가는지 확인한다** — stdout으로 나가면 반환값에 로그 텍스트가
+섞여 깨진다. `$(...)`는 서브셸이라 그 안에서의 `CHANGES` 카운터 증가도 상위 셸에 반영되지
+않는다는 점도 함께 주의한다 — 카운터가 과소 표시될 수 있다.
 
 ### 4-2. 음성 테스트 — `verify.sh`가 **실제로 잡는지** 증명
 
@@ -177,8 +198,10 @@ git에 두지 않는다는 요건의 연장이다.
 
 | 값 | 행선지 |
 |----|--------|
-| `TF_STATE_BUCKET` | GitHub repo 변수 |
-| `AWS_ENTRY_ROLE_ARN` · `AWS_EXEC_ROLE_ARN` | GitHub repo 변수 |
-| 로컬 `backend.hcl` | **gitignore 됨.** `tofu init -backend-config=backend.hcl` |
+| `TF_STATE_BUCKET`(dev) | GitHub repo 변수 |
+| `AWS_ENTRY_ROLE_ARN`·`AWS_EXEC_ROLE_ARN`(dev) | GitHub repo 변수 |
+| `HUB_TF_STATE_BUCKET`(hub) | GitHub repo 변수 |
+| `HUB_AWS_ENTRY_ROLE_ARN`·`HUB_AWS_EXEC_ROLE_ARN`(hub) | GitHub repo 변수 |
+| 로컬 `backend.hcl`(각 루트 디렉토리) | **gitignore 됨.** `tofu init -backend-config=backend.hcl` |
 
 `docs/deployment-facts.md`는 **값이 아니라 "어디에 있는지"** 를 기록한다.

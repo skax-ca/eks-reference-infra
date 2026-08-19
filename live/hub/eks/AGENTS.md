@@ -59,7 +59,7 @@ data "aws_subnets" "node" {
 ## Backend 설정
 
 `networking/`과 같은 패턴: `backend.hcl` gitignored, CI에서만 `assume_role`. **버킷은
-`live/dev`와 공유**(같은 계정), key만 `hub/eks.tfstate`로 다르다.
+`live/dev`와 별도**(hub 전용 `s3-demo-hub-an2-tfstate-*`), key는 `hub/eks.tfstate`.
 
 ## 의존성
 
@@ -68,8 +68,8 @@ data "aws_subnets" "node" {
 
 ### 외부
 - `iac-module-library` eks-cluster 모듈(`v0.8.0`) · workbench 모듈(`v0.6.0`)
-- S3 backend + OIDC + Roles — **`live/dev`와 공유**(`bootstrap/`이 생성, 같은 계정). 입구 Role
-  신뢰 정책에 `environment:hub` sub 패턴을 2026-08-19 추가했다(`bootstrap/config.sh` 참조)
+- S3 backend + Roles — **`live/dev`와 별도**(`bootstrap/`이 생성, 같은 계정이지만 별도 소유 —
+  `bootstrap/README.md` 「5.6」참조). OIDC provider만 AWS 제약으로 dev와 공유한다
 
 ## 제약사항
 
