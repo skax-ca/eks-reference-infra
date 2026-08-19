@@ -23,15 +23,15 @@
 | 이 repo 숫자 ID | `1316830050` | OIDC `sub` 조립(D28) |
 | 모듈 repo | `skax-ca/iac-module-library` | 소싱 대상 |
 | workload code | `demo` (D24) | `Name` 태그 2번째 토큰 |
-| env | `dev` · `hub`(2026-08-19 신설, **같은 계정** — 아래 「5.6 hub 환경」) | — |
+| env | `dev` · `hub`(2026-08-19 신설, **같은 계정이지만 별도 소유** — 아래 「5.6 hub 환경」) | — |
 | region / regioncode | `ap-northeast-2` / `an2` | — |
-| OIDC 발급자 | `token.actions.githubusercontent.com` | provider URL(계정에 이미 존재 — 신규 생성 아님) |
+| OIDC 발급자 | `token.actions.githubusercontent.com` | provider URL(계정에 이미 존재 — 신규 생성 아님, dev·hub **공유** — AWS가 URL당 계정 1개로 제한) |
 | OIDC audience | `sts.amazonaws.com` | `aws-actions/configure-aws-credentials` 기본값 |
-| 실행 Role **이름** | `iamr-demo-dev-an2-gha-exec-01`(D27-1) | ARN은 아래 「2」. dev·hub 공유 |
-| 입구 Role **이름** | `iamr-demo-dev-an2-gha-entry-01` | ARN은 아래 「2」. dev·hub 공유(신뢰 정책만 hub 패턴 추가) |
+| 실행 Role **이름** | `iamr-demo-dev-an2-gha-exec-01`(dev) · `iamr-demo-hub-an2-gha-exec-01`(hub) | ARN은 아래 「2」. **각자 소유**, 공유 아님 |
+| 입구 Role **이름** | `iamr-demo-dev-an2-gha-entry-01`(dev) · `iamr-demo-hub-an2-gha-entry-01`(hub) | ARN은 아래 「2」. **각자 소유**, 공유 아님 |
 | VPC `Name` 태그 | `vpc-demo-dev-an2-main` · `vpc-demo-hub-an2-main` | ID는 계정 식별로 이어지므로 적지 않는다 |
-| networking state key | `dev/networking.tfstate` · `hub/networking.tfstate` | backend `key`, 같은 버킷 |
-| eks state key | `dev/eks.tfstate` · `hub/eks.tfstate` | backend `key`, 같은 버킷 |
+| networking state key | dev: `dev/networking.tfstate`(dev 버킷) · hub: `hub/networking.tfstate`(hub 버킷) | backend `key`, **버킷도 dev·hub 각자** |
+| eks state key | dev: `dev/eks.tfstate`(dev 버킷) · hub: `hub/eks.tfstate`(hub 버킷) | backend `key`, **버킷도 dev·hub 각자** |
 | GitHub App slug | `skax-ca-module-reader` | 모듈 소싱 인증(D20) |
 | App Client ID | repo 변수 `MODULE_READER_CLIENT_ID` | `create-github-app-token`의 `client-id` |
 
@@ -184,18 +184,26 @@ GitHub은 **secret만 마스킹**한다. repo 변수(`vars.*`)는 마스킹 대�
 plan artifact(`retention-days: 1`)와 노출 대상이 같으므로 현재는 수용한다 — 완화하려면 첫
 스텝에서 `::add-mask::`를 쓰거나 값을 secret으로 옮긴다(열린 항목, 아래 「9」).
 
-### 5.6 hub 환경 — 계정 공유·신뢰 정책 확장 (2026-08-19)
+### 5.6 hub 환경 — 같은 계정, 별도 소유
 
-`live/hub/{networking,eks}`는 `live/dev`와 **같은 계정**을 쓴다(실측: `aws sts
+`live/hub/{networking,eks}`는 `live/dev`와 **같은 AWS 계정**을 쓴다(실측: `aws sts
 get-caller-identity --profile team`이 가리키는 계정이 `live/dev`가 이미 배포된 공용 개발
-계정과 동일). 계정 분리가 아니라 state key(`hub/*.tfstate`)·CIDR·`env` 토큰으로 dev/hub를
-가른다 — 신규 bootstrap이 필요 없다.
+계정과 동일). 그러나 **"같은 계정 = 공유"가 아니다** — 이 계정은 hub의 영구 거처이고 dev는
+향후 별도 계정으로 이전할 예정이라, dev·hub는 부트스트랩 자원(state 버킷·입구/실행 Role)을
+**각자** 갖는다:
 
-GitHub Environment `hub`가 apply job에서 `:environment:hub` OIDC sub를 받으려면 입구 Role의
-신뢰 정책이 그 패턴을 알아야 한다 — 그래서 3패턴(`pull_request`·`ref:refs/heads/main`·
-`environment:dev`)이 **4패턴**으로 늘었다(`environment:hub` 추가, `bootstrap/config.sh`·
-`bootstrap/README.md` 참조). `bootstrap.sh` 재실행으로 수렴시켰다(변경 1건, 나머지 전부 `ok` —
-dev 경로는 영향받지 않음).
+| 자원 | dev | hub |
+|------|-----|-----|
+| state 버킷 | `s3-demo-dev-an2-tfstate-*` | `s3-demo-hub-an2-tfstate-*`(별도) |
+| 입구/실행 Role | `iamr-demo-dev-an2-gha-{entry,exec}-01` | `iamr-demo-hub-an2-gha-{entry,exec}-01`(별도) |
+| Role 신뢰 sub 패턴 | 3패턴(`pull_request`·`ref:refs/heads/main`·`environment:dev`) | 2패턴(`ref:refs/heads/main`·`environment:hub`, `pull_request` 없음 — hub workflow에 PR 트리거가 없다) |
+
+**공유하는 유일한 예외는 OIDC provider다** — AWS가 URL당 계정에 정확히 1개만 허용해 원천적으로
+나눌 수 없다. `Name` 태그에서 env 토큰을 뺐다(`iamoidc-demo-an2-gha`, `bootstrap/config.sh` 참조).
+
+⚠️ **`hub/{networking,eks}.tfstate` 위치**: 이 상태 파일들이 dev 버킷에 있으면 아직
+`tofu init -migrate-state`로 hub 전용 버킷으로 옮기지 않은 것이다 — 옮긴 뒤에는 hub 버킷에
+있어야 정상이다. `live/hub/*/backend.hcl`의 `bucket` 값이 현재 사실이다.
 
 ---
 
