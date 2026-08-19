@@ -1,5 +1,75 @@
 # Notepad — iac-reference-infra
 
+## 2026-08-19 (이어서) — hub 신설 apply 완료, cert-manager 스케줄 문제 진단·수정
+
+이전 항목("hub-spoke 전환: live/dev 완전 teardown 완료, hub/spoke 신설 대기")의 후속.
+`.omc/plans/2026-08-19-live-hub-deployment-root.md` 계획을 세우고 0~4단계(bootstrap →
+networking 신설 → eks 신설 → workflow 신설 → apply)까지 전부 완료했다.
+
+**apply 결과**: `live/hub/networking` — VPC 등 66개 리소스 apply 완료(`Apply complete! 66
+added, 0 changed, 0 destroyed`). `live/hub/eks` — 첫 시도에서 `cert-manager` addon이
+DEGRADED로 20분 타임아웃 실패(`InsufficientNumberOfReplicas` — system 관리형 노드그룹의
+`workload-class=system` NoSchedule taint를 cert-manager 차트의 cainjector·webhook
+서브컴포넌트가 못 넘음, Karpenter 노드는 GitOps 미시딩이라 아직 없어 대안 스케줄 경로 없음).
+`coredns`·`metrics-server`·`aws-ebs-csi-driver`와 같은 `workload_class_toleration` 패턴을
+`cert-manager`(+ nested `cainjector`·`webhook`)에도 주입해 수정.
+
+**중요한 방향 전환 — hub는 dev의 Role/버킷을 "공유"하면 안 됐다**: 최초 구현은 dev 입구 Role
+신뢰 정책에 `environment:hub` 패턴만 얹어 Role을 공유했으나, 사용자가 "이 계정(team)은 hub의
+영구 거처이고 dev는 향후 별도 계정으로 이전할 예정 — 같이 쓰는 게 아니다"로 정정. 그래서:
+- hub 전용 입구/실행 Role 신설(`iamr-demo-hub-an2-gha-{entry,exec}-01`, sub 2패턴 —
+  `pull_request` 없음, hub workflow는 애초에 PR 트리거가 없어서). dev 입구 Role은 원래
+  3패턴으로 복원.
+- hub 전용 state 버킷 신설(`s3-demo-hub-an2-tfstate-408627943c93`). dev 버킷에 있던
+  `hub/{networking,eks}.tfstate`를 `tofu init -migrate-state -force-copy`로 이전(로컬
+  personal 자격증명으로 가능 — backend는 provider assume_role과 별개로 해결된다). 마이그레이션
+  전후 리소스 개수 실측 대조(networking 70·eks 130, 정확히 동일)로 무손실 확인.
+- **OIDC provider만 공유** — AWS가 URL당 계정에 1개로 제한해 원천적으로 나눌 수 없는 유일한
+  예외. `Name` 태그에서 env 토큰 제거(`iamoidc-demo-an2-gha`).
+- `deploy-hub-{network,eks}.yml`이 `HUB_AWS_ENTRY_ROLE_ARN`·`HUB_AWS_EXEC_ROLE_ARN`·
+  `HUB_TF_STATE_BUCKET` repo 변수를 쓰도록 전환.
+- ⚠️ **버킷은 리네임 불가(AWS 제약)**라 "새 버킷 생성 + 마이그레이션 + old 정리"만이 유일한
+  경로였다 — dev 것과 자연스럽게 완전 분리됐다.
+
+**부수 발견 — bootstrap.sh 버그**: `ok()`/`changed()` 로그 함수가 stdout에 찍혀서
+`$(converge_bucket ...)`처럼 "로그 찍으며 값도 반환"하는 함수에서 반환값에 로그가 섞여
+깨졌다. stderr로 이동시켜 수정(`bootstrap/config.sh` 참조 — 앞으로 이런 함수를 추가할 때
+주의). 같은 이유로 `$(...)` 서브셸 안에서의 `CHANGES` 카운터 증가는 상위 셸에 반영되지 않는다는
+것도 확인 — 카운터가 과소 표시될 수 있다.
+
+**커밋**: PR #36(hub 신설, merge됨) → PR #37(`fix/hub-dedicated-bootstrap-and-cert-manager`,
+hub 전용 분리 + cert-manager 수정, merge됨, 커밋 `f4cb264`).
+
+**최종 검증**: `live/hub/eks` apply 재실행 중 첫 재시도에서 `ConfigurationConflict`(이전
+실패 시도가 남긴 cert-manager 네임스페이스·webhook 잔여물과 충돌) 발생 — workbench SSM으로
+kubectl 접속해 잔여 `MutatingWebhookConfiguration`·`ValidatingWebhookConfiguration`·
+`namespace cert-manager`를 수동 정리한 뒤 재실행해 성공(`1 added, 0 changed, 1 destroyed`).
+addon 7종 전부 `ACTIVE` 실측 확인(aws-ebs-csi-driver·cert-manager·coredns·
+eks-pod-identity-agent·kube-proxy·metrics-server·vpc-cni).
+
+⚠️ **주의 — MCP `mcp__t__notepad_*` 툴은 이 repo에 안 먹는다**: Claude Code 세션에서
+`workingDirectory` 파라미터로 이 repo를 지정해도 실제로는 무시되고 항상
+`iac-module-library`(OMC가 붙은 원 프로젝트)의 notepad를 읽고 쓴다 — 이 repo는 OMC 표준
+3단 구조가 아니라 opencode 플러그인 전용 형식(날짜별 `##` 헤딩을 파일 최상단에 prepend)을
+쓰기 때문이다. Claude Code에서 이 repo의 notepad를 갱신할 때는 **Edit 툴로 직접 이 파일
+최상단에 prepend**한다 — opencode 세션에서는 `.opencode/plugins/notepad.ts`의 커스텀 툴을
+쓴다(우선순위는 그쪽이 1순위, 이건 대체 경로).
+
+**다음 세션 시작 시 착수 후보(우선순위 순)**:
+1. workbench SSM 도달 → `kubectl get nodes` 정상 확인 → `scripts/argocd-seed.sh`(module repo
+   소유) hub 클러스터 재시딩 → ArgoCD 초기 비밀번호 교체(대화형, 사용자가 정함) →
+   `argocd-initial-admin-secret` 삭제.
+2. spoke(`asset` 계정, `614054776208`) 부트스트랩 — `bootstrap/bootstrap.sh` 신규 실행 대상
+   (hub와 달리 진짜 새 계정이라 전체 신규 부트스트랩 필요).
+3. spoke 배포 — `live/<spoke-env>/{networking,eks}` + `cross-account-trust-role` 모듈.
+4. 배선 — spoke 신뢰 Role ARN → hub eks의 `argocd_hub_assumable_role_arns`,
+   `enable_argocd_hub_pod_identity=true`로 전환(현재 false).
+5. 검증 — hub ArgoCD가 spoke EKS에 실제로 크로스 계정 인증되는지.
+6. `live/dev/{networking,eks}` 코드 폐기(사용자가 hub 작업과 함께/이후로 정함 — 인프라는
+   이미 파기됐고 코드만 남음).
+
+---
+
 ## 2026-08-19 — hub-spoke 전환: live/dev 완전 teardown 완료, hub/spoke 신설 대기
 
 **배경**: `iac-module-library`에서 `cross-account-trust-role-v0.1.0`·`eks-cluster-v0.8.0` 릴리스
