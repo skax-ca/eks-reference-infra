@@ -6,6 +6,10 @@
 
 ## Working Memory
 
+### 2026-08-19 16:58
+team 계정 orphan dev 자원 정리 완료 (사용자 승인): `iamr-demo-dev-an2-gha-exec-01`(AdministratorAccess detach 후 삭제)·`iamr-demo-dev-an2-gha-entry-01`(inline policy 삭제 후 Role 삭제)·`s3-demo-dev-an2-tfstate-efedc8b00120`(버전 73+delete marker 39 전량 삭제 후 버킷 삭제) — 전부 삭제 확인. hub 자원(entry/exec Role, hub state 버킷, OIDC provider) 무사 확인. 이로써 team 계정은 hub 전용만 남았다.
+
+
 ### 2026-08-19 16:53
 spoke:dev GitHub 변수 prefix 전환 및 asset 계정 부트스트랩 완료. dev 워크플로(`deploy-network.yml`, `deploy-eks.yml`)는 기존 무접두 `TF_STATE_BUCKET`/`AWS_ENTRY_ROLE_ARN`/`AWS_EXEC_ROLE_ARN` 대신 `DEV_TF_STATE_BUCKET`/`DEV_AWS_ENTRY_ROLE_ARN`/`DEV_AWS_EXEC_ROLE_ARN`를 소비하도록 변경. `bootstrap/bootstrap.sh` 출력·`bootstrap/README.md`·dev/hub README·`docs/deployment-facts.md`·`CLAUDE.md`·`.github/workflows/AGENTS.md`도 2패턴 신뢰 정책과 DEV_/HUB_ 변수 구조로 정정. asset 계정(614054776208)에서 `BOOTSTRAP_TARGET=spoke SPOKE_ENV=dev AWS_PROFILE=asset EXPECTED_ACCOUNT=614054776208 ./bootstrap.sh` 실행 완료 — S3 tfstate 버킷, OIDC provider, entry/exec Role 생성. GitHub repo 변수는 `DEV_*` 3개 등록 완료, 기존 무접두 3개 삭제 완료. `./verify.sh` drift 없음, bootstrap 재실행 변경 0건.
 
@@ -1427,3 +1431,4 @@ kubectl       Client Version: v1.35.7          ← 클러스터 1.35 와 마이�
 - ✅ **#4 해결** — CI `init` shallow clone → `&depth=1` 추가. `deployment-facts.md` §8
 - ✅ **deepinit 실행 완료** (2026-08-04) — 9개 AGENTS.md 작성/hierarchical 검증 완료
 - ✅ **plan artifact 암호화** — 문서화 완료 (2026-08-04). `retention-days: 1` 유지. 완전한 해결은 GitHub Free 구조와 상충 — artifact 없으면 승인 plan ≠ 적용 plan 구멍, artifact 있으면 repo read 권한자 접근 1일 제한. 현재 구조 유지(문서化는 deployment-facts.md §6 참고)
+
