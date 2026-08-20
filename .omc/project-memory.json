@@ -72,6 +72,24 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-20 — TGW 네트워크 경로 완료(이전 세션)에 이어, hub ArgoCD의 spoke 크로스 계정 인증을 실제로 검증·완료했다. dev(spoke) cluster-secret.yaml을 iac-platform-gitops에 등록하고, 발견된 sts:TagSession 누락 버그(iac-module-library PR #29, eks-cluster-v0.9.0·cross-account-trust-role-v0.2.0)를 hub·dev 양쪽에 재적용한 뒤 7개 Application(aws-lbc·cluster-autoscaler·karpenter·karpenter-nodepool·kyverno·kyverno-custom-policies·kyverno-policies) 전부 Synced/Healthy 실측 확인. 이전 open-items의 \"(1) spoke cluster-secret.yaml 등록·크로스 계정 인증 검증\"은 이 항목으로 완료 대체. 남은 것은 \"(2) live/hub/networking의 deletion_protection=false 커밋 방치 + docs/deployment-facts.md의 true 오기록(drift)\" 하나뿐 — 안전 사안, 아직 미확인 상태로 이월."
+    },
+    {
+      "timestamp": 1787211726893,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "ArgoCD의 GitOps 계층은 root-app → ApplicationSet → Application → 실제 리소스 4단이다(2026-08-20 실측). ApplicationSet YAML(iac-platform-gitops)을 고치고 push한 뒤 개별 Application(예: eks-demo-hub-an2-main-01-aws-lbc)에 hard refresh를 걸면 Sync=Synced/Healthy가 뜨지만, 실제로는 아무것도 안 바뀔 수 있다 — root-app이 아직 새 커밋을 pull하지 않아 클러스터 안의 ApplicationSet 리소스 자체가 구버전이면, 그 ApplicationSet이 계속 구버전 스펙으로 Application을 재생성하기 때문이다(spec.source.helm.releaseName 필드가 refresh 후에도 계속 비어 있었던 것으로 확인). 반드시 root-app부터 hard refresh(`kubectl annotate application root-app -n argocd argocd.argoproj.io/refresh=hard --overwrite`)해서 sync revision이 최신 커밋 SHA인지 먼저 확인한 뒤, 그 다음에 하위 Application을 refresh해야 한다. \"Synced/Healthy가 실제 반영을 보장하지 않는다\" 계열 함정(moved 블록 미반영, HEALTH=Healthy인데 인증 실패)의 세 번째 사례."
+    },
+    {
+      "timestamp": 1787211734875,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "AWS Systems Manager Session Manager가 접속 시 띄우는 셸은 계정별 SSM 문서 `SSM-SessionManagerRunShell`로 결정되고, 이건 이 프로젝트 어디에도 IaC로 관리되지 않는 순수 콘솔/CLI 수동 설정이다(2026-08-20 실측). team(hub) 계정에는 이 문서가 있었고(`shellProfile.linux: \"exec /bin/bash\\r\\ncd\\r\\nclear\"`) — Amazon Linux 계열의 `~/.bashrc`→`/etc/bashrc`가 인터랙티브 셸이면 `/etc/profile.d/*.sh`를 순회 소싱하는 관례 덕에 workbench의 `alias k=kubectl`·krew PATH가 자동 적용됐다. asset(spoke) 계정에는 이 문서가 아예 없어(`get-document`가 `InvalidDocument`) 같은 workbench 모듈로 만든 인스턴스인데도 alias/krew가 안 먹는 것처럼 보였다. 해법: `aws ssm create-document --name SSM-SessionManagerRunShell --document-type Session ...`으로 hub와 동일한 content를 asset 계정에도 만든다(완료). ⚠️ 재발 조건: 새 spoke 계정을 부트스트랩할 때마다 이 설정을 빠뜨리기 쉽다 — `bootstrap/bootstrap.sh`가 다루는 범위(OIDC·Role·state 버킷) 밖의 계정 설정이라 자동으로 안 따라간다."
+    },
+    {
+      "timestamp": 1787211741161,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-20 — Pod 이름 가독성 문제(ArgoCD Application 이름이 Helm release 이름·K8s 리소스 이름까지 전파되던 것)를 iac-module-library docs/02-choose-your-path.md에 설계 반영 후 iac-platform-gitops(aws-lbc·karpenter·cluster-autoscaler에 helm.releaseName 추가) 구현·apply까지 완료. 이어서 spoke workbench의 SSM-SessionManagerRunShell 계정별 설정 격차를 발견·해결(asset 계정에 문서 생성 완료). 마지막으로 hub에 cluster-autoscaler·keda, dev에 keda 카탈로그 addon 구독을 추가(cluster-secret.yaml 라벨)해 전부 Synced/Healthy 확인 완료. 이 세션에 새로 발생한 미결 항목: SSM-SessionManagerRunShell이 bootstrap.sh 범위 밖의 수동 계정 설정이라 향후 신규 spoke 계정 추가 시 다시 빠뜨릴 수 있음 — bootstrap/README.md 「기대 상태」 표에 이 항목을 추가할지 검토 필요(아직 미착수). 이전부터 이월되는 미해결 항목도 그대로 남아 있음: live/hub/networking의 deletion_protection=false 커밋 방치 + docs/deployment-facts.md의 true 오기록(drift) — 안전 사안, 아직 미확인."
     }
   ],
   "userDirectives": [],
