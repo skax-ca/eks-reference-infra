@@ -90,6 +90,18 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-20 — Pod 이름 가독성 문제(ArgoCD Application 이름이 Helm release 이름·K8s 리소스 이름까지 전파되던 것)를 iac-module-library docs/02-choose-your-path.md에 설계 반영 후 iac-platform-gitops(aws-lbc·karpenter·cluster-autoscaler에 helm.releaseName 추가) 구현·apply까지 완료. 이어서 spoke workbench의 SSM-SessionManagerRunShell 계정별 설정 격차를 발견·해결(asset 계정에 문서 생성 완료). 마지막으로 hub에 cluster-autoscaler·keda, dev에 keda 카탈로그 addon 구독을 추가(cluster-secret.yaml 라벨)해 전부 Synced/Healthy 확인 완료. 이 세션에 새로 발생한 미결 항목: SSM-SessionManagerRunShell이 bootstrap.sh 범위 밖의 수동 계정 설정이라 향후 신규 spoke 계정 추가 시 다시 빠뜨릴 수 있음 — bootstrap/README.md 「기대 상태」 표에 이 항목을 추가할지 검토 필요(아직 미착수). 이전부터 이월되는 미해결 항목도 그대로 남아 있음: live/hub/networking의 deletion_protection=false 커밋 방치 + docs/deployment-facts.md의 true 오기록(drift) — 안전 사안, 아직 미확인."
+    },
+    {
+      "timestamp": 1787269128560,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "workbench 모듈(user-data.sh.tftpl)의 변경은 **주석 텍스트만 바뀌어도** aws_instance.this의 user_data 값이 달라져 인스턴스 replace(destroy+create)를 강제한다(2026-08-20 실측: workbench-v0.6.0→v0.7.0 승격 시 IAM 정책 추가와 무관하게, v0.6.0 이후 main에 쌓여있던 순수 주석 정리 커밋까지 태그에 같이 묶이면서 hub·dev 둘 다 `1 to destroy` 발생). 모듈 버전을 올릴 때는 `tofu plan`에서 `must be replaced` 여부를 반드시 확인하고, \"인라인 정책 추가만\" 같은 좁은 의도라도 실제 plan 범위는 더 넓을 수 있다고 가정할 것."
+    },
+    {
+      "timestamp": 1787269133908,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "workbench EC2가 SSM PingStatus=Online이 되는 시점과 user_data(cloud-init, kubectl/kubeconfig 설치)가 끝나는 시점 사이에 레이스 컨디션이 있다(2026-08-20 실측, dev workbench에서 재현). 그 틈에 인터랙티브 SSM 세션으로 접속하면 SSM Agent가 `ssm-user` 계정을 그 순간 만드는데, `/etc/skel/.kube/config`가 아직 없는 상태라 스킵되고, skel은 계정 생성 시점에만 1회 적용되는 메커니즘이라 이후 아무리 기다려도 스스로 복구되지 않는다(\"connection refused to localhost:8080\"로 나타남). 복구법: `sudo cp -r /etc/skel/.kube /home/ssm-user/.kube && sudo chown -R ssm-user:ssm-user /home/ssm-user/.kube`(SSM send-command로 root 권한 실행). 예방법: 인스턴스가 막 replace/신설된 직후에는 SSM Online 표시만 보고 바로 접속하지 말고 cloud-init 완료(약 1~2분)까지 기다릴 것. 재발 시 이 복구 커맨드를 바로 쓴다."
     }
   ],
   "userDirectives": [],
