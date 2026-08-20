@@ -350,12 +350,20 @@ module "eks" {
       }
     }
 
-    # 허브 ArgoCD 크로스 계정 접근 — AWS 관리형 access policy 가 아니라 kubernetes_groups 로
-    # 매핑한다. 실제 ClusterRoleBinding(그룹 "argocd-hub" → 권한)은 iac-platform-gitops 소관이다
-    # (모듈 repo 설계 계획 .omc/plans/2026-08-19-cross-account-trust-role.md 「C. 연결」 그대로).
+    # 허브 ArgoCD 크로스 계정 접근 — AWS 관리형 access policy 로 부여한다. ArgoCD 가 애드온·CRD
+    # 등 클러스터 스코프 리소스 전반을 다뤄야 해 세밀한 RBAC 범위 제어가 애초에 불필요하다
+    # (모듈 repo docs/05-modules.md 「K8s 권한 부여 방식」 절 — access policy 로 요구가 충족되면
+    # kubernetes_groups+RBAC 로 내려가지 않는다는 AWS 공식 기준).
+    # ⚠️ 이 방식으로 준 권한은 kubectl auth can-i --list 에 보이지 않는다 —
+    # aws eks list-associated-access-policies 로만 조회된다.
     argocd_hub = {
-      principal_arn     = module.argocd_trust.role_arn
-      kubernetes_groups = ["argocd-hub"]
+      principal_arn = module.argocd_trust.role_arn
+      policy_associations = {
+        admin = {
+          policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = { type = "cluster" }
+        }
+      }
     }
   }
 
