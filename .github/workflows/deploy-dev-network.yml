@@ -190,6 +190,10 @@ jobs:
         env:
           # 2단째 assume 대상. ARN 에 계정 ID 가 있어 코드에 두지 않는다(D25 의 연장).
           TF_VAR_execution_role_arn: ${{ vars.DEV_AWS_EXEC_ROLE_ARN }}
+          # hub networking apply 후 수동 등록한 값 — TGW ID·RAM resource share ARN(둘 다
+          # 결정적 합성 불가). resource share ARN 은 hub 계정 ID 를 담고 있어 코드에 두지 않는다.
+          TF_VAR_hub_transit_gateway_id: ${{ vars.HUB_TRANSIT_GATEWAY_ID }}
+          TF_VAR_hub_tgw_resource_share_arn: ${{ vars.HUB_TGW_RESOURCE_SHARE_ARN }}
         run: |
           # -detailed-exitcode: 0=변경없음 · 1=오류 · 2=변경있음.
           # "두 번째 apply 가 No changes 인가"(ignore_tags 판정)를 사람 눈이 아니라

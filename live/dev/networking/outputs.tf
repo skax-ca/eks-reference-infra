@@ -62,3 +62,12 @@ output "flow_log_group_name" {
   EOT
   value       = module.vpc.flow_log_group_name
 }
+
+output "tgw_attachment_id" {
+  description = <<-EOT
+    이 VPC 의 TGW attachment ID(AWS 무작위 부여, 결정적 합성 불가). apply 후 이 값을 그대로
+    GitHub repo 변수 DEV_TGW_ATTACHMENT_ID 에 옮겨 적는다 — live/hub/networking 이
+    TGW 라우트테이블에 "spoke CIDR → 이 attachment" 라우트를 추가할 때 소비한다.
+  EOT
+  value       = aws_ec2_transit_gateway_vpc_attachment.spoke.id
+}

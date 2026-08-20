@@ -56,3 +56,29 @@ variable "execution_role_arn" {
   EOT
   type        = string
 }
+
+variable "hub_transit_gateway_id" {
+  description = <<-EOT
+    hub(team 계정)가 소유한 Transit Gateway ID. spoke 의 attachment 를 이 TGW 에 붙인다
+    (모듈 repo docs/02-choose-your-path.md 「네트워크 경로」 절).
+
+    ⛔ 기본값을 두지 않는다 — 결정적 합성이 불가능한 AWS 무작위 값이다(hub apply 후에만
+       나온다). 주입 경로: CI 는 repo 변수 HUB_TRANSIT_GATEWAY_ID → TF_VAR_hub_transit_gateway_id,
+       로컬은 export TF_VAR_hub_transit_gateway_id=...
+  EOT
+  type        = string
+}
+
+variable "hub_tgw_resource_share_arn" {
+  description = <<-EOT
+    hub 가 TGW 를 공유하는 RAM resource share ARN. allow_external_principals = true 설계라
+    spoke 가 aws_ram_resource_share_accepter 로 명시적으로 초대를 수락해야 attachment 를
+    만들 수 있다 — 조직 내부 공유(초대 없음)는 조직 관리 계정 권한이 없어 쓸 수 없다
+    (2026-08-20 실측, 모듈 repo docs/02-choose-your-path.md 참조).
+
+    ⛔ 기본값을 두지 않는다 — ARN 에 hub 계정 ID 가 들어 있다. 주입 경로: CI 는 repo 변수
+       HUB_TGW_RESOURCE_SHARE_ARN → TF_VAR_hub_tgw_resource_share_arn, 로컬은
+       export TF_VAR_hub_tgw_resource_share_arn=...
+  EOT
+  type        = string
+}

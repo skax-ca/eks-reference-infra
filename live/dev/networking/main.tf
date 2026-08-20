@@ -172,3 +172,47 @@ module "vpc" {
   # ⛔ false 로 바꾼 커밋을 main 에 남겨두지 않는다 — 파기가 끝나면 즉시 되돌린다.
   deletion_protection = false
 }
+
+# ── TGW 연결 — spoke(dev) 측 ────────────────────────────────────────────────
+# hub 가 소유한 TGW 에 이 VPC 를 붙인다(모듈 repo docs/02-choose-your-path.md 「네트워크
+# 경로」 절). IAM 신뢰(cross-account-trust-role)는 "누가 인증되는가"만 답하고, 이 리소스들이
+# 허브 ArgoCD 가 spoke API 서버에 패킷을 보낼 실제 경로다.
+#
+# 초대를 먼저 수락해야 한다 — allow_external_principals = true 설계라(hub main.tf 참조)
+# 조직 내부 자동 공유가 아니라 표준 계정 간 공유(초대)로 동작한다.
+resource "aws_ram_resource_share_accepter" "tgw" {
+  share_arn = var.hub_tgw_resource_share_arn
+}
+
+resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
+  # 초대를 수락해야 공유된 TGW 가 attach 대상으로 보인다.
+  depends_on = [aws_ram_resource_share_accepter.tgw]
+
+  vpc_id             = module.vpc.vpc_id
+  subnet_ids         = module.vpc.subnet_ids_by_group["tgw-uniq"]
+  transit_gateway_id = var.hub_transit_gateway_id
+
+  tags = {
+    Name = "tgwa-${var.workload}-${var.env}-${var.region_code}-main"
+  }
+}
+
+# 이 VPC 라우트테이블(node-uniq)에 hub 의 node-uniq CIDR(10.53.0.0/16, live/hub/networking
+# 의 cidr_uniq) 로 가는 경로를 얹는다. ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별
+# RT 리스트다(private 그룹) — 전부에 건다(hub main.tf 의 to_spoke_dev 와 대칭).
+resource "aws_route" "to_hub" {
+  for_each = toset(module.vpc.route_table_ids_by_group["node-uniq"])
+
+  route_table_id = each.value
+  # 🔑 hub 의 cidr_uniq 값이다(live/hub/networking/main.tf 참조) — 결정적 상수라 하드코딩한다.
+  #    CIDR 은 계정 식별 정보가 아니다(이미 그 파일에 평문으로 커밋돼 있다) — 계정 ID 와
+  #    다르게 var 로 빼지 않는다.
+  destination_cidr_block = "10.53.0.0/16"
+  transit_gateway_id     = aws_ec2_transit_gateway_vpc_attachment.spoke.transit_gateway_id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.spoke]
+}
+
+# ⚠️ **hub → spoke 방향은 이 apply 로 끝나지 않는다.** TGW 라우트테이블은 TGW owner(hub)만
+#    고칠 수 있어(AWS 제약), "spoke CIDR → 이 attachment" 라우트는 hub 쪽 별도 커밋이
+#    필요하다 — 이 attachment 의 ID(아래 출력 tgw_attachment_id)를 hub 로 전달해야 한다.
