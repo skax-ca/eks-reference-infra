@@ -56,20 +56,20 @@ output "nat_gateway_ids" {
 
 output "transit_gateway_id" {
   description = <<-EOT
-    spoke 로 향하는 Transit Gateway ID(tgw-...). 이 값은 AWS 가 생성 시점에 무작위로
-    부여해 결정적 합성이 불가능하다 — apply 후 이 출력을 그대로 GitHub repo 변수
-    HUB_TRANSIT_GATEWAY_ID 에 옮겨 적는다(live/dev/networking 의
-    aws_ec2_transit_gateway_vpc_attachment 가 소비한다).
+    spoke 로 향하는 Transit Gateway ID(tgw-...). AWS 가 생성 시점에 무작위로 부여해 결정적
+    합성이 불가능하다. ⚠️ spoke 는 이 출력을 repo 변수로 받지 않는다 — RAM 공유를 이름으로
+    조회해(data.aws_ram_resource_share) 그 안의 resource_arns 에서 직접 파싱한다(2026-08-20
+    재설계, 모듈 repo docs/02-choose-your-path.md 「값 발견」 절). 이 출력은 계약이 실제로
+    동작함을 보이는 용도로만 남긴다.
   EOT
   value       = aws_ec2_transit_gateway.hub.id
 }
 
 output "tgw_resource_share_arn" {
   description = <<-EOT
-    TGW 를 spoke 에 공유하는 RAM resource share ARN. allow_external_principals = true 라 spoke
-    쪽에서 초대를 명시적으로 수락해야 한다(live/dev/networking 의
-    aws_ram_resource_share_accepter 가 소비) — 이 값을 GitHub repo 변수
-    HUB_TGW_RESOURCE_SHARE_ARN 에 옮겨 적는다.
+    TGW 를 spoke 에 공유하는 RAM resource share ARN. ⚠️ spoke 는 이 출력을 repo 변수로 받지
+    않는다 — 같은 이름(name)으로 자기 계정에서 직접 조회한다(data.aws_ram_resource_share,
+    resource_owner="OTHER-ACCOUNTS"). 이 출력은 계약이 실제로 동작함을 보이는 용도로만 남긴다.
   EOT
   value       = aws_ram_resource_share.tgw.arn
 }

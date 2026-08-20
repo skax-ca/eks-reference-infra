@@ -235,6 +235,9 @@ resource "aws_ram_resource_share" "tgw" {
 
   tags = {
     Name = "ram-${var.workload}-${var.env}-${var.region_code}-tgw-share"
+    # spoke 가 이 공유를 이름으로 조회할 때 hub 의 uniq CIDR 을 함께 읽어간다 — repo 변수로
+    # 옮겨 적지 않는다(모듈 repo docs/02-choose-your-path.md 「네트워크 경로」 「값 발견」 절).
+    UniqCidr = local.cidr_uniq
   }
 }
 
@@ -278,26 +281,75 @@ resource "aws_ec2_transit_gateway_route_table_association" "hub" {
   replace_existing_association   = true
 }
 
-resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
-  transit_gateway_attachment_id  = var.spoke_tgw_attachment_id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
-  replace_existing_association   = true
+# ── spoke 자동 발견 — 이 TGW 에 RAM 으로 붙은 attachment 전부(허브 자신 제외) ──────────
+# 복수형 데이터소스는 "없으면 빈 리스트"다(단수형과 달리 에러가 아니다) — spoke 가 하나도
+# 없어도, 여러 개여도 이 apply 는 그대로 성공한다. repo 변수로 spoke 의 attachment ID 를
+# 수동 전달받던 방식(2026-08-20 최초 구현)을 걷어낸다 — 다음 spoke 를 추가할 때 이 파일을
+# 고치지 않아도 되는 것이 목적이다(모듈 repo docs/02-choose-your-path.md 「네트워크 경로」
+# 「값 발견」 절).
+data "aws_ec2_transit_gateway_vpc_attachments" "spokes" {
+  filter {
+    name   = "transit-gateway-id"
+    values = [aws_ec2_transit_gateway.hub.id]
+  }
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
 }
 
-# 허브 VPC 라우트테이블(node-uniq)에 spoke 의 node-uniq CIDR(10.51.0.0/16, live/dev/networking
-# 의 cidr_uniq) 로 가는 경로를 얹는다. ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별
-# RT 리스트다(private 그룹) — 전부에 건다.
-resource "aws_route" "to_spoke_dev" {
-  for_each = toset(module.vpc.route_table_ids_by_group["node-uniq"])
+data "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
+  for_each = toset([
+    for id in data.aws_ec2_transit_gateway_vpc_attachments.spokes.ids :
+    id if id != aws_ec2_transit_gateway_vpc_attachment.hub.id
+  ])
 
-  route_table_id = each.value
-  # 🔑 spoke 의 cidr_uniq 값이다(live/dev/networking/main.tf 참조) — 결정적 상수라 하드코딩한다.
-  #    CIDR 은 계정 식별 정보가 아니다(이미 그 파일에 평문으로 커밋돼 있다) — 계정 ID 와
-  #    다르게 var 로 빼지 않는다.
-  destination_cidr_block = "10.51.0.0/16"
+  id = each.value
+}
+
+resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
+  for_each = data.aws_ec2_transit_gateway_vpc_attachment.spoke
+
+  transit_gateway_attachment_id  = each.value.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
+  # 옛 묵시적 기본 RT 에서 옮겨온 이력이 있는 spoke(dev)를 위해 유지한다 — 이미 우리 RT 에
+  # 정확히 연결된 spoke 에는 no-op 이라 신규 spoke 에도 그대로 재사용해도 안전하다.
+  replace_existing_association = true
+}
+
+moved {
+  from = aws_ec2_transit_gateway_route_table_association.spoke
+  to   = aws_ec2_transit_gateway_route_table_association.spoke["tgw-attach-08b8eeb6b58caa4b8"]
+}
+
+# 허브 VPC 라우트테이블(node-uniq)에서 발견된 spoke 마다 라우트를 하나씩 얹는다 —
+# CIDR 은 그 spoke 의 attachment 에 남겨진 UniqCidr 태그에서 읽는다(하드코딩도 repo 변수
+# 수동 복사도 아니다). ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별 RT 리스트라
+# (RT × spoke) 곱집합을 만든다.
+locals {
+  hub_rt_x_spoke = setproduct(
+    toset(module.vpc.route_table_ids_by_group["node-uniq"]),
+    keys(data.aws_ec2_transit_gateway_vpc_attachment.spoke)
+  )
+}
+
+resource "aws_route" "vpc_to_spoke" {
+  for_each = { for pair in local.hub_rt_x_spoke : "${pair[0]}-${pair[1]}" => pair }
+
+  route_table_id         = each.value[0]
+  destination_cidr_block = data.aws_ec2_transit_gateway_vpc_attachment.spoke[each.value[1]].tags["UniqCidr"]
   transit_gateway_id     = aws_ec2_transit_gateway.hub.id
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.hub]
+}
+
+moved {
+  from = aws_route.to_spoke_dev["rtb-060876293d2b2e3fe"]
+  to   = aws_route.vpc_to_spoke["rtb-060876293d2b2e3fe-tgw-attach-08b8eeb6b58caa4b8"]
+}
+moved {
+  from = aws_route.to_spoke_dev["rtb-00387de45c4ec6f8a"]
+  to   = aws_route.vpc_to_spoke["rtb-00387de45c4ec6f8a-tgw-attach-08b8eeb6b58caa4b8"]
 }
 
 # ── TGW 라우트테이블 — hub 가 소유한다(TGW owner 만 자기 라우트테이블에 라우트를
@@ -314,14 +366,20 @@ resource "aws_ec2_transit_gateway_route" "hub_via_hub_attachment" {
   depends_on = [aws_ec2_transit_gateway_route_table_association.hub]
 }
 
-# spoke CIDR → spoke 의 attachment. spoke 의 attachment ID(AWS 무작위 부여, 결정적 합성
-# 불가)는 spoke 가 자기 계정에서 attachment 를 만든 뒤 apply 로 받아 repo 변수로 전달했다
-# (live/dev/networking 의 tgw_attachment_id 출력, 2026-08-20) — 이 라우트로 hub → spoke
-# 방향이 완성돼 양방향 라우팅이 끝난다.
-resource "aws_ec2_transit_gateway_route" "spoke_via_spoke_attachment" {
-  destination_cidr_block         = "10.51.0.0/16" # spoke(dev) 의 cidr_uniq — live/dev/networking 참조
-  transit_gateway_attachment_id  = var.spoke_tgw_attachment_id
+# 발견된 spoke 마다 TGW 라우트테이블에 라우트를 하나씩 얹는다 — 대상 CIDR 도 그 spoke 의
+# UniqCidr 태그에서 읽는다. spoke 가 늘어도 이 리소스 블록은 그대로다(for_each 가 알아서
+# 늘어난다).
+resource "aws_ec2_transit_gateway_route" "tgw_rt_to_spoke" {
+  for_each = data.aws_ec2_transit_gateway_vpc_attachment.spoke
+
+  destination_cidr_block         = each.value.tags["UniqCidr"]
+  transit_gateway_attachment_id  = each.value.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
 
   depends_on = [aws_ec2_transit_gateway_route_table_association.spoke]
+}
+
+moved {
+  from = aws_ec2_transit_gateway_route.spoke_via_spoke_attachment
+  to   = aws_ec2_transit_gateway_route.tgw_rt_to_spoke["tgw-attach-08b8eeb6b58caa4b8"]
 }
