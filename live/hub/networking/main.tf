@@ -248,6 +248,38 @@ resource "aws_ram_principal_association" "spoke_dev" {
   resource_share_arn = aws_ram_resource_share.tgw.arn
 }
 
+# ── 관리형 접두사 목록 — 허브의 uniq CIDR을 RAM으로 공유 ────────────────────────
+#
+# 스포크(dev)가 허브로 가는 라우트·SG 규칙에서 "10.53.0.0/16" 을 CIDR 텍스트로 하드코딩하지
+# 않게 한다. TGW ID 를 발견하는 것과 같은 원칙("이름이 아니라 RAM resource_arns 로 발견")을
+# CIDR 에도 적용한다 — 태그로는 계정 경계를 못 넘지만(2026-08-20 실측), RAM 이 공유하는
+# 리소스 자체(resource_arns)는 넘는다. 프리픽스 리스트는 그 성질을 갖는 리소스다(AWS 공식:
+# RAM 으로 공유된 관리형 접두사 목록은 참가자 계정이 SG 규칙·라우트에서 직접 참조할 수 있다).
+#
+# ⚠️ 반대 방향(스포크의 CIDR)은 바꾸지 않는다 — 스포크가 여럿이면 허브가 spoke_account_id 를
+#    사람에게 안내받는 자리(위 aws_ram_principal_association)에서 CIDR 도 같이 받는 편이
+#    낫다(모듈 repo docs/02-choose-your-path.md 「값 발견」 참조). 프리픽스 리스트는 1:N
+#    발행자(허브)가 자기 값을 공표하는 방향에서만 성립한다.
+resource "aws_ec2_managed_prefix_list" "hub_uniq" {
+  name           = "pl-${var.workload}-${var.env}-${var.region_code}-uniq"
+  address_family = "IPv4"
+  max_entries    = 1 # 허브 자신의 uniq CIDR 하나만 담는다. max_entries 는 mutable(교체 아님) — 필요해지면 늘린다.
+
+  entry {
+    cidr        = local.cidr_uniq
+    description = "hub uniq CIDR"
+  }
+
+  tags = {
+    Name = "pl-${var.workload}-${var.env}-${var.region_code}-uniq"
+  }
+}
+
+resource "aws_ram_resource_association" "prefix_list" {
+  resource_arn       = aws_ec2_managed_prefix_list.hub_uniq.arn
+  resource_share_arn = aws_ram_resource_share.tgw.arn
+}
+
 # ── 허브 자신의 attachment — ArgoCD(argocd-application-controller)가 도는 서브넷 ──────
 resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
   vpc_id             = module.vpc.vpc_id

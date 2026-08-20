@@ -237,6 +237,63 @@ kubeconfig를 찾지 못한다. `--parameters`는 인라인 배열이 개행을 
 
 > dev·spoke도 같은 규칙이며 `Name`의 env 토큰만 다르다: `ec2-demo-<env>-an2-workbench-01`.
 
+### 5.8 TGW 네트워크 경로 — apply/teardown 순서
+
+hub↔spoke(dev) 크로스 계정 라우팅(TGW·RAM 공유·프리픽스 리스트)은 리소스 소유가 두 루트로
+갈려 있어 순서 제약이 있다(TGW 라우트테이블은 owner인 허브만 고칠 수 있다는 AWS 제약, 모듈
+repo `docs/02-choose-your-path.md`「네트워크 경로」 참조). 하지만 이 제약 대부분은 hub→spoke
+순서로 **각 환경을 통상 순서(`networking` → `eks`)대로 배포하는 것만으로 저절로 지켜진다**:
+
+| 통상 배포 단계 | 저절로 끝나는 TGW 몫 |
+|---|---|
+| hub `networking` apply | TGW·RAM 공유·허브 uniq 프리픽스 리스트·허브 자신의 attachment·라우트 |
+| hub `eks` apply | (TGW와 무관 — 허브 자신의 클러스터) |
+| spoke(dev) `networking` apply | **RAM 초대 수락**(`aws_ram_resource_share_accepter.tgw`) + spoke 자신의 attachment·라우트(프리픽스 리스트 참조) |
+| spoke(dev) `eks` apply | 클러스터 SG에 hub발 443 인바운드(프리픽스 리스트 참조) |
+
+🔑 **RAM 초대 수락이 이 전체 순서의 실질적 관문이다.** hub가 TGW·프리픽스 리스트를 만들어
+RAM 공유에 올려도(`allow_external_principals = true`, 초대 방식), spoke 계정은
+`aws_ram_resource_share_accepter.tgw`(spoke `networking` apply 안)가 그 초대를 수락하기
+**전까지는** 그 리소스들을 전혀 볼 수 없다. 수락은 계정 단위로 한 번만 일어나면 되고, 그
+뒤로는 spoke 계정의 어느 state에서 조회하든(spoke `networking`이든 `eks`든) 같은 RAM 공유에
+실린 리소스가 전부 보인다 — spoke `eks` apply가 프리픽스 리스트를 참조할 수 있는 것도, hub
+`networking`의 2차 재적용을 기다릴 필요가 없는 것도 전부 이 수락 하나 때문이다.
+
+⚠️ **이 수락은 사람이 콘솔·CLI로 누르는 단계가 아니다.** `aws_ram_resource_share_accepter`는
+Terraform이 관리하는 리소스라, spoke `networking` apply가 돌 때 spoke 실행 Role 자격증명으로
+`tofu apply`가 직접 `AcceptResourceShareInvitation`을 호출한다 — CI 워크플로 밖에서 별도로
+콘솔을 열거나 `aws ram accept-resource-share-invitation`을 손으로 칠 필요가 없다. AWS 공식
+문서의 예외("같은 Organization이고 RAM Sharing with AWS Organizations가 켜져 있으면 이
+리소스 자체가 불필요")는 이 프로젝트에 해당하지 않는다 — 조직 내부 자동 공유는 조직 관리
+계정 권한이 없어 막혔고(hub `networking/main.tf`의 `aws_ram_resource_share.tgw` 주석 참조),
+그래서 초대 방식을 의도적으로 택했다. 즉 이 accepter 리소스는 생략 가능한 편의가 아니라
+이 설계가 성립하는 데 **필수**다.
+
+**통상 순서만으로 안 끝나는 건 단 하나** — hub→spoke 방향 라우트다. hub의 `networking`이
+spoke보다 **먼저** 적용되므로, 그 시점엔 spoke attachment가 아직 없어 hub 최초 apply에
+포함될 수 없다. spoke `networking` apply(=RAM 수락 시점)가 끝난 뒤 **hub `networking`을 한
+번 더 재적용**해야 한다 — spoke attachment를 자동 발견하는 data 소스가 그때 비로소 값을
+채운다(`for_each`가 늘어나는 것뿐이라 hub main.tf를 다시 고칠 필요는 없다).
+
+즉 전체 순서는 `hub networking → hub eks → spoke networking → spoke eks → hub networking(재적용)`
+다섯 단계이고, **"TGW 전용으로 따로 기억해야 할 단계"는 마지막 hub networking 재적용
+하나뿐**이다 — 나머지 넷은 이 repo의 통상 배포 순서를 따르는 것만으로 자동으로 채워진다.
+
+⚠️ **teardown 후 재생성 시**: 위와 같은 순서를 반복한다. hub networking을 destroy하면
+프리픽스 리스트·TGW·RAM 공유가 전부 사라지므로, spoke networking을 먼저 재생성해도
+`data.aws_ram_resource_share` 조회가 즉시 에러로 실패한다 — 순서를 잊어도 안전하게 드러난다.
+spoke eks apply를 생략하지 않는다 — prefix list 참조 방식은 "CIDR 값을 코드에 다시 옮겨 적을
+필요"만 없앨 뿐, "apply를 실행할 필요"는 없애지 않는다. hub를 재생성하면 프리픽스 리스트도
+새 ID로 다시 만들어지므로(TGW ID와 같은 이유), spoke eks가 그 새 ID를 집으려면 apply가 한
+번은 돌아야 한다 — data 소스는 plan/apply 시점에만 값을 새로 읽지, 이미 배포된 AWS 리소스를
+저절로 갱신하지 않는다.
+
+⚠️ **route/SG 규칙 교체 주의**: `destination_cidr_block`→`destination_prefix_list_id`,
+`cidr_blocks`→`prefix_list_ids`로 인자가 바뀐 리소스는 in-place 업데이트가 아니라 **교체
+(destroy 후 create)**로 plan에 잡힌다(레거시 `aws_route`·`aws_security_group_rule`의 공통
+특성) — 재적용 중 그 라우트/규칙 하나가 짧게 끊긴다. 프리픽스 리스트 방식으로 전환하는
+1회성 사건이고, 그 뒤로는 발생하지 않는다.
+
 ---
 
 ## 6. apply 판정표

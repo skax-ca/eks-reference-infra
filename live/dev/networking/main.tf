@@ -183,21 +183,30 @@ module "vpc" {
 # (=hub 가 아직 없으면) 이 data 소스가 즉시 에러로 실패한다 — "hub 가 spoke 보다 먼저
 # 존재해야 한다"는 순서를 사람이 기억하지 않아도 되게 강제하는 가드다.
 #
-# ⚠️ CIDR 은 여기서 조회하지 않는다 — 태그는 종류를 가리지 않고 계정 경계를 못 넘는다
+# ⚠️ CIDR 은 **태그**로 조회하지 않는다 — 태그는 종류를 가리지 않고 계정 경계를 못 넘는다
 #    (2026-08-20 실측: describe-tags·DescribeTransitGatewayVpcAttachments·
-#    aws_ram_resource_share 의 tags 전부 cross-account 조회 시 빈 배열/null). resource_arns
-#    (TGW 자체)는 RAM 의 본래 목적이라 다르게 동작해 그대로 쓸 수 있다.
+#    aws_ram_resource_share 의 tags 전부 cross-account 조회 시 빈 배열/null). 대신 CIDR 을
+#    담은 관리형 접두사 목록(managed prefix list) 자체를 RAM 으로 공유받는다 — resource_arns
+#    (TGW·프리픽스 리스트 둘 다)는 RAM 의 본래 목적이라 다르게 동작해 그대로 쓸 수 있다.
 data "aws_ram_resource_share" "hub_tgw" {
   name           = "ram-${var.workload}-hub-${var.region_code}-tgw-share"
   resource_owner = "OTHER-ACCOUNTS"
 }
 
 locals {
-  # resource_arns 에 공유된 리소스 ARN 이 들어있다 — 이 공유는 TGW 하나만 담으므로
-  # "transit-gateway/" 를 포함하는 것 하나를 골라 뒤쪽 ID 만 잘라낸다.
+  # resource_arns 에 공유된 리소스 ARN 이 전부 들어있다(TGW + 허브 uniq CIDR 프리픽스 리스트,
+  # 2026-08-20 이후 2종) — 타입별 substring 으로 걸러 각자의 ID 를 잘라낸다.
   hub_transit_gateway_id = split("/", [
     for arn in data.aws_ram_resource_share.hub_tgw.resource_arns :
     arn if strcontains(arn, ":transit-gateway/")
+  ][0])[1]
+
+  # 허브의 uniq CIDR(10.53.0.0/16)을 담은 관리형 접두사 목록 — hub networking 이 만들어 같은
+  # RAM 공유에 실어 보낸다. 아래 aws_route.to_hub 가 CIDR 텍스트 대신 이 ID 를 참조한다 —
+  # 값 자체를 몰라도 되고, 허브의 CIDR 이 바뀌어도 이 파일을 고칠 필요가 없다.
+  hub_uniq_prefix_list_id = split("/", [
+    for arn in data.aws_ram_resource_share.hub_tgw.resource_arns :
+    arn if strcontains(arn, ":prefix-list/")
   ][0])[1]
 }
 
@@ -220,18 +229,19 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
   }
 }
 
-# 이 VPC 라우트테이블(node-uniq)에 hub 의 node-uniq CIDR(10.53.0.0/16, live/hub/networking
-# 의 cidr_uniq) 로 가는 경로를 얹는다. ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별
-# RT 리스트다(private 그룹) — 전부에 건다.
+# 이 VPC 라우트테이블(node-uniq)에 hub 의 node-uniq CIDR(hub 의 cidr_uniq) 로 가는 경로를
+# 얹는다. ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별 RT 리스트다(private 그룹) — 전부에 건다.
 resource "aws_route" "to_hub" {
   for_each = toset(module.vpc.route_table_ids_by_group["node-uniq"])
 
   route_table_id = each.value
-  # 🔑 hub 의 cidr_uniq 값이다(live/hub/networking/main.tf 참조) — 결정적 상수라 하드코딩한다.
-  #    CIDR 은 계정 식별 정보가 아니다(이미 그 파일에 평문으로 커밋돼 있다) — 계정 ID 와
-  #    다르게 var 로 빼지 않는다. 태그로도 못 읽는다(계정 경계를 못 넘는다, 위 주석 참조).
-  destination_cidr_block = "10.53.0.0/16"
-  transit_gateway_id     = aws_ec2_transit_gateway_vpc_attachment.spoke.transit_gateway_id
+  # 🔑 CIDR 텍스트를 하드코딩하지 않는다 — 허브가 RAM 으로 공유한 관리형 접두사 목록(위
+  #    local.hub_uniq_prefix_list_id)을 대상으로 참조한다. AWS 가 그 ID 뒤의 실제 CIDR 을
+  #    apply 시점에 풀어 쓴다. aws_route 는 destination_cidr_block 과 destination_prefix_list_id
+  #    를 동시에 받지 않는다 — 이 전환은 기존 라우트를 교체(destroy 후 create)한다(레거시
+  #    리소스의 공통 특성, docs/deployment-facts.md 「5.8」 참조) — 재적용 중 짧게 끊긴다.
+  destination_prefix_list_id = local.hub_uniq_prefix_list_id
+  transit_gateway_id         = aws_ec2_transit_gateway_vpc_attachment.spoke.transit_gateway_id
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.spoke]
 }
@@ -241,4 +251,5 @@ resource "aws_route" "to_hub" {
 #    hub 쪽에서 직접 만들 수는 없다. 대신 hub 는 자기 TGW 에 붙은 attachment 전부를
 #    데이터소스로 자동 발견한다(live/hub/networking main.tf 「spoke 자동 발견」 참조,
 #    vpc_owner_id 로 CIDR 을 식별) — hub 의 정기 plan/apply(또는 spoke 배포 직후 재실행)가
-#    저절로 이 attachment 를 찾아낸다.
+#    저절로 이 attachment 를 찾아낸다. 허브 uniq 프리픽스 리스트는 hub 의 1차 apply 때 이미
+#    만들어져 있으므로(TGW·RAM 공유와 같은 블록) 이 값 발견에는 순서가 하나 더 늘지 않는다.

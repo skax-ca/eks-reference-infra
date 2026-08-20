@@ -79,6 +79,22 @@ locals {
   })
 }
 
+# ── 허브 uniq CIDR 발견 — networking 과 별도 state 라 같은 RAM 조회를 독립적으로 반복한다 ──
+# (이 루트는 remote_state 를 쓰지 않는다는 원칙과 같은 이유 — 이 파일 머리말 참조.
+#  live/dev/networking/main.tf 의 동일 블록과 로직이 같다 — state 는 분리해도 발견 방법은
+#  하나다. 태그로는 계정 경계를 못 넘지만(2026-08-20 실측) RAM resource_arns 는 넘는다.)
+data "aws_ram_resource_share" "hub_tgw" {
+  name           = "ram-${var.workload}-hub-${var.region_code}-tgw-share"
+  resource_owner = "OTHER-ACCOUNTS"
+}
+
+locals {
+  hub_uniq_prefix_list_id = split("/", [
+    for arn in data.aws_ram_resource_share.hub_tgw.resource_arns :
+    arn if strcontains(arn, ":prefix-list/")
+  ][0])[1]
+}
+
 # ── VPC 디스커버리 (독립 배포의 핵심) ──────────────────────────────────────────
 # networking state 를 읽지 않고 Name 태그로 우리 VPC 를 찾는다. 공용 개발 계정이라 Workload 태그로
 # 한 번 더 좁혀 **남의 VPC 를 잡지 않게** 한다(`CLAUDE.md` 참조) — 이 계정엔 다수의 VPC 가 공존한다.
@@ -354,16 +370,17 @@ module "eks" {
 
     # hub ArgoCD 가 spoke apiserver 에 도달하는 경로 — TGW 로 라우팅된 트래픽이라(네트워크
     # 경로 1~3단계, live/hub·dev/networking 완료) source_security_group_id 가 아니라
-    # cidr_blocks 를 쓴다(다른 VPC·다른 계정이라 SG 참조 자체가 성립하지 않는다).
-    # ⚠️ hub 의 cidr_uniq 값이다(live/hub/networking/main.tf 참조) — 결정적 상수라 하드코딩한다.
-    #    CIDR 은 계정 식별 정보가 아니다(이미 그 파일에 평문으로 커밋돼 있다). data 소스로도
-    #    못 읽는다 — 태그는 종류를 가리지 않고 계정 경계를 못 넘는다(2026-08-20 실측:
-    #    aws_ram_resource_share 의 tags 도 cross-account 조회 시 null).
+    # prefix_list_ids 를 쓴다(다른 VPC·다른 계정이라 SG 참조 자체가 성립하지 않는다).
+    # ⚠️ hub 의 cidr_uniq 값을 CIDR 텍스트로 하드코딩하지 않는다 — 허브가 RAM 으로 공유한
+    #    관리형 접두사 목록(위 local.hub_uniq_prefix_list_id)을 대신 참조한다. upstream eks
+    #    모듈의 aws_security_group_rule.cluster 가 prefix_list_ids 를 그대로 받는다(실측:
+    #    .terraform/modules/eks.eks/main.tf 435행). 이 전환은 기존 규칙을 교체(destroy 후
+    #    create)한다(레거시 aws_security_group_rule 의 공통 특성) — 재적용 중 짧게 끊긴다.
     hub_argocd = {
-      from_port   = 443
-      to_port     = 443
-      description = "apiserver from hub ArgoCD (via TGW)"
-      cidr_blocks = ["10.53.0.0/16"]
+      from_port       = 443
+      to_port         = 443
+      description     = "apiserver from hub ArgoCD (via TGW)"
+      prefix_list_ids = [local.hub_uniq_prefix_list_id]
     }
   }
 
