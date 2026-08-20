@@ -271,7 +271,7 @@ module "workbench" {
 #
 # ⛔ vpc/eks-cluster/workbench 체인과 독립이다 — naming 만 공유하고 다른 모듈 출력을 참조하지 않는다.
 module "argocd_trust" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/cross-account-trust-role?ref=cross-account-trust-role-v0.1.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/cross-account-trust-role?ref=cross-account-trust-role-v0.2.0&depth=1"
 
   naming = {
     workload    = var.workload
@@ -284,7 +284,7 @@ module "argocd_trust" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.7.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.9.0&depth=1"
 
   # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(모듈 repo 규약).
   naming = {
