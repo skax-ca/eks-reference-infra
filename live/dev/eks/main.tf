@@ -356,7 +356,9 @@ module "eks" {
     # 경로 1~3단계, live/hub·dev/networking 완료) source_security_group_id 가 아니라
     # cidr_blocks 를 쓴다(다른 VPC·다른 계정이라 SG 참조 자체가 성립하지 않는다).
     # ⚠️ hub 의 cidr_uniq 값이다(live/hub/networking/main.tf 참조) — 결정적 상수라 하드코딩한다.
-    #    CIDR 은 계정 식별 정보가 아니다(이미 그 파일에 평문으로 커밋돼 있다).
+    #    CIDR 은 계정 식별 정보가 아니다(이미 그 파일에 평문으로 커밋돼 있다). data 소스로도
+    #    못 읽는다 — 태그는 종류를 가리지 않고 계정 경계를 못 넘는다(2026-08-20 실측:
+    #    aws_ram_resource_share 의 tags 도 cross-account 조회 시 null).
     hub_argocd = {
       from_port   = 443
       to_port     = 443
