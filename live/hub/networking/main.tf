@@ -314,11 +314,6 @@ resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
   replace_existing_association = true
 }
 
-moved {
-  from = aws_ec2_transit_gateway_route_table_association.spoke
-  to   = aws_ec2_transit_gateway_route_table_association.spoke["tgw-attach-08b8eeb6b58caa4b8"]
-}
-
 # ⚠️ **CIDR 은 태그에서 읽지 않는다** — 2026-08-20 실측: EC2·RAM 태그는 종류를 가리지 않고
 #    계정 경계를 못 넘는다(describe-tags·DescribeTransitGatewayVpcAttachments 모두 cross-account
 #    조회 시 빈 배열/null 반환 확인, aws_ram_resource_share 데이터소스의 tags 도 마찬가지).
@@ -351,15 +346,6 @@ resource "aws_route" "vpc_to_spoke" {
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.hub]
 }
 
-moved {
-  from = aws_route.to_spoke_dev["rtb-060876293d2b2e3fe"]
-  to   = aws_route.vpc_to_spoke["rtb-060876293d2b2e3fe-tgw-attach-08b8eeb6b58caa4b8"]
-}
-moved {
-  from = aws_route.to_spoke_dev["rtb-00387de45c4ec6f8a"]
-  to   = aws_route.vpc_to_spoke["rtb-00387de45c4ec6f8a-tgw-attach-08b8eeb6b58caa4b8"]
-}
-
 # ── TGW 라우트테이블 — hub 가 소유한다(TGW owner 만 자기 라우트테이블에 라우트를
 #    넣을 수 있다는 AWS 제약, 모듈 repo 설계 문서 참조). 자동 전파를 껐으므로(위) 두
 #    방향 모두 정적 라우트로 명시해야 한다.
@@ -385,9 +371,4 @@ resource "aws_ec2_transit_gateway_route" "tgw_rt_to_spoke" {
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
 
   depends_on = [aws_ec2_transit_gateway_route_table_association.spoke]
-}
-
-moved {
-  from = aws_ec2_transit_gateway_route.spoke_via_spoke_attachment
-  to   = aws_ec2_transit_gateway_route.tgw_rt_to_spoke["tgw-attach-08b8eeb6b58caa4b8"]
 }
