@@ -24,6 +24,12 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-20 — TGW 네트워크 경로 1~4단계(hub↔spoke 양방향 라우팅 + dev eks SG 인바운드) 전부 apply·실측 완료. 다음 착수 후보(우선순위 순): (1) iac-platform-gitops에 spoke cluster-secret.yaml 등록 → hub ArgoCD의 spoke 크로스 계정 인증 실제 검증. (2) live/hub/networking의 deletion_protection=false 커밋 방치 + docs/deployment-facts.md의 true 오기록(drift) 확인 — 안전 사안. 이전 세션들의 TGW 관련 open-items는 이 항목으로 대체됨."
+    },
+    {
+      "timestamp": 1787192057310,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "Terraform/OpenTofu의 moved 블록이 걸린 리소스에서는 \"plan이 0 to add/0 to change/0 to destroy니 apply는 안 해도 된다\"는 직관이 틀린다(2026-08-20 실측). moved 블록의 리소스 주소 이전은 plan(항상 읽기 전용)이 아니라 apply의 부수효과로만 state 파일에 반영된다 — 0/0/0은 \"속성값 계산 결과가 (이전 주소로 읽든 새 주소로 읽든) 같다\"는 뜻일 뿐, 실제 이전 여부와는 별개다. 판정 방법: plan 로그에 \"has moved to\"가 아직 나오면 미반영 — apply를 한 번 돌려 \"No changes. Your infrastructure matches the configuration.\"로 바뀌는 것을 확인한 뒤에만 moved 블록을 안전하게 제거한다."
     }
   ],
   "userDirectives": [],
