@@ -71,3 +71,16 @@ variable "spoke_account_id" {
   EOT
   type        = string
 }
+
+variable "spoke_tgw_attachment_id" {
+  description = <<-EOT
+    spoke(dev) 가 만든 TGW attachment ID. hub → spoke 방향 TGW 라우트테이블 라우트
+    (aws_ec2_transit_gateway_route.spoke_via_spoke_attachment)의 대상이다 — TGW owner(hub)만
+    자기 라우트테이블에 라우트를 넣을 수 있다는 AWS 제약 때문에 이 값을 여기로 가져와야 한다.
+
+    ⛔ 기본값을 두지 않는다 — 결정적 합성이 불가능한 AWS 무작위 값이다(spoke apply 후에만
+       나온다). 주입 경로: CI 는 repo 변수 DEV_TGW_ATTACHMENT_ID → TF_VAR_spoke_tgw_attachment_id,
+       로컬은 export TF_VAR_spoke_tgw_attachment_id=...
+  EOT
+  type        = string
+}

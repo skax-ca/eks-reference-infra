@@ -271,8 +271,12 @@ resource "aws_ec2_transit_gateway_route" "hub_via_hub_attachment" {
   transit_gateway_route_table_id = aws_ec2_transit_gateway.hub.association_default_route_table_id
 }
 
-# ⚠️ **반대 방향(hub → spoke)은 여기서 끝나지 않는다.** "spoke CIDR → spoke 의
-#    attachment" 라우트가 남아 있는데, spoke 의 attachment ID 는 spoke 가 자기 계정에서
-#    attachment 를 만들어야 나온다(AWS 무작위 부여, 결정적 합성 불가) — spoke apply 후
-#    그 값을 받아 별도 커밋(aws_ec2_transit_gateway_route.spoke_via_spoke_attachment 류)
-#    으로 추가한다. 그 전까지는 spoke → hub 방향만 뚫려 있다.
+# spoke CIDR → spoke 의 attachment. spoke 의 attachment ID(AWS 무작위 부여, 결정적 합성
+# 불가)는 spoke 가 자기 계정에서 attachment 를 만든 뒤 apply 로 받아 repo 변수로 전달했다
+# (live/dev/networking 의 tgw_attachment_id 출력, 2026-08-20) — 이 라우트로 hub → spoke
+# 방향이 완성돼 양방향 라우팅이 끝난다.
+resource "aws_ec2_transit_gateway_route" "spoke_via_spoke_attachment" {
+  destination_cidr_block         = "10.51.0.0/16" # spoke(dev) 의 cidr_uniq — live/dev/networking 참조
+  transit_gateway_attachment_id  = var.spoke_tgw_attachment_id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway.hub.association_default_route_table_id
+}

@@ -194,6 +194,8 @@ jobs:
           # Transit Gateway RAM 공유 principal 에만 쓴다 — 계정 ID라 코드에 두지 않는다
           # (D25 의 연장, execution_role_arn 과 같은 이유).
           TF_VAR_spoke_account_id: ${{ vars.DEV_ACCOUNT_ID }}
+          # spoke networking apply 후 수동 등록한 값(결정적 합성 불가) — hub→spoke TGW 라우트의 대상.
+          TF_VAR_spoke_tgw_attachment_id: ${{ vars.DEV_TGW_ATTACHMENT_ID }}
         run: |
           # -detailed-exitcode: 0=변경없음 · 1=오류 · 2=변경있음.
           # "두 번째 apply 가 No changes 인가"(ignore_tags 판정)를 사람 눈이 아니라
