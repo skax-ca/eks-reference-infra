@@ -280,3 +280,28 @@ resource "aws_ec2_transit_gateway_route" "spoke_via_spoke_attachment" {
   transit_gateway_attachment_id  = var.spoke_tgw_attachment_id
   transit_gateway_route_table_id = aws_ec2_transit_gateway.hub.association_default_route_table_id
 }
+
+# ── TGW 기본 라우트테이블 태깅 — default_tags 가 닿지 않는 예외 ────────────────
+# default_route_table_association = "enable" 을 켜면 AWS 가 이 라우트테이블을 TGW 생성의
+# 부산물로 자동 만든다 — Terraform 이 그 생성 API 를 호출하지 않으므로 provider 의
+# default_tags(위 providers.tf)가 적용되지 않는다(2026-08-20 실측: 무태그 확인). aws_ec2_tag
+# 로 개별 태그한다 — "모든 리소스는 태그를 단다"(모듈 repo docs/06-conventions.md
+# 「2. 네이밍과 태깅」 강제 방식 6번)의 이행이다.
+locals {
+  tgw_default_rt_tags = {
+    Name        = "tgwrt-${var.workload}-${var.env}-${var.region_code}-default"
+    Environment = var.env
+    Workload    = var.workload
+    RegionCode  = var.region_code
+    ManagedBy   = "opentofu"
+    Repository  = var.repository
+  }
+}
+
+resource "aws_ec2_tag" "tgw_default_rt" {
+  for_each = local.tgw_default_rt_tags
+
+  resource_id = aws_ec2_transit_gateway.hub.association_default_route_table_id
+  key         = each.key
+  value       = each.value
+}
