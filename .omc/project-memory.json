@@ -42,6 +42,18 @@
       "source": "manual",
       "category": "gotcha",
       "content": "`aws_route`·`aws_security_group_rule`(레거시)에서 destination/source 인자의 **종류**를 바꾸면(예: `destination_cidr_block`→`destination_prefix_list_id`, `cidr_blocks`→`prefix_list_ids`) in-place 업데이트가 아니라 **교체(destroy 후 create)**로 plan에 잡힌다(2026-08-20 실측: dev networking `2 to add/2 destroy`, dev eks `1 to add/1 destroy`). 값이 같은 CIDR을 가리켜도 \"표현 방식\"이 바뀌면 리소스 재생성이라는 뜻 — 이런 전환을 적용할 때는 해당 라우트/규칙이 짧게 끊기는 것을 감수해야 한다."
+    },
+    {
+      "timestamp": 1787202429850,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "`.mcp.json`의 `aws-mcp`(mcp-proxy-for-aws → https://aws-mcp.us-east-1.api.aws/mcp)는 이 머신에서 영구적으로 연결 실패한다(2026-08-20 실측). 원인: 사내(SK holdings C&C) TLS 검사 프록시가 이 도메인을 가로채 재서명하는데, 그 루트 CA의 X509v3 Basic Constraints가 critical로 마킹되어 있지 않아(RFC 5280 위반) OpenSSL 3.x가 신뢰 저장소 등록 여부와 무관하게 거부한다(`Basic Constraints of CA cert not marked critical`). macOS 키체인엔 이 루트가 있어 브라우저는 되지만 uvx의 Python(OpenSSL 3.x)에선 CA 번들에 추가해도 안 됨을 실측 확인. mcp-proxy-for-aws에 검증 우회 플래그도 없음. 사용자 결정: IT 에스컬레이션·로컬 우회 모두 보류, aws-mcp 없이 진행 — 실제 AWS 조회는 `aws --profile team` CLI로 한다(CLAUDE.md 4-1절과 일치). iac-module-library의 aws-mcp도 같은 엔드포인트라 동일 증상 예상(미실측, 도메인 동일이 근거). 재진단 불필요 — 사내 IT가 그 루트 CA를 재발급하기 전까진 결과가 같다."
+    },
+    {
+      "timestamp": 1787202432471,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "이 repo는 `.mcp.json`(Claude Code)과 `opencode.jsonc`(OpenCode)에 같은 MCP 서버 목록을 각각 따로 관리한다 — iac-module-library와 동일 패턴이며 자동 동기화 장치는 없다. 2026-08-20 aws-well-architected(awslabs.well-architected-security-mcp-server) 추가 시 이전엔 opencode.jsonc 자체가 없었음을 발견 — 새 MCP 서버를 추가할 땐 두 파일 모두 반드시 함께 고친다(하나만 고치면 그 클라이언트만 조용히 구식 목록으로 남는다)."
     }
   ],
   "userDirectives": [],

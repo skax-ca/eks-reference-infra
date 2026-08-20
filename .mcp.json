@@ -36,6 +36,18 @@
         "team",
         "--read-only"
       ]
+    },
+    "aws-well-architected": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "awslabs.well-architected-security-mcp-server",
+        "awslabs.well-architected-security-mcp-server"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
     }
   }
 }
