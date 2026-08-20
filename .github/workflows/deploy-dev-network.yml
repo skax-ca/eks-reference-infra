@@ -190,9 +190,8 @@ jobs:
         env:
           # 2단째 assume 대상. ARN 에 계정 ID 가 있어 코드에 두지 않는다(D25 의 연장).
           TF_VAR_execution_role_arn: ${{ vars.DEV_AWS_EXEC_ROLE_ARN }}
-          # 🚧 마이그레이션 중간 단계 전용(2026-08-20) — hub 적용 완료 후 다음 커밋에서 제거된다.
-          TF_VAR_hub_transit_gateway_id: ${{ vars.HUB_TRANSIT_GATEWAY_ID }}
-          TF_VAR_hub_tgw_resource_share_arn: ${{ vars.HUB_TGW_RESOURCE_SHARE_ARN }}
+          # ⚠️ hub 의 TGW ID·RAM resource share ARN 은 더 이상 여기로 주입하지 않는다
+          # (2026-08-20 재설계) — main.tf 가 data.aws_ram_resource_share 로 이름 조회한다.
         run: |
           # -detailed-exitcode: 0=변경없음 · 1=오류 · 2=변경있음.
           # "두 번째 apply 가 No changes 인가"(ignore_tags 판정)를 사람 눈이 아니라

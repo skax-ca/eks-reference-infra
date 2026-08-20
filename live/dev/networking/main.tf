@@ -178,13 +178,33 @@ module "vpc" {
 # 경로」 절). IAM 신뢰(cross-account-trust-role)는 "누가 인증되는가"만 답하고, 이 리소스들이
 # 허브 ArgoCD 가 spoke API 서버에 패킷을 보낼 실제 경로다.
 #
-# 🚧 마이그레이션 중간 단계(2026-08-20) — hub 쪽이 아직 이 attachment 의 UniqCidr 태그를
-# 읽는 코드를 적용하지 않았다(hub 가 spoke 의 태그를, spoke 가 hub 의 태그를 서로 읽는
-# 순환이라 한쪽을 하드코딩인 채로 태그만 먼저 남겨야 한다). 이 커밋은 **태그만** 추가하고
-# hub_transit_gateway_id/hub_tgw_resource_share_arn 변수와 하드코딩 CIDR 은 유지한다 —
-# hub 적용 완료 후 다음 커밋에서 data 소스 조회로 전환한다.
+# hub 의 TGW ID 는 repo 변수로 받지 않는다 — RAM 공유를 **이름으로** 조회한다(2026-08-20
+# 재설계). 이름은 hub main.tf 의 name 조합과 동일한 공식이라 결정적이다. 값이 없으면
+# (=hub 가 아직 없으면) 이 data 소스가 즉시 에러로 실패한다 — "hub 가 spoke 보다 먼저
+# 존재해야 한다"는 순서를 사람이 기억하지 않아도 되게 강제하는 가드다.
+#
+# ⚠️ CIDR 은 여기서 조회하지 않는다 — 태그는 종류를 가리지 않고 계정 경계를 못 넘는다
+#    (2026-08-20 실측: describe-tags·DescribeTransitGatewayVpcAttachments·
+#    aws_ram_resource_share 의 tags 전부 cross-account 조회 시 빈 배열/null). resource_arns
+#    (TGW 자체)는 RAM 의 본래 목적이라 다르게 동작해 그대로 쓸 수 있다.
+data "aws_ram_resource_share" "hub_tgw" {
+  name           = "ram-${var.workload}-hub-${var.region_code}-tgw-share"
+  resource_owner = "OTHER-ACCOUNTS"
+}
+
+locals {
+  # resource_arns 에 공유된 리소스 ARN 이 들어있다 — 이 공유는 TGW 하나만 담으므로
+  # "transit-gateway/" 를 포함하는 것 하나를 골라 뒤쪽 ID 만 잘라낸다.
+  hub_transit_gateway_id = split("/", [
+    for arn in data.aws_ram_resource_share.hub_tgw.resource_arns :
+    arn if strcontains(arn, ":transit-gateway/")
+  ][0])[1]
+}
+
+# 초대를 먼저 수락해야 한다 — allow_external_principals = true 설계라(hub main.tf 참조)
+# 조직 내부 자동 공유가 아니라 표준 계정 간 공유(초대)로 동작한다.
 resource "aws_ram_resource_share_accepter" "tgw" {
-  share_arn = var.hub_tgw_resource_share_arn
+  share_arn = data.aws_ram_resource_share.hub_tgw.arn
 }
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
@@ -193,13 +213,10 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
 
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.subnet_ids_by_group["tgw-uniq"]
-  transit_gateway_id = var.hub_transit_gateway_id
+  transit_gateway_id = local.hub_transit_gateway_id
 
   tags = {
     Name = "tgwa-${var.workload}-${var.env}-${var.region_code}-main"
-    # hub 가 이 값을 데이터소스로 읽어 자기 라우트테이블·자기 VPC RT 에 반환 라우트를
-    # 만든다(2026-08-20 재설계) — repo 변수로 옮겨 적지 않는다.
-    UniqCidr = local.cidr_uniq
   }
 }
 
@@ -210,15 +227,18 @@ resource "aws_route" "to_hub" {
   for_each = toset(module.vpc.route_table_ids_by_group["node-uniq"])
 
   route_table_id = each.value
-  # 🔑 hub 의 cidr_uniq 값이다 — 다음 커밋에서 data 소스 조회로 대체된다.
+  # 🔑 hub 의 cidr_uniq 값이다(live/hub/networking/main.tf 참조) — 결정적 상수라 하드코딩한다.
+  #    CIDR 은 계정 식별 정보가 아니다(이미 그 파일에 평문으로 커밋돼 있다) — 계정 ID 와
+  #    다르게 var 로 빼지 않는다. 태그로도 못 읽는다(계정 경계를 못 넘는다, 위 주석 참조).
   destination_cidr_block = "10.53.0.0/16"
   transit_gateway_id     = aws_ec2_transit_gateway_vpc_attachment.spoke.transit_gateway_id
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.spoke]
 }
 
-# ⚠️ **hub → spoke 방향은 이 apply 로 끝나지 않지만, 값을 손으로 옮길 필요는 없다.**
-#    TGW 라우트테이블은 TGW owner(hub)만 고칠 수 있어(AWS 제약) 이 attachment 를 hub 쪽에서
-#    직접 만들 수는 없다. 대신 hub 는 자기 TGW 에 붙은 attachment 전부를 데이터소스로
-#    자동 발견해 라우트를 만든다(live/hub/networking main.tf 「spoke 자동 발견」 참조) — hub
-#    의 정기 plan/apply(또는 spoke 배포 직후 재실행)가 저절로 이 attachment 를 찾아낸다.
+# ⚠️ **hub → spoke 방향은 이 apply 로 끝나지 않지만, attachment ID 를 손으로 옮길 필요는
+#    없다.** TGW 라우트테이블은 TGW owner(hub)만 고칠 수 있어(AWS 제약) 이 attachment 를
+#    hub 쪽에서 직접 만들 수는 없다. 대신 hub 는 자기 TGW 에 붙은 attachment 전부를
+#    데이터소스로 자동 발견한다(live/hub/networking main.tf 「spoke 자동 발견」 참조,
+#    vpc_owner_id 로 CIDR 을 식별) — hub 의 정기 plan/apply(또는 spoke 배포 직후 재실행)가
+#    저절로 이 attachment 를 찾아낸다.

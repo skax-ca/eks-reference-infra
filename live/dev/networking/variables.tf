@@ -56,14 +56,3 @@ variable "execution_role_arn" {
   EOT
   type        = string
 }
-
-# 🚧 마이그레이션 중간 단계 전용(2026-08-20) — hub 적용 완료 후 다음 커밋에서 제거된다.
-variable "hub_transit_gateway_id" {
-  description = "임시 — hub 적용 후 data 소스 조회로 대체된다."
-  type        = string
-}
-
-variable "hub_tgw_resource_share_arn" {
-  description = "임시 — hub 적용 후 data 소스 조회로 대체된다."
-  type        = string
-}
