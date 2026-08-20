@@ -367,7 +367,7 @@ moved {
 # hub CIDR → hub 자신의 attachment. 이 값은 이미 hub state 안에 있어 지금 바로 만들 수
 # 있다(spoke → hub 방향이 이 apply 로 뚫린다).
 resource "aws_ec2_transit_gateway_route" "hub_via_hub_attachment" {
-  destination_cidr_block         = "10.53.0.0/16" # hub 자신의 cidr_uniq — 위 locals 참조
+  destination_cidr_block         = local.cidr_uniq # hub 자신의 값 — 이 파일 상단 locals 에 이미 있다
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
 
