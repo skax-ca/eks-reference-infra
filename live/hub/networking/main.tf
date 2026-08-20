@@ -254,29 +254,30 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
   subnet_ids         = module.vpc.subnet_ids_by_group["node-uniq"]
   transit_gateway_id = aws_ec2_transit_gateway.hub.id
 
-  # TGW 의 묵시적 기본 라우트테이블에 자동 연결되지 않게 한다 — 아래
-  # aws_ec2_transit_gateway_route_table_association 이 명시적으로 우리 RT 에 붙인다.
-  # (hub 는 이 TGW 의 소유자라 이 인자를 쓸 수 있다 — RAM 으로 "받는" 쪽인 spoke 는
-  # AWS 공식 문서상 이 인자를 못 쓴다, 아래 참조.)
-  transit_gateway_default_route_table_association = false
-  transit_gateway_default_route_table_propagation = false
-
   tags = {
     Name = "tgwa-${var.workload}-${var.env}-${var.region_code}-main"
   }
 }
 
+# 두 attachment 모두 replace_existing_association 로 옛 묵시적 기본 RT(default_route_table_association
+# 이 "enable" 이던 시절 자동 연결됐다)에서 우리 RT 로 옮긴다.
+#
+# ⚠️ hub 자신의 attachment 에도 이 방식을 쓴다 — attachment 리소스의
+# transit_gateway_default_route_table_association = false 로 먼저 시도했으나 실제로는 무동작
+# 이었다(2026-08-20 실측: "Modifications complete after 0s" 뒤에도 옛 RT 연결이 그대로 남아
+# AssociateTransitGatewayRouteTable 이 Resource.AlreadyAssociated 로 실패). AWS 공식 문서의
+# "두 리소스로 같은 연결을 관리하지 말라"는 경고와도 맞아 — 이 인자를 걷어내고
+# replace_existing_association 하나로 통일한다.
+#
+# spoke 의 attachment 는 애초에 RAM 으로 "받은" 쪽이라 그 인자 자체를 못 쓴다(AWS 공식 문서:
+# "This cannot be configured or perform drift detection with Resource Access Manager shared
+# EC2 Transit Gateways") — 이래저래 hub(TGW owner)가 명시적 연결 리소스로 양쪽을 끌어와야 한다.
 resource "aws_ec2_transit_gateway_route_table_association" "hub" {
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
+  replace_existing_association   = true
 }
 
-# spoke 의 attachment 는 RAM 으로 "받은" 쪽이라 transit_gateway_default_route_table_association
-# 인자를 못 쓴다(AWS 공식 문서: "This cannot be configured or perform drift detection with
-# Resource Access Manager shared EC2 Transit Gateways") — hub(TGW owner)가 대신 끌어와야 한다.
-# replace_existing_association = true 인 이유: spoke 의 attachment 는 이미 TGW 의 옛 묵시적
-# 기본 RT 에 연결된 상태였다(default_route_table_association 이 "enable" 이던 시절 생성돼
-# 자동 연결됐다) — 그 기존 연결을 제거하고 우리 RT 로 옮긴다.
 resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
   transit_gateway_attachment_id  = var.spoke_tgw_attachment_id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
