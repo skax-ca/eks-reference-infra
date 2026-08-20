@@ -358,6 +358,11 @@ module "eks" {
     # aws eks list-associated-access-policies 로만 조회된다.
     argocd_hub = {
       principal_arn = module.argocd_trust.role_arn
+      # ⚠️ aws_eks_access_entry.kubernetes_groups 는 Optional+Computed 라, 이 필드를 아예
+      #    빼면(null) provider 가 "의견 없음"으로 읽어 이전 상태값을 그대로 둔다 — 옛 설계의
+      #    kubernetes_groups = ["argocd-hub"] 잔여물이 안 지워진 채 남는다(실측 확인).
+      #    명시적으로 빈 리스트를 줘야 실제로 지워진다.
+      kubernetes_groups = []
       policy_associations = {
         admin = {
           policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
