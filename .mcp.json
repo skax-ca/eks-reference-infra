@@ -23,18 +23,19 @@
         "AWS_CA_BUNDLE": "${HOME}/.claude/certs/ca-bundle.pem"
       }
     },
-    "aws-api": {
+    "aws-mcp": {
       "type": "stdio",
       "command": "uvx",
+      "timeout": 100000,
       "args": [
-        "awslabs.aws-api-mcp-server@latest"
-      ],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR",
-        "AWS_REGION": "ap-northeast-2",
-        "AWS_API_MCP_PROFILE_NAME": "team",
-        "READ_OPERATIONS_ONLY": "true"
-      }
+        "mcp-proxy-for-aws@1.6.4",
+        "https://aws-mcp.us-east-1.api.aws/mcp",
+        "--metadata",
+        "AWS_REGION=ap-northeast-2",
+        "--profile",
+        "team",
+        "--read-only"
+      ]
     }
   }
 }
