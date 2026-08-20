@@ -2,17 +2,11 @@
   "techStack": "OpenTofu(terraform 명령 아님) + GitHub Actions OIDC + S3 backend. 모듈은 iac-module-library를 git tag로 소싱(D20). GitOps는 iac-platform-gitops(self-managed ArgoCD, helm) 소관.",
   "build": "로컬 게이트(git hook, core.hooksPath=.githooks): pre-commit(backend.hcl 유출 검사+fmt+tflint+trivy), pre-push(validate, live/ 변경 시). 문서 파일 staged 시 별도 갈래로 validate-doc-conventions.py 실행(§8 규칙: 절 번호 인용 금지·비표준 이모지 금지·400줄 제한).",
   "conventions": "설계 SSOT는 이 repo가 아니라 iac-module-library docs/design/50(D-CONSUME, D20~D30) — 재논의 전 필독. workload=demo(2026-08-13 ref→demo 전환 완료). 버킷명·계정ID·Role ARN은 git에 두지 않는다(D25) — repo 변수/gitignore된 backend.hcl로만.",
-  "structure": "hub(team 계정 533616270150, live/hub/{networking,eks}, ArgoCD control-plane 영구 거처) / spoke(asset 계정 614054776208, 미부트스트랩) / 폐기 예정 dev(live/dev/{networking,eks}, 인프라는 이미 teardown됨, 코드만 남음). GitOps 매니페스트는 이 repo가 아니라 iac-platform-gitops 소관.",
+  "structure": "hub(team 계정 533616270150, live/hub/{networking,eks}, ArgoCD control-plane 영구 거처, hub-spoke TGW 양방향 라우팅 완료) / spoke=dev(asset 계정 614054776208, live/dev/{networking,eks}, 부트스트랩·apply 완료, TGW attachment+SG 인바운드까지 연결 완료). GitOps 매니페스트는 이 repo가 아니라 iac-platform-gitops 소관.",
   "version": "1.0.0",
-  "lastScanned": 1787101000000,
+  "lastScanned": 1787190815240,
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
-    {
-      "timestamp": 1787101000000,
-      "source": "manual",
-      "category": "open-items",
-      "content": "2026-08-19 — hub ArgoCD 실제 seed 완료(iac-platform-gitops PR #17~#19 머지, 8개 Application Synced/Healthy). 다음 착수 후보(우선순위 순): (1) spoke(asset 계정 614054776208) 부트스트랩 — bootstrap/bootstrap.sh 신규 실행 대상(hub와 달리 진짜 새 계정). (2) spoke 배포 — live/<spoke-env>/{networking,eks} + cross-account-trust-role 모듈. (3) 배선 — spoke 신뢰 Role ARN을 hub eks의 argocd_hub_assumable_role_arns에 추가, enable_argocd_hub_pod_identity=true로 전환(현재 false). (4) 검증 — hub ArgoCD가 spoke EKS에 실제로 크로스 계정 인증되는지. (5) live/dev/{networking,eks} 죽은 .tf 코드 폐기 여부(사용자 미확답, 인프라는 이미 파기됨)."
-    },
     {
       "timestamp": 1787101000001,
       "source": "manual",
@@ -20,10 +14,16 @@
       "content": "2026-08-19 — 이 repo의 notepad.md를 날짜별 prepend 방식(2026-08-19 신설했다가 같은 세션에 폐기)에서 iac-module-library와 동일한 OMC 3단 구조(Priority/Working/MANUAL)로 전환. 사용자 의도가 '동일 메커니즘 관리'였음을 뒤늦게 확인 — mcp__t__notepad_*가 다른 프로젝트에 못 쓰는 원인은 OMC의 의도된 worktree 격리(세션 시작 시점 trustedRoot에 고정)였으므로, 커스텀 MCP 서버(.mcp/notepad-server.ts 등, 같은 세션에 신설했다가 삭제)는 불필요했다 — 이 repo를 프로젝트 루트로 하는 별도 세션에서는 mcp__t__notepad_*가 iac-module-library와 완전히 동일하게 동작한다. 마이그레이션 시 원본 1392줄 전부 보존(무손실 스크립트 검증) — 최근 3개(2026-08-19) 항목만 Working Memory로, 나머지 전부 MANUAL로 이관. 과거 flat-file 형식 설명 원문은 git 이력(migrate 커밋 직전)에 남아 있다."
     },
     {
-      "timestamp": 1787183106864,
+      "timestamp": 1787190783561,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "AWS 리소스 태그는 종류를 가리지 않고 계정 경계를 못 넘는다(2026-08-20 실측: EC2 describe-tags, DescribeTransitGatewayVpcAttachments의 Tags, aws_ram_resource_share 데이터소스의 tags 전부 cross-account 조회 시 빈 배열/null — 실행 Role이 AdministratorAccess라도 마찬가지). RAM이 명시적으로 공유하는 대상(resource_arns 등)이나 EC2 API의 고유 속성(vpc_owner_id 등)은 cross-account로 정상 보인다 — \"그 리소스가 RAM으로 공유돼 보인다\"와 \"그 리소스의 태그가 보인다\"는 별개다. 크로스 계정 값 전달 설계 시 태그 기반 발견을 가정하지 말고 먼저 AWS CLI로 실측할 것."
+    },
+    {
+      "timestamp": 1787190785377,
       "source": "manual",
       "category": "open-items",
-      "content": "2026-08-19 — spoke(dev) networking+eks apply 완료(66개+클러스터/노드그룹/7addon 전부 ACTIVE), cross-account-trust-role도 생성 완료. VPC Peering은 AWS가 구조적으로 거부(hub·spoke가 공유하는 pod-dup CIDR 100.64.0.0/16 때문)해 완전 폐기하고 Transit Gateway로 설계 전환(모듈 repo docs 3커밋 반영 완료). 이 repo는 TGW hub쪽 1단계 코드만 push(commit 0e81675, plan 확인됨: 8 to add 0 destroy) — apply(workflow_dispatch)는 아직 실행 안 함. 다음 착수 순서: (1) hub networking TGW apply dispatch → transit_gateway_id를 repo변수 HUB_TRANSIT_GATEWAY_ID로 수동 등록 (2) live/dev/networking에 TGW attachment+라우트 신설·apply → attachment ID를 DEV_TGW_ATTACHMENT_ID로 수동 등록 (3) hub networking에 TGW RT의 spoke행 라우트 추가·apply로 양방향 완성 (4) live/dev/eks SG에 허브발 443 인바운드 추가 (5) 별도 미해결: live/hub/networking의 deletion_protection=false가 커밋된 채 방치, docs/deployment-facts.md는 true라고 잘못 기록됨(drift) — 안전 사안이라 확인 필요 (6) 위 완료 후 iac-platform-gitops에 spoke cluster-secret.yaml 등록해 hub ArgoCD의 spoke 크로스 계정 인증 검증."
+      "content": "2026-08-20 — TGW 네트워크 경로 1~4단계(hub↔spoke 양방향 라우팅 + dev eks SG 인바운드) 전부 apply·실측 완료. 다음 착수 후보(우선순위 순): (1) iac-platform-gitops에 spoke cluster-secret.yaml 등록 → hub ArgoCD의 spoke 크로스 계정 인증 실제 검증. (2) live/hub/networking의 deletion_protection=false 커밋 방치 + docs/deployment-facts.md의 true 오기록(drift) 확인 — 안전 사안. 이전 세션들의 TGW 관련 open-items는 이 항목으로 대체됨."
     }
   ],
   "userDirectives": [],
