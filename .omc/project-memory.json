@@ -54,6 +54,24 @@
       "source": "manual",
       "category": "gotcha",
       "content": "이 repo는 `.mcp.json`(Claude Code)과 `opencode.jsonc`(OpenCode)에 같은 MCP 서버 목록을 각각 따로 관리한다 — iac-module-library와 동일 패턴이며 자동 동기화 장치는 없다. 2026-08-20 aws-well-architected(awslabs.well-architected-security-mcp-server) 추가 시 이전엔 opencode.jsonc 자체가 없었음을 발견 — 새 MCP 서버를 추가할 땐 두 파일 모두 반드시 함께 고친다(하나만 고치면 그 클라이언트만 조용히 구식 목록으로 남는다)."
+    },
+    {
+      "timestamp": 1787204923126,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "`aws_eks_access_entry.kubernetes_groups`는 AWS provider 스키마상 Optional+Computed다(2026-08-20 실측). `main.tf`의 access_entries 객체에서 이 필드를 아예 지우면(모듈이 `try(each.value.kubernetes_groups, null)`로 계산 — null이 됨) provider는 \"값을 정하지 않겠다\"로 읽어 **이전 상태값을 그대로 유지**한다 — plan에도 그 리소스가 변경 대상으로 안 잡힌다(`0 to change`). 실제로 지우려면 `kubernetes_groups = []`를 **명시적으로** 줘야 하고, 그래야 `1 to change`(in-place update)로 잡히고 apply 후 `describe-access-entry`의 `kubernetesGroups`가 실제로 빈 배열이 된다(`modifiedAt`도 갱신됨). 일반화: Optional+Computed 속성이 걸린 리소스에서 \"필드를 지운다\"(null)와 \"명시적으로 빈 값을 준다\"([]·\"\"·0)는 다른 의미다 — A 방식→B 방식 마이그레이션 시 이전 방식의 값을 명시적으로 override해야 실제 정리가 된다. 사례: `iamr-demo-dev-an2-argocd-hub` access entry를 kubernetes_groups(RBAC 방식)에서 policy_associations(AmazonEKSClusterAdminPolicy, access policy 방식)로 전환하며 발견(커밋 25d9a1c→9c3abaa, iac-reference-infra)."
+    },
+    {
+      "timestamp": 1787207226671,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "EKS Pod Identity로 이미 세션 태그가 붙은 Role이 다시 다른 Role을 체이닝 assume(cross-account)할 때, AWS STS는 `sts:AssumeRole`과 `sts:TagSession`을 별개 액션으로 검사한다(2026-08-20 실측). hub의 `argocd_hub_pod_identity` Role(Pod Identity 트러스트가 AssumeRole+TagSession 둘 다 허용)이 spoke의 `cross-account-trust-role`을 assume할 때, 양쪽 정책(hub의 permission policy·spoke의 trust policy)에 `sts:AssumeRole`만 걸어뒀더니 실제 apply 후 403 `not authorized to perform: sts:TagSession`으로 거부됨 — `argocd-application-controller` 로그에서 발견. 최초 진단 시 컨테이너명 오타(`argocd-application-controller` vs 실제 `application-controller`)로 \"Pod Identity 자격증명이 아예 주입 안 됨\"이라는 잘못된 결론에 먼저 도달했었다(파드 재시작까지 했으나 무관했음) — `kubectl exec -c`로 컨테이너 지정 시 실제 컨테이너명을 `kubectl get pod -o yaml`로 먼저 확인할 것. 수정: `iac-module-library` PR #29(머지됨, 태그 `eks-cluster-v0.9.0`·`cross-account-trust-role-v0.2.0`)에서 양쪽 정책의 Action에 `sts:TagSession` 추가. iac-reference-infra의 `live/hub/eks`·`live/dev/eks` main.tf가 아직 구 태그(`eks-cluster-v0.8.0`)를 쓰고 있어 재적용 필요(미완료 — 다음 세션 착수 후보)."
+    },
+    {
+      "timestamp": 1787208304021,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-20 — TGW 네트워크 경로 완료(이전 세션)에 이어, hub ArgoCD의 spoke 크로스 계정 인증을 실제로 검증·완료했다. dev(spoke) cluster-secret.yaml을 iac-platform-gitops에 등록하고, 발견된 sts:TagSession 누락 버그(iac-module-library PR #29, eks-cluster-v0.9.0·cross-account-trust-role-v0.2.0)를 hub·dev 양쪽에 재적용한 뒤 7개 Application(aws-lbc·cluster-autoscaler·karpenter·karpenter-nodepool·kyverno·kyverno-custom-policies·kyverno-policies) 전부 Synced/Healthy 실측 확인. 이전 open-items의 \"(1) spoke cluster-secret.yaml 등록·크로스 계정 인증 검증\"은 이 항목으로 완료 대체. 남은 것은 \"(2) live/hub/networking의 deletion_protection=false 커밋 방치 + docs/deployment-facts.md의 true 오기록(drift)\" 하나뿐 — 안전 사안, 아직 미확인 상태로 이월."
     }
   ],
   "userDirectives": [],
