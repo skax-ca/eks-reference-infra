@@ -190,8 +190,7 @@ jobs:
         env:
           # 2단째 assume 대상. ARN 에 계정 ID 가 있어 코드에 두지 않는다(D25 의 연장).
           TF_VAR_execution_role_arn: ${{ vars.DEV_AWS_EXEC_ROLE_ARN }}
-          # hub networking apply 후 수동 등록한 값 — TGW ID·RAM resource share ARN(둘 다
-          # 결정적 합성 불가). resource share ARN 은 hub 계정 ID 를 담고 있어 코드에 두지 않는다.
+          # 🚧 마이그레이션 중간 단계 전용(2026-08-20) — hub 적용 완료 후 다음 커밋에서 제거된다.
           TF_VAR_hub_transit_gateway_id: ${{ vars.HUB_TRANSIT_GATEWAY_ID }}
           TF_VAR_hub_tgw_resource_share_arn: ${{ vars.HUB_TGW_RESOURCE_SHARE_ARN }}
         run: |
