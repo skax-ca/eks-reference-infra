@@ -235,9 +235,6 @@ resource "aws_ram_resource_share" "tgw" {
 
   tags = {
     Name = "ram-${var.workload}-${var.env}-${var.region_code}-tgw-share"
-    # spoke 가 이 공유를 이름으로 조회할 때 hub 의 uniq CIDR 을 함께 읽어간다 — repo 변수로
-    # 옮겨 적지 않는다(모듈 repo docs/02-choose-your-path.md 「네트워크 경로」 「값 발견」 절).
-    UniqCidr = local.cidr_uniq
   }
 }
 
@@ -322,10 +319,21 @@ moved {
   to   = aws_ec2_transit_gateway_route_table_association.spoke["tgw-attach-08b8eeb6b58caa4b8"]
 }
 
-# 허브 VPC 라우트테이블(node-uniq)에서 발견된 spoke 마다 라우트를 하나씩 얹는다 —
-# CIDR 은 그 spoke 의 attachment 에 남겨진 UniqCidr 태그에서 읽는다(하드코딩도 repo 변수
-# 수동 복사도 아니다). ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별 RT 리스트라
-# (RT × spoke) 곱집합을 만든다.
+# ⚠️ **CIDR 은 태그에서 읽지 않는다** — 2026-08-20 실측: EC2·RAM 태그는 종류를 가리지 않고
+#    계정 경계를 못 넘는다(describe-tags·DescribeTransitGatewayVpcAttachments 모두 cross-account
+#    조회 시 빈 배열/null 반환 확인, aws_ram_resource_share 데이터소스의 tags 도 마찬가지).
+#    대신 attachment 의 vpc_owner_id(태그가 아니라 EC2 API 고유 속성이라 cross-account 로도
+#    보인다, 실측 확인)로 spoke 를 식별해 아래 지도에서 CIDR 을 찾는다. hub 는 spoke 마다
+#    RAM 초대를 보내려면 이미 계정 ID 를 알아야 하므로(위 aws_ram_principal_association) —
+#    같은 자리에 CIDR 하나만 더 적는다. 새 수동 단계가 아니라 기존 단계의 확장이다.
+locals {
+  spoke_uniq_cidrs = {
+    (var.spoke_account_id) = "10.51.0.0/16" # dev(asset 계정) — live/dev/networking 의 cidr_uniq
+  }
+}
+
+# 허브 VPC 라우트테이블(node-uniq)에서 발견된 spoke 마다 라우트를 하나씩 얹는다.
+# ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별 RT 리스트라 (RT × spoke) 곱집합을 만든다.
 locals {
   hub_rt_x_spoke = setproduct(
     toset(module.vpc.route_table_ids_by_group["node-uniq"]),
@@ -337,7 +345,7 @@ resource "aws_route" "vpc_to_spoke" {
   for_each = { for pair in local.hub_rt_x_spoke : "${pair[0]}-${pair[1]}" => pair }
 
   route_table_id         = each.value[0]
-  destination_cidr_block = data.aws_ec2_transit_gateway_vpc_attachment.spoke[each.value[1]].tags["UniqCidr"]
+  destination_cidr_block = local.spoke_uniq_cidrs[data.aws_ec2_transit_gateway_vpc_attachment.spoke[each.value[1]].vpc_owner_id]
   transit_gateway_id     = aws_ec2_transit_gateway.hub.id
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.hub]
@@ -366,13 +374,13 @@ resource "aws_ec2_transit_gateway_route" "hub_via_hub_attachment" {
   depends_on = [aws_ec2_transit_gateway_route_table_association.hub]
 }
 
-# 발견된 spoke 마다 TGW 라우트테이블에 라우트를 하나씩 얹는다 — 대상 CIDR 도 그 spoke 의
-# UniqCidr 태그에서 읽는다. spoke 가 늘어도 이 리소스 블록은 그대로다(for_each 가 알아서
-# 늘어난다).
+# 발견된 spoke 마다 TGW 라우트테이블에 라우트를 하나씩 얹는다 — 대상 CIDR 은 위
+# local.spoke_uniq_cidrs 에서 vpc_owner_id 로 찾는다. spoke 가 늘어도(지도에 계정 ID·CIDR
+# 한 줄만 추가하면) 이 리소스 블록 자체는 그대로다(for_each 가 알아서 늘어난다).
 resource "aws_ec2_transit_gateway_route" "tgw_rt_to_spoke" {
   for_each = data.aws_ec2_transit_gateway_vpc_attachment.spoke
 
-  destination_cidr_block         = each.value.tags["UniqCidr"]
+  destination_cidr_block         = local.spoke_uniq_cidrs[each.value.vpc_owner_id]
   transit_gateway_attachment_id  = each.value.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
 
