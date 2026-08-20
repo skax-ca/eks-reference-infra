@@ -24,12 +24,18 @@ check_healthy() {
   curl -sk -o /dev/null -w '%{http_code}' "https://localhost:${port}/" --max-time 5 2>/dev/null | grep -q '^200$'
 }
 
+open_browser() {
+  local port="$1"
+  command -v open >/dev/null 2>&1 && open "https://localhost:${port}" >/dev/null 2>&1 || true
+}
+
 # ── 멱등성 판단 ──────────────────────────────────────────────────────────
 if [[ -f "$PID_FILE" ]]; then
   OLD_PID=$(cat "$PID_FILE")
   OLD_PORT=$(cat "$PORT_FILE" 2>/dev/null || echo "$LOCAL_PORT")
   if kill -0 "$OLD_PID" 2>/dev/null && check_healthy "$OLD_PORT"; then
     echo "ALREADY_CONNECTED port=$OLD_PORT pid=$OLD_PID"
+    open_browser "$OLD_PORT"
     exit 0
   fi
   # 죽었거나 응답이 없다 — 잔여 프로세스 정리 후 재연결로 진행한다
@@ -102,6 +108,7 @@ echo "$LOCAL_PORT" > "$PORT_FILE"
 sleep 5
 if check_healthy "$LOCAL_PORT"; then
   echo "CONNECTED port=$LOCAL_PORT instance=$INSTANCE_ID pid=$LOCAL_PID"
+  open_browser "$LOCAL_PORT"
 else
   echo "WARNING: 터널은 떴지만 https://localhost:$LOCAL_PORT 응답이 아직 없다 — 몇 초 후 다시 확인할 것" >&2
   echo "CONNECTED_UNVERIFIED port=$LOCAL_PORT instance=$INSTANCE_ID pid=$LOCAL_PID"

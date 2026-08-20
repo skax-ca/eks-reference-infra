@@ -34,7 +34,10 @@ bash .claude/skills/argocd-tunnel-connect/scripts/connect.sh [LOCAL_PORT]
 | `CONNECTED_UNVERIFIED ...` | 터널은 열었지만 아직 응답 확인 전 — 몇 초 후 다시 curl 해볼 것 |
 | `ERROR: ...` (stderr, exit 1) | workbench를 못 찾았거나 SSM 오프라인이거나 원격 명령 실패 |
 
-성공하면 사용자에게 `https://localhost:<PORT>`를 안내한다(자체 서명 인증서 경고는 정상).
+헬스체크(HTTP 200)를 통과하면 `open`(macOS)으로 기본 브라우저에 `https://localhost:<PORT>`를
+바로 띄운다 — `ALREADY_CONNECTED`·`CONNECTED` 둘 다 해당(`CONNECTED_UNVERIFIED`는 열지 않는다,
+아직 응답 확인 전이라 에러 페이지가 뜰 수 있어서다). 자체 서명 인증서 경고는 정상이므로
+사용자에게 "고급 → 이동"으로 진행하라고 안내한다.
 
 ## 멱등성 판단 방식
 
