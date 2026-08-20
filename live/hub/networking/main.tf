@@ -191,10 +191,15 @@ resource "aws_ec2_transit_gateway" "hub" {
   # description 은 AWS API 가 ASCII 만 허용한다(2026-08-20 실측: InvalidParameterValue).
   description = "hub-spoke cross-account routing for ArgoCD"
 
-  # 자동 전파를 끈다 — 자동 전파는 attachment 의 VPC 전 CIDR(uniq+dup)을 그대로 전파해
-  # peering 과 같은 dup 대역 충돌이 TGW 라우트테이블 안에서 재현된다. 그래서 uniq 대역만
-  # aws_ec2_transit_gateway_route 로 명시한다(자동 전파를 쓰지 않는다).
-  default_route_table_association = "enable"
+  # 연결·전파 둘 다 끈다 — AWS 가 TGW 생성의 부산물로 만드는 "기본" 라우트테이블에
+  # 기대지 않고, 아래 aws_ec2_transit_gateway_route_table 을 직접 만들어 쓰기 위해서다.
+  # 그 묵시적 기본 라우트테이블은 Terraform 이 생성 API 를 호출하지 않아 provider 의
+  # default_tags 가 안 붙는다(2026-08-20 실측: 무태그 확인) — 명시적으로 만든 라우트테이블은
+  # provider 가 직접 만드는 리소스라 태그가 그대로 적용된다(모듈 repo
+  # docs/06-conventions.md 「2」 강제 방식 6번). 자동 전파는 애초에 attachment 의 VPC 전
+  # CIDR(uniq+dup)을 그대로 전파해 peering 과 같은 dup 대역 충돌을 재현하므로 끈다 —
+  # uniq 대역만 정적 라우트(아래)로 명시한다.
+  default_route_table_association = "disable"
   default_route_table_propagation = "disable"
 
   # RAM 공유로 들어오는 attachment 를 자동 수락한다 — RAM principal association 이 이미
@@ -203,6 +208,17 @@ resource "aws_ec2_transit_gateway" "hub" {
 
   tags = {
     Name = "tgw-${var.workload}-${var.env}-${var.region_code}-hub"
+  }
+}
+
+# 명시적으로 소유하는 라우트테이블 — TGW 생성의 부산물(default_route_table_association 로
+# 자동 연결되는 것)이 아니라 이 resource 블록이 직접 만든다. provider 가 직접 만드는
+# 리소스라 default_tags 가 그대로 적용된다(위 주석 참조).
+resource "aws_ec2_transit_gateway_route_table" "hub" {
+  transit_gateway_id = aws_ec2_transit_gateway.hub.id
+
+  tags = {
+    Name = "tgwrt-${var.workload}-${var.env}-${var.region_code}-main"
   }
 }
 
@@ -238,9 +254,33 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
   subnet_ids         = module.vpc.subnet_ids_by_group["node-uniq"]
   transit_gateway_id = aws_ec2_transit_gateway.hub.id
 
+  # TGW 의 묵시적 기본 라우트테이블에 자동 연결되지 않게 한다 — 아래
+  # aws_ec2_transit_gateway_route_table_association 이 명시적으로 우리 RT 에 붙인다.
+  # (hub 는 이 TGW 의 소유자라 이 인자를 쓸 수 있다 — RAM 으로 "받는" 쪽인 spoke 는
+  # AWS 공식 문서상 이 인자를 못 쓴다, 아래 참조.)
+  transit_gateway_default_route_table_association = false
+  transit_gateway_default_route_table_propagation = false
+
   tags = {
     Name = "tgwa-${var.workload}-${var.env}-${var.region_code}-main"
   }
+}
+
+resource "aws_ec2_transit_gateway_route_table_association" "hub" {
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
+}
+
+# spoke 의 attachment 는 RAM 으로 "받은" 쪽이라 transit_gateway_default_route_table_association
+# 인자를 못 쓴다(AWS 공식 문서: "This cannot be configured or perform drift detection with
+# Resource Access Manager shared EC2 Transit Gateways") — hub(TGW owner)가 대신 끌어와야 한다.
+# replace_existing_association = true 인 이유: spoke 의 attachment 는 이미 TGW 의 옛 묵시적
+# 기본 RT 에 연결된 상태였다(default_route_table_association 이 "enable" 이던 시절 생성돼
+# 자동 연결됐다) — 그 기존 연결을 제거하고 우리 RT 로 옮긴다.
+resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
+  transit_gateway_attachment_id  = var.spoke_tgw_attachment_id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
+  replace_existing_association   = true
 }
 
 # 허브 VPC 라우트테이블(node-uniq)에 spoke 의 node-uniq CIDR(10.51.0.0/16, live/dev/networking
@@ -268,7 +308,9 @@ resource "aws_route" "to_spoke_dev" {
 resource "aws_ec2_transit_gateway_route" "hub_via_hub_attachment" {
   destination_cidr_block         = "10.53.0.0/16" # hub 자신의 cidr_uniq — 위 locals 참조
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub.id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway.hub.association_default_route_table_id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
+
+  depends_on = [aws_ec2_transit_gateway_route_table_association.hub]
 }
 
 # spoke CIDR → spoke 의 attachment. spoke 의 attachment ID(AWS 무작위 부여, 결정적 합성
@@ -278,30 +320,7 @@ resource "aws_ec2_transit_gateway_route" "hub_via_hub_attachment" {
 resource "aws_ec2_transit_gateway_route" "spoke_via_spoke_attachment" {
   destination_cidr_block         = "10.51.0.0/16" # spoke(dev) 의 cidr_uniq — live/dev/networking 참조
   transit_gateway_attachment_id  = var.spoke_tgw_attachment_id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway.hub.association_default_route_table_id
-}
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
 
-# ── TGW 기본 라우트테이블 태깅 — default_tags 가 닿지 않는 예외 ────────────────
-# default_route_table_association = "enable" 을 켜면 AWS 가 이 라우트테이블을 TGW 생성의
-# 부산물로 자동 만든다 — Terraform 이 그 생성 API 를 호출하지 않으므로 provider 의
-# default_tags(위 providers.tf)가 적용되지 않는다(2026-08-20 실측: 무태그 확인). aws_ec2_tag
-# 로 개별 태그한다 — "모든 리소스는 태그를 단다"(모듈 repo docs/06-conventions.md
-# 「2. 네이밍과 태깅」 강제 방식 6번)의 이행이다.
-locals {
-  tgw_default_rt_tags = {
-    Name        = "tgwrt-${var.workload}-${var.env}-${var.region_code}-default"
-    Environment = var.env
-    Workload    = var.workload
-    RegionCode  = var.region_code
-    ManagedBy   = "opentofu"
-    Repository  = var.repository
-  }
-}
-
-resource "aws_ec2_tag" "tgw_default_rt" {
-  for_each = local.tgw_default_rt_tags
-
-  resource_id = aws_ec2_transit_gateway.hub.association_default_route_table_id
-  key         = each.key
-  value       = each.value
+  depends_on = [aws_ec2_transit_gateway_route_table_association.spoke]
 }
