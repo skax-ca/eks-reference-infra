@@ -43,6 +43,21 @@ if [[ -f "$PID_FILE" ]]; then
   rm -f "$PID_FILE"
 fi
 
+# PID 파일에 안 잡히는 고아 프로세스 대비: PID 파일 추적 여부와 무관하게 LOCAL_PORT를
+# 실제로 점유 중인 프로세스가 있으면 전부 정리한다. 이전 세션의 터미널이 강제 종료되는 등의
+# 이유로 PID 파일 없이 세션이 남으면(실제 사례: workbench 교체 전 옛 인스턴스 ID를 향한
+# session-manager-plugin이 몇 시간째 포트를 쥔 채 남아 있었음), 위 PID 파일 검사만으로는
+# 못 잡고 새 세션이 같은 포트에 바인딩 못 해 TLS handshake가 무한 대기하는 상태가 된다.
+STALE_PIDS=$(lsof -nP -iTCP:"$LOCAL_PORT" -sTCP:LISTEN -t 2>/dev/null || true)
+if [[ -n "$STALE_PIDS" ]]; then
+  for p in $STALE_PIDS; do
+    PARENT=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
+    [[ -n "$PARENT" ]] && kill "$PARENT" 2>/dev/null || true
+    kill "$p" 2>/dev/null || true
+  done
+  sleep 1
+fi
+
 # ── 1) hub workbench 동적 탐색 (인스턴스 ID 하드코딩 금지 — 재부트스트랩 시 바뀐다) ──
 INSTANCE_ID=$(aws ec2 describe-instances --profile "$AWS_PROFILE_NAME" --region "$REGION" \
   --filters "Name=tag:Name,Values=ec2-demo-hub-an2-workbench-*" "Name=instance-state-name,Values=running" \
