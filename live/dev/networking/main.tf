@@ -231,10 +231,18 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
 
 # 이 VPC 라우트테이블(node-uniq)에 hub 의 node-uniq CIDR(hub 의 cidr_uniq) 로 가는 경로를
 # 얹는다. ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별 RT 리스트다(private 그룹) — 전부에 건다.
+#
+# 🔴 for_each 는 **정적으로 알려진 인덱스**(0..len-1)를 키로 쓴다 — 리스트 자체(module 출력)를
+#    키로 쓰지 않는다. VPC 를 이 apply 안에서 처음 만드는 경우(완전 신규 spoke) 라우트테이블
+#    ID 는 apply 시점에야 정해져 리스트 전체가 "known after apply"가 되고, 그런 값을 for_each
+#    키로 쓰면 OpenTofu 가 "Invalid for_each argument"로 plan 자체를 거부한다(2026-08-21 실측 —
+#    2026-08-19 최초 배포 때는 이 hub 라우트가 없어 한 번도 안 겪었던 경로). local.node_cidrs
+#    의 길이(정적 값)로 인덱스 집합만 만들고, 실제 라우트테이블 ID는 apply 시점에 그 인덱스로
+#    조회한다 — for_each는 **키 집합**만 plan 시점에 알려지면 되고 값은 몰라도 된다.
 resource "aws_route" "to_hub" {
-  for_each = toset(module.vpc.route_table_ids_by_group["node-uniq"])
+  for_each = toset([for idx in range(length(local.node_cidrs)) : tostring(idx)])
 
-  route_table_id = each.value
+  route_table_id = module.vpc.route_table_ids_by_group["node-uniq"][tonumber(each.value)]
   # 🔑 CIDR 텍스트를 하드코딩하지 않는다 — 허브가 RAM 으로 공유한 관리형 접두사 목록(위
   #    local.hub_uniq_prefix_list_id)을 대상으로 참조한다. AWS 가 그 ID 뒤의 실제 CIDR 을
   #    apply 시점에 풀어 쓴다. aws_route 는 destination_cidr_block 과 destination_prefix_list_id
