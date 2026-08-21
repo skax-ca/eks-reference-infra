@@ -210,22 +210,30 @@ locals {
   ][0])[1]
 }
 
-# 초대를 먼저 수락해야 한다 — allow_external_principals = true 설계라(hub main.tf 참조)
-# 조직 내부 자동 공유가 아니라 표준 계정 간 공유(초대)로 동작한다.
+# 초대 수락은 Terraform 리소스가 아니라 CI 단계(.github/workflows/deploy-dev-network.yml
+# plan job, tofu init 이전)가 전담한다 — iac-module-library docs/02-choose-your-path.md
+# 「RAM 초대 수락」 절 참조. 이유: aws_ram_resource_share_accepter를 Terraform 리소스로
+# 두면 (1) 이 리소스의 delete가 DisassociateResourceShare를 직접 호출해 spoke teardown
+# 마다 hub의 aws_ram_principal_association을 hub state 모르게 실물에서 해제시키고,
+# (2) 재배포 때 새로 생기는 초대는 PENDING인데 그 상태를 조회하는 Terraform 데이터소스가
+# 없어(위 data.aws_ram_resource_share는 ACCEPTED 이후에만 찾는다) 스스로는 절대 수락할
+# 수 없는 순환에 빠진다(2026-08-21 실측, 최초엔 import 블록으로 일회성 우회했었다).
 #
-# ⚠️ **완전 신규 spoke 의 첫 apply에서는 이 리소스가 바로 생성되지 않는다** — PENDING
-#    초대를 조회하는 Terraform 데이터소스가 없어(위 data.aws_ram_resource_share는
-#    ACCEPTED 이후에만 찾는다), 첫 acceptance는 AWS CLI로 먼저 수락한 뒤 import 블록으로
-#    일회성으로 state에 들여와야 한다(`docs/04-spoke-lifecycle.md` 4절 참조, 2026-08-21
-#    실측 — import 블록은 성공 확인 후 이 커밋에서처럼 지운다, 영구 코드가 아니다).
-resource "aws_ram_resource_share_accepter" "tgw" {
-  share_arn = data.aws_ram_resource_share.hub_tgw.arn
+# 아래 removed 블록은 2026-08-21 이전에 이미 state에 들어있던 이 리소스를 "관리 대상에서
+# 뺀다"는 뜻이지 destroy가 아니다(lifecycle.destroy = false) — 다음 apply 한 번으로
+# state에서만 잊혀지고 AWS 실물(수락 상태)은 그대로 유지된다. 신규 spoke는 이 리소스가
+# 애초에 state에 있었던 적이 없으므로 이 블록 자체가 필요 없다.
+removed {
+  from = aws_ram_resource_share_accepter.tgw
+  lifecycle {
+    destroy = false
+  }
 }
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
-  # 초대를 수락해야 공유된 TGW 가 attach 대상으로 보인다.
-  depends_on = [aws_ram_resource_share_accepter.tgw]
-
+  # depends_on 이 없다 — CI가 tofu init 이전에 이미 수락을 끝내므로, 이 시점엔 항상
+  # ACTIVE 상태다(위 주석 참조). Terraform 리소스 그래프 안에 수락을 대신할 의존 대상이
+  # 더 이상 없다.
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.subnet_ids_by_group["tgw-uniq"]
   transit_gateway_id = local.hub_transit_gateway_id

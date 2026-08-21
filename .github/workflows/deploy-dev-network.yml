@@ -144,6 +144,36 @@ jobs:
           aws-region: ap-northeast-2
           role-session-name: gha-plan-${{ github.run_id }}
 
+      # ── RAM 초대 자동 수락 (PENDING이면 수락, 아니면 no-op — 멱등) ─────────────
+      # main.tf의 data.aws_ram_resource_share(resource_owner=OTHER-ACCOUNTS)는 초대가
+      # 이미 ACCEPTED여야만 찾는다 — 완전 신규/재배포 spoke는 초대가 PENDING으로
+      # 시작하는데, Terraform에는 PENDING 초대를 조회하는 데이터소스 자체가 없어 뒤의
+      # tofu plan이 곧바로 "no matching RAM Resource Share found"로 실패한다
+      # (iac-module-library docs/02-choose-your-path.md 「RAM 초대 수락」 절 참조).
+      # ⚠️ 입구 Role은 sts:AssumeRole 권한뿐이라(D27-1) 이 RAM API를 직접 못 부른다 —
+      #    여기서만 실행 Role을 CLI로 체인 assume한다(provider·backend가 내부적으로
+      #    하는 것과 같은 2단 체인을 셸에서 명시적으로 재현하는 것뿐이다).
+      - name: RAM 초대 자동 수락
+        run: |
+          CREDS=$(aws sts assume-role \
+            --role-arn "${{ vars.DEV_AWS_EXEC_ROLE_ARN }}" \
+            --role-session-name "ram-accept-${{ github.run_id }}" \
+            --query 'Credentials' --output json)
+          export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | jq -r .AccessKeyId)
+          export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r .SecretAccessKey)
+          export AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r .SessionToken)
+
+          ARN=$(aws ram get-resource-share-invitations \
+            --query "resourceShareInvitations[?resourceShareName=='ram-demo-hub-an2-tgw-share' && status=='PENDING'].resourceShareInvitationArn | [0]" \
+            --output text)
+
+          if [ -n "$ARN" ] && [ "$ARN" != "None" ]; then
+            echo "::notice::PENDING 초대 발견 — 수락: $ARN"
+            aws ram accept-resource-share-invitation --resource-share-invitation-arn "$ARN"
+          else
+            echo "이미 수락됐거나 초대가 없음 — no-op"
+          fi
+
       # ── D25 · partial backend configuration ────────────────────────────────
       # 버킷명이 코드에 없다. 여기서 repo 변수로 조립한다.
       #

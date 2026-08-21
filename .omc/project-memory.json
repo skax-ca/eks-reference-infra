@@ -8,12 +8,6 @@
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
     {
-      "timestamp": 1787192057310,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "Terraform/OpenTofu의 moved 블록이 걸린 리소스에서는 \"plan이 0 to add/0 to change/0 to destroy니 apply는 안 해도 된다\"는 직관이 틀린다(2026-08-20 실측). moved 블록의 리소스 주소 이전은 plan(항상 읽기 전용)이 아니라 apply의 부수효과로만 state 파일에 반영된다 — 0/0/0은 \"속성값 계산 결과가 (이전 주소로 읽든 새 주소로 읽든) 같다\"는 뜻일 뿐, 실제 이전 여부와는 별개다. 판정 방법: plan 로그에 \"has moved to\"가 아직 나오면 미반영 — apply를 한 번 돌려 \"No changes. Your infrastructure matches the configuration.\"로 바뀌는 것을 확인한 뒤에만 moved 블록을 안전하게 제거한다."
-    },
-    {
       "timestamp": 1787201547868,
       "source": "manual",
       "category": "gotcha",
@@ -126,6 +120,12 @@
       "source": "manual",
       "category": "gotcha",
       "content": "hub networking main.tf의 spoke TGW 라우트(`aws_route.vpc_to_spoke`·`aws_ec2_transit_gateway_route.tgw_rt_to_spoke`)는 `data.aws_ec2_transit_gateway_vpc_attachments`(필터 `state=available`)로 살아있는 attachment를 직접 discover하는 `for_each` 기반이라, spoke가 destroy돼 attachment가 `deleted`로 바뀌면 **코드 수정 없이 다음 hub networking apply 한 번**으로 그 spoke의 라우트만 자동 destroy된다(TGW 자체·RAM 공유·hub 자신의 attachment는 그대로 유지) — `04-spoke-lifecycle.md` 13절의 \"spoke 단독 teardown 시 hub TGW 잔존 라우트 처리, 미실측\" 항목에 대한 실제 답(2026-08-21 실측: attachment deleted 직후 해당 라우트가 AWS에 의해 자동으로 blackhole 상태가 됨 — 삭제되는 게 아니라 blackhole로 남고, 그걸 실제로 지우려면 hub apply가 필요함). CI의 `deploy-hub-network.yml`은 push(paths 필터라 빈 커밋으론 안 트리거됨)는 plan까지만, dispatch는 plan+apply가 같은 run 안에서 바로 이어져 \"미리 plan만 보고 멈추는\" 방법이 없다 — apply를 실제로 돌릴 각오가 있을 때만 dispatch한다."
+    },
+    {
+      "timestamp": 1787281997415,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-21 — spoke(dev) 재배포+검증 완주(이전 open-item 전부 대체). 04-spoke-lifecycle.md 4~7절 절차를 실제로 처음부터 끝까지 실행: bootstrap은 기존 것 재사용, live/dev/networking apply → live/dev/eks apply → iac-platform-gitops cluster-secret 재등록 → hub root-app 반영 → dev Application 8/8 Synced/Healthy 확인. 과정에서 완전 신규 spoke 첫 apply에서만 드러나는 실제 버그 3건(hub RAM principal association drift, RAM 초대 PENDING/ACTIVE 순환, aws_route.to_hub의 for_each known-after-apply)을 발견·수정·모듈 repo 문서화(iac-module-library commit 69f2f96) 완료. hub TGW 쪽도 spoke networking apply 이후 재적용해 양방향 라우트 정상 채워짐 — 별도 정리 불필요. 다음 세션 착수 후보: 특별히 없음, 현재 hub+dev(spoke) 둘 다 정상 가동 중."
     }
   ],
   "userDirectives": [],
