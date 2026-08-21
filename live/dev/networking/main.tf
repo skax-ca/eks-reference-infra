@@ -213,21 +213,11 @@ locals {
 # 초대를 먼저 수락해야 한다 — allow_external_principals = true 설계라(hub main.tf 참조)
 # 조직 내부 자동 공유가 아니라 표준 계정 간 공유(초대)로 동작한다.
 #
-# 🔴 **일회성 복구 import — 이 블록은 다음 apply 후 지운다.** 2026-08-21 재배포 리허설 중
-#    실측: data.aws_ram_resource_share(위, resource_owner=OTHER-ACCOUNTS)는 초대가 이미
-#    ACCEPTED(=ACTIVE)여야만 찾아지고, 이 accepter 리소스는 반대로 초대가 아직 PENDING
-#    이어야만 "생성"(=수락)할 수 있다 — 완전 신규 spoke의 첫 apply에서 둘이 서로를
-#    막는 순환이 생긴다(Terraform에는 PENDING 초대를 조회하는 데이터소스가 없다).
-#    깨는 방법은 AWS CLI로 먼저 수락(`aws ram accept-resource-share-invitation`, 개인
-#    IAM user 권한으로 충분 — exec role 불필요)한 뒤, 이 import 블록으로 그 결과를
-#    Terraform state 에 들여오는 것뿐이다 — "생성"을 다시 시도하면 이 주석 위의 실패가
-#    재현된다. import는 이미 state에 있으면 no-op 이지만, 다음 spoke 재배포 때는 초대가
-#    진짜 PENDING이라 이 import 자체가 실패한다 — 그래서 임시다, 영구히 남기지 않는다.
-import {
-  to = aws_ram_resource_share_accepter.tgw
-  id = data.aws_ram_resource_share.hub_tgw.arn
-}
-
+# ⚠️ **완전 신규 spoke 의 첫 apply에서는 이 리소스가 바로 생성되지 않는다** — PENDING
+#    초대를 조회하는 Terraform 데이터소스가 없어(위 data.aws_ram_resource_share는
+#    ACCEPTED 이후에만 찾는다), 첫 acceptance는 AWS CLI로 먼저 수락한 뒤 import 블록으로
+#    일회성으로 state에 들여와야 한다(`docs/04-spoke-lifecycle.md` 4절 참조, 2026-08-21
+#    실측 — import 블록은 성공 확인 후 이 커밋에서처럼 지운다, 영구 코드가 아니다).
 resource "aws_ram_resource_share_accepter" "tgw" {
   share_arn = data.aws_ram_resource_share.hub_tgw.arn
 }
