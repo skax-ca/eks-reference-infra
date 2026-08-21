@@ -20,7 +20,7 @@ EKS 클러스터 하나를 배포하는 루트다. 모듈은 `iac-module-library
 | Pod 서브넷 | `data.aws_subnets` — `vpc-id` + `tag:SubnetGroup = pod-dup` |
 
 - **remote_state 를 쓰지 않는다.** 네이밍이 결정적이라 태그 조회가 예측 가능하다(모듈 repo
-  `docs/03-new-project.md`의 「2. 배포 저장소 만들기」, networking `outputs.tf` 주석). remote_state 는
+  `docs/03-hub-lifecycle.md`, networking `outputs.tf` 주석). remote_state 는
   두 루트를 state 수준에서 묶어 독립성을 깬다.
 - **배포 순서**: networking 이 먼저다. VPC·서브넷·태그가 없으면 이 루트의 data source 가 빈 결과를
   내고 plan 이 **명확히 실패**한다(조용한 오작동이 아니다). 파기는 역순 — eks 를 먼저 파기한다.

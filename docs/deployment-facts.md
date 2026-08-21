@@ -294,6 +294,14 @@ spoke eks apply를 생략하지 않는다 — prefix list 참조 방식은 "CIDR
 특성) — 재적용 중 그 라우트/규칙 하나가 짧게 끊긴다. 프리픽스 리스트 방식으로 전환하는
 1회성 사건이고, 그 뒤로는 발생하지 않는다.
 
+### 5.9 deletion_protection — v1.0 이전까지 의도적으로 false
+
+dev·hub의 `deletion_protection`(VPC `prevent_destroy`·EKS 네이티브 속성 둘 다)은 2026-08-21
+현재 코드·AWS 실물 양쪽에서 `false`다(EKS는 `describe-cluster`로 실측 확인 — 필드 자체가
+응답에 없음 = AWS 기본값 `false`와 일치). **사용자 결정(2026-08-21)**: 모듈 v1.0 출시
+전까지는 반복 배포 편의를 위해 `false`를 유지한다. v1.0 이후에는 `CLAUDE.md`·모듈 repo
+`docs/03-hub-lifecycle.md`·`docs/04-spoke-lifecycle.md` 원칙대로 기본 `true`로 전환한다.
+
 ---
 
 ## 6. apply 판정표
