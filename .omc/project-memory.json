@@ -102,6 +102,24 @@
       "source": "manual",
       "category": "gotcha",
       "content": "workbench EC2가 SSM PingStatus=Online이 되는 시점과 user_data(cloud-init, kubectl/kubeconfig 설치)가 끝나는 시점 사이에 레이스 컨디션이 있다(2026-08-20 실측, dev workbench에서 재현). 그 틈에 인터랙티브 SSM 세션으로 접속하면 SSM Agent가 `ssm-user` 계정을 그 순간 만드는데, `/etc/skel/.kube/config`가 아직 없는 상태라 스킵되고, skel은 계정 생성 시점에만 1회 적용되는 메커니즘이라 이후 아무리 기다려도 스스로 복구되지 않는다(\"connection refused to localhost:8080\"로 나타남). 복구법: `sudo cp -r /etc/skel/.kube /home/ssm-user/.kube && sudo chown -R ssm-user:ssm-user /home/ssm-user/.kube`(SSM send-command로 root 권한 실행). 예방법: 인스턴스가 막 replace/신설된 직후에는 SSM Online 표시만 보고 바로 접속하지 말고 cloud-init 완료(약 1~2분)까지 기다릴 것. 재발 시 이 복구 커맨드를 바로 쓴다."
+    },
+    {
+      "timestamp": 1787272359472,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "iac-module-library의 scripts/validate-doc-conventions.py(docs/06-conventions.md 「8」 규칙 6 강제)는 \"§\" 문자 자체를 코드펜스 밖 어디서든 위반으로 잡는다(2026-08-21 실측: 03-hub-lifecycle.md 작성 중 자기 문서 안의 자기 절 참조 \"§10\"·\"§13\" 5곳에서 전부 걸림) — 다른 문서를 향한 절 번호 인용뿐 아니라 같은 문서 안의 자기 참조에도 예외가 없다. 스크립트 자체 주석(6~7행)에 \"'§' 등장 자체를 위반으로 본다\"고 명시돼 있다. 대체 표기는 이 저장소 기존 문서들의 관례 그대로 \"N절\"(예: \"10절 참조\") 또는 「N. 제목」 — 둘 다 정규식에 안 걸린다. 400줄 제한(규칙 4)도 같은 스크립트가 검사하며, 문서 초안 작성 시 여유를 두지 않으면(이번에 411→399줄로 12줄 압축 필요) 마지막에 문장을 계속 다듬어야 하니 애초에 목표를 380줄 안팎으로 잡는 게 낫다."
+    },
+    {
+      "timestamp": 1787272368204,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "argocd-tunnel-connect 스킬(.claude/skills/argocd-tunnel-connect/scripts/connect.sh)의 멱등성 판단이 PID 파일(.omc/state/argocd-tunnel/local-watchdog.pid)만 신뢰해서, 그 파일 밖에서 살아남은 고아 프로세스를 못 잡는 결함이 있었다(2026-08-21 실측). workbench가 workbench-v0.7.0 업그레이드로 인스턴스 교체된 뒤에도, 옛 인스턴스 ID(i-0b89e05f17146bd40)를 향한 session-manager-plugin이 로컬 8080 포트를 계속 쥔 채 시간 단위로 남아 있었다(터미널 강제 종료 등 비정상 종료 경로로 추정) — 새 세션이 같은 포트에 바인딩 못 해 TCP는 연결되는데 TLS handshake가 무한 대기하는 조용한 행(hang)으로 나타났다. 증상 진단은 curl -v로 어느 프로토콜 단계에서 멈췄는지 보고, lsof -nP -iTCP:<port> -sTCP:LISTEN으로 실제 점유 프로세스를 찾는 순서로 했다. 수정: PID 파일 추적과 무관하게 LOCAL_PORT를 점유한 프로세스를 매번 lsof로 찾아 정리하는 단계를 PID 파일 검사 직후에 추가(connect.sh, 커밋 0c7427c). 일반화: \"내가 기록한 PID만 확인\"하는 멱등성 설계는 정상 종료 경로만 커버한다 — 비정상 종료(강제 종료·OOM 등)까지 잡으려면 실제 리소스(포트·락파일)를 직접 관측하는 두 번째 겹이 필요하다."
+    },
+    {
+      "timestamp": 1787272378763,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-21 — spoke(dev) teardown+재배포 리허설 준비 세션. (1) deletion_protection 관련 이전 open-item(hub/networking false 방치)은 해소됨 — 실측 결과 dev·hub 전부(networking+eks) 코드·AWS 실물 양쪽 이미 false였고, 사용자가 \"모듈 v1.0 출시 전까지 의도적으로 false 유지\"로 결정, deployment-facts.md 5.9절에 기록 완료(commit e72e0db). (2) iac-module-library의 03-new-project.md·04-teardown.md(hub-spoke 분리 이전, 단일 클러스터 전제)를 03-hub-lifecycle.md·04-spoke-lifecycle.md로 재편 완료(commit ddedf35) — spoke 문서에 이번에 발견한 3간극을 반영: ArgoCD 컨트롤러 정지는 hub의 cluster-secret 제거로 해야 함(10절), cluster-secret.yaml 재등록 절차 신설(14절), spoke 단독 teardown 시 hub TGW 잔존 라우트 처리는 **아직 실측 안 됨 — 열린 질문으로 명시**(13절, 다음 리허설에서 확인 후 문서 갱신 필요). (3) 리허설 사전 조치로 iac-platform-gitops의 dev cluster-secret.yaml 삭제를 커밋(36d706c)만 해두고 **push는 보류** — 사용자가 \"실제 리허설 시작할 때\" push하기로 결정. (4) 태그 기준(Workload=demo) dev 자원 현황 조사 완료: EC2 3대(관리형 시스템 노드그룹 2대+workbench 1대, Karpenter 노드 0대), ALB/NLB 0개, EBS available 0개 — IaC 밖 자원 선처리 단계가 예상보다 가벼울 것으로 보임. 다음 세션 착수 시 순서: iac-platform-gitops push → hub에서 Application prune 확인 → dev workbench에서 남은 IaC 밖 자원 정리(현재 거의 없음) → deploy-dev-eks.yml→deploy-dev-network.yml destroy dispatch → teardown-verify.sh(AWS_PROFILE=asset 필수) → hub TGW 잔존 라우트 실측 후 04-spoke-lifecycle.md 13절 갱신."
     }
   ],
   "userDirectives": [],
