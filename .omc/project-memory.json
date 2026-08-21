@@ -8,24 +8,6 @@
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
     {
-      "timestamp": 1787101000001,
-      "source": "manual",
-      "category": "notepad-migration",
-      "content": "2026-08-19 — 이 repo의 notepad.md를 날짜별 prepend 방식(2026-08-19 신설했다가 같은 세션에 폐기)에서 iac-module-library와 동일한 OMC 3단 구조(Priority/Working/MANUAL)로 전환. 사용자 의도가 '동일 메커니즘 관리'였음을 뒤늦게 확인 — mcp__t__notepad_*가 다른 프로젝트에 못 쓰는 원인은 OMC의 의도된 worktree 격리(세션 시작 시점 trustedRoot에 고정)였으므로, 커스텀 MCP 서버(.mcp/notepad-server.ts 등, 같은 세션에 신설했다가 삭제)는 불필요했다 — 이 repo를 프로젝트 루트로 하는 별도 세션에서는 mcp__t__notepad_*가 iac-module-library와 완전히 동일하게 동작한다. 마이그레이션 시 원본 1392줄 전부 보존(무손실 스크립트 검증) — 최근 3개(2026-08-19) 항목만 Working Memory로, 나머지 전부 MANUAL로 이관. 과거 flat-file 형식 설명 원문은 git 이력(migrate 커밋 직전)에 남아 있다."
-    },
-    {
-      "timestamp": 1787190783561,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "AWS 리소스 태그는 종류를 가리지 않고 계정 경계를 못 넘는다(2026-08-20 실측: EC2 describe-tags, DescribeTransitGatewayVpcAttachments의 Tags, aws_ram_resource_share 데이터소스의 tags 전부 cross-account 조회 시 빈 배열/null — 실행 Role이 AdministratorAccess라도 마찬가지). RAM이 명시적으로 공유하는 대상(resource_arns 등)이나 EC2 API의 고유 속성(vpc_owner_id 등)은 cross-account로 정상 보인다 — \"그 리소스가 RAM으로 공유돼 보인다\"와 \"그 리소스의 태그가 보인다\"는 별개다. 크로스 계정 값 전달 설계 시 태그 기반 발견을 가정하지 말고 먼저 AWS CLI로 실측할 것."
-    },
-    {
-      "timestamp": 1787190785377,
-      "source": "manual",
-      "category": "open-items",
-      "content": "2026-08-20 — TGW 네트워크 경로 1~4단계(hub↔spoke 양방향 라우팅 + dev eks SG 인바운드) 전부 apply·실측 완료. 다음 착수 후보(우선순위 순): (1) iac-platform-gitops에 spoke cluster-secret.yaml 등록 → hub ArgoCD의 spoke 크로스 계정 인증 실제 검증. (2) live/hub/networking의 deletion_protection=false 커밋 방치 + docs/deployment-facts.md의 true 오기록(drift) 확인 — 안전 사안. 이전 세션들의 TGW 관련 open-items는 이 항목으로 대체됨."
-    },
-    {
       "timestamp": 1787192057310,
       "source": "manual",
       "category": "gotcha",
@@ -120,6 +102,30 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-21 — spoke(dev) teardown+재배포 리허설 준비 세션. (1) deletion_protection 관련 이전 open-item(hub/networking false 방치)은 해소됨 — 실측 결과 dev·hub 전부(networking+eks) 코드·AWS 실물 양쪽 이미 false였고, 사용자가 \"모듈 v1.0 출시 전까지 의도적으로 false 유지\"로 결정, deployment-facts.md 5.9절에 기록 완료(commit e72e0db). (2) iac-module-library의 03-new-project.md·04-teardown.md(hub-spoke 분리 이전, 단일 클러스터 전제)를 03-hub-lifecycle.md·04-spoke-lifecycle.md로 재편 완료(commit ddedf35) — spoke 문서에 이번에 발견한 3간극을 반영: ArgoCD 컨트롤러 정지는 hub의 cluster-secret 제거로 해야 함(10절), cluster-secret.yaml 재등록 절차 신설(14절), spoke 단독 teardown 시 hub TGW 잔존 라우트 처리는 **아직 실측 안 됨 — 열린 질문으로 명시**(13절, 다음 리허설에서 확인 후 문서 갱신 필요). (3) 리허설 사전 조치로 iac-platform-gitops의 dev cluster-secret.yaml 삭제를 커밋(36d706c)만 해두고 **push는 보류** — 사용자가 \"실제 리허설 시작할 때\" push하기로 결정. (4) 태그 기준(Workload=demo) dev 자원 현황 조사 완료: EC2 3대(관리형 시스템 노드그룹 2대+workbench 1대, Karpenter 노드 0대), ALB/NLB 0개, EBS available 0개 — IaC 밖 자원 선처리 단계가 예상보다 가벼울 것으로 보임. 다음 세션 착수 시 순서: iac-platform-gitops push → hub에서 Application prune 확인 → dev workbench에서 남은 IaC 밖 자원 정리(현재 거의 없음) → deploy-dev-eks.yml→deploy-dev-network.yml destroy dispatch → teardown-verify.sh(AWS_PROFILE=asset 필수) → hub TGW 잔존 라우트 실측 후 04-spoke-lifecycle.md 13절 갱신."
+    },
+    {
+      "timestamp": 1787277763689,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-21 — spoke(dev) teardown 완주. `iac-platform-gitops` cluster-secret 삭제(hub fan-out 중단, 올바른 2단계 순서로 재검증) → `deploy-dev-eks.yml` destroy(87 destroyed) → `deploy-dev-network.yml` destroy(70 destroyed) → 남은 CloudWatch flow-log 로그 그룹 수동 삭제 → `teardown-verify.sh`(AWS_PROFILE=asset) **exit 0, 잔존물 없음** 공식 확인. 다음 착수 후보(우선순위 순): (1) hub TGW route table에 dev CIDR(10.51.0.0/16) blackhole 라우트 2개(`aws_route.vpc_to_spoke`·`aws_ec2_transit_gateway_route.tgw_rt_to_spoke`)가 남아 있음 — 무해(트래픽 갈 곳 없음)하고 자동 정리 설계 이미 있음(아래 gotcha 참조), 다음 hub networking apply 시 자동으로 사라짐 — 급하지 않으면 방치해도 됨, 다음 spoke 재배포 전 정리해도 됨. (2) spoke 재배포: `04-spoke-lifecycle.md` 절차대로 asset 계정에 다시 세우기(bootstrap은 이미 돼 있으므로 `live/dev/{networking,eks}` apply부터). 이전 open-items(TGW 네트워크 경로·크로스 계정 인증·Pod 이름 가독성·SSM 셸 프로파일 등)는 전부 이걸로 대체 — 지난 spoke가 이미 정상 소멸했으므로 재배포 시 처음부터 다시 검증 필요."
+    },
+    {
+      "timestamp": 1787277772898,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "ArgoCD cluster-secret(argocd 네임스페이스, `secret-type: cluster` 라벨)은 두 역할을 겸한다: ①ArgoCD가 그 클러스터에 접속할 자격증명(`server`/`config`) ②ApplicationSet cluster generator가 팬아웃 대상으로 판단하는 라벨(`environment`·`tier`·`addon-*`). **이 Secret을 한 번에 통째로 지우면 addon이 정리되지 않는다**(2026-08-21 spoke teardown 리허설 3차 왕복 실측) — ArgoCD가 그 클러스터에 접속할 방법 자체를 잃어(`no clusters with this name`, argoproj/argo-cd#5817) cascade delete가 물리적으로 불가능해지고 Application 추적 기록만 사라진다. `kubectl delete application`로 직접 지우는 것도 안 통한다 — 매칭이 살아있는 동안은 selfHeal이 즉시 되살린다(deletionTimestamp도 안 찍힘, 5초 만에 재생성 확인). **올바른 순서**: ①매칭 라벨만 먼저 지우고 secret-type·server/config는 유지 → ApplicationSet이 더 이상 발견 못 해 Application을 정상 제거하는 동시에 ArgoCD는 여전히 접속 가능해 cascade delete가 실제로 완주(실측: NodePool CR까지 포함해 전부 삭제 확인) → ②그 다음에야 Secret 전체 삭제. `iac-module-library` `docs/04-spoke-lifecycle.md` 10절에 반영 완료(commit 76a0e36·9fdec11, 후자는 \"정정 서술 금지\" 규칙 위반 자가수정 + 원래 있던 워크로드 LB/PVC 선처리 단계 복원)."
+    },
+    {
+      "timestamp": 1787277780515,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "VPC destroy 후에도 CloudWatch 로그 그룹(`/aws/vpc/flow-log/...`)이 남을 수 있다 — Terraform 버그도 모듈 결함도 아니다(2026-08-21 AWS 공식 문서 확인). AWS의 flow-log IAM Role 최소 권한 정책 자체가 `logs:CreateLogGroup`을 요구하므로(docs.aws.amazon.com/vpc/latest/userguide/flow-logs-iam-role.html), destroy 도중 아직 배달 중이던 레코드가 도착하면 그 Role 권한으로 CloudWatch가 로그 그룹을 즉석 재생성한다(terraform-aws-modules/terraform-aws-vpc#435와 동일 증상). `flow_logs_retention_days`(모듈 기본값 30일)는 무관하다 — retention은 데이터 만료만 제어하지 로그 그룹 존재 자체는 못 지우고, 이 orphan은 애초에 Terraform이 만든 게 아니라 재생성 시 retention 미설정(None)으로 나타난다. `CreateLogGroup` 권한을 빼면 재생성을 막을 수 있지만 AWS 공식 최소 권한 요구사항을 벗어나는 트레이드오프라 재사용 모듈(`modules/vpc/flow-logs.tf`)에는 부적절 — 정해진 대응은 `teardown-verify.sh`가 잡아내면 수동 삭제(이미 hub/spoke-lifecycle.md에 문서화돼 있던 정답)."
+    },
+    {
+      "timestamp": 1787277786230,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "hub networking main.tf의 spoke TGW 라우트(`aws_route.vpc_to_spoke`·`aws_ec2_transit_gateway_route.tgw_rt_to_spoke`)는 `data.aws_ec2_transit_gateway_vpc_attachments`(필터 `state=available`)로 살아있는 attachment를 직접 discover하는 `for_each` 기반이라, spoke가 destroy돼 attachment가 `deleted`로 바뀌면 **코드 수정 없이 다음 hub networking apply 한 번**으로 그 spoke의 라우트만 자동 destroy된다(TGW 자체·RAM 공유·hub 자신의 attachment는 그대로 유지) — `04-spoke-lifecycle.md` 13절의 \"spoke 단독 teardown 시 hub TGW 잔존 라우트 처리, 미실측\" 항목에 대한 실제 답(2026-08-21 실측: attachment deleted 직후 해당 라우트가 AWS에 의해 자동으로 blackhole 상태가 됨 — 삭제되는 게 아니라 blackhole로 남고, 그걸 실제로 지우려면 hub apply가 필요함). CI의 `deploy-hub-network.yml`은 push(paths 필터라 빈 커밋으론 안 트리거됨)는 plan까지만, dispatch는 plan+apply가 같은 run 안에서 바로 이어져 \"미리 plan만 보고 멈추는\" 방법이 없다 — apply를 실제로 돌릴 각오가 있을 때만 dispatch한다."
     }
   ],
   "userDirectives": [],
