@@ -1,8 +1,7 @@
 # Notepad — iac-reference-infra
 
 ## Priority Context
-
-레퍼런스 소비 repo — iac-module-library의 모듈을 git tag로 소싱하는 배포 루트(소비 경로 리허설, 실 고객사 배포 아님). ⛔ 설계 SSOT는 이 repo가 아니라 iac-module-library docs/design/50(D-CONSUME, D20~D30) — 재논의 전 필독. 🔑 backend는 부분설정(D25): 버킷명·계정ID·Role ARN 전부 git에 없음(로컬 backend.hcl/gitignore, CI는 repo 변수). 최신 모듈 핀·현재 형상은 main.tf·docs/deployment-facts.md 참조.
+eks-reference-infra(2026-08-24 rename, 구 iac-reference-infra) — iac-module-library 모듈을 git tag로 소싱하는 배포 루트이자 hub-spoke EKS GitOps 패턴의 레퍼런스. 소비 규약 SSOT는 iac-module-library(재구성 진행중 — docs/design/50 폐지, docs/conventions.md 등으로 개편). ⛑ hub-spoke 세우기·걷어내기·운영 절차 SSOT는 이제 이 repo: docs/hub-lifecycle.md·spoke-lifecycle.md·runbooks.md(2026-08-24 이관). backend는 부분설정: 버킷명·계정ID·Role ARN 전부 git에 없음. 최신 형상은 main.tf·docs/deployment-facts.md 참조.
 
 ## Working Memory
 ### 2026-08-19 16:58
