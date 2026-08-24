@@ -8,30 +8,6 @@
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
     {
-      "timestamp": 1787207226671,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "EKS Pod Identity로 이미 세션 태그가 붙은 Role이 다시 다른 Role을 체이닝 assume(cross-account)할 때, AWS STS는 `sts:AssumeRole`과 `sts:TagSession`을 별개 액션으로 검사한다(2026-08-20 실측). hub의 `argocd_hub_pod_identity` Role(Pod Identity 트러스트가 AssumeRole+TagSession 둘 다 허용)이 spoke의 `cross-account-trust-role`을 assume할 때, 양쪽 정책(hub의 permission policy·spoke의 trust policy)에 `sts:AssumeRole`만 걸어뒀더니 실제 apply 후 403 `not authorized to perform: sts:TagSession`으로 거부됨 — `argocd-application-controller` 로그에서 발견. 최초 진단 시 컨테이너명 오타(`argocd-application-controller` vs 실제 `application-controller`)로 \"Pod Identity 자격증명이 아예 주입 안 됨\"이라는 잘못된 결론에 먼저 도달했었다(파드 재시작까지 했으나 무관했음) — `kubectl exec -c`로 컨테이너 지정 시 실제 컨테이너명을 `kubectl get pod -o yaml`로 먼저 확인할 것. 수정: `iac-module-library` PR #29(머지됨, 태그 `eks-cluster-v0.9.0`·`cross-account-trust-role-v0.2.0`)에서 양쪽 정책의 Action에 `sts:TagSession` 추가. iac-reference-infra의 `live/hub/eks`·`live/dev/eks` main.tf가 아직 구 태그(`eks-cluster-v0.8.0`)를 쓰고 있어 재적용 필요(미완료 — 다음 세션 착수 후보)."
-    },
-    {
-      "timestamp": 1787208304021,
-      "source": "manual",
-      "category": "open-items",
-      "content": "2026-08-20 — TGW 네트워크 경로 완료(이전 세션)에 이어, hub ArgoCD의 spoke 크로스 계정 인증을 실제로 검증·완료했다. dev(spoke) cluster-secret.yaml을 iac-platform-gitops에 등록하고, 발견된 sts:TagSession 누락 버그(iac-module-library PR #29, eks-cluster-v0.9.0·cross-account-trust-role-v0.2.0)를 hub·dev 양쪽에 재적용한 뒤 7개 Application(aws-lbc·cluster-autoscaler·karpenter·karpenter-nodepool·kyverno·kyverno-custom-policies·kyverno-policies) 전부 Synced/Healthy 실측 확인. 이전 open-items의 \"(1) spoke cluster-secret.yaml 등록·크로스 계정 인증 검증\"은 이 항목으로 완료 대체. 남은 것은 \"(2) live/hub/networking의 deletion_protection=false 커밋 방치 + docs/deployment-facts.md의 true 오기록(drift)\" 하나뿐 — 안전 사안, 아직 미확인 상태로 이월."
-    },
-    {
-      "timestamp": 1787211726893,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "ArgoCD의 GitOps 계층은 root-app → ApplicationSet → Application → 실제 리소스 4단이다(2026-08-20 실측). ApplicationSet YAML(iac-platform-gitops)을 고치고 push한 뒤 개별 Application(예: eks-demo-hub-an2-main-01-aws-lbc)에 hard refresh를 걸면 Sync=Synced/Healthy가 뜨지만, 실제로는 아무것도 안 바뀔 수 있다 — root-app이 아직 새 커밋을 pull하지 않아 클러스터 안의 ApplicationSet 리소스 자체가 구버전이면, 그 ApplicationSet이 계속 구버전 스펙으로 Application을 재생성하기 때문이다(spec.source.helm.releaseName 필드가 refresh 후에도 계속 비어 있었던 것으로 확인). 반드시 root-app부터 hard refresh(`kubectl annotate application root-app -n argocd argocd.argoproj.io/refresh=hard --overwrite`)해서 sync revision이 최신 커밋 SHA인지 먼저 확인한 뒤, 그 다음에 하위 Application을 refresh해야 한다. \"Synced/Healthy가 실제 반영을 보장하지 않는다\" 계열 함정(moved 블록 미반영, HEALTH=Healthy인데 인증 실패)의 세 번째 사례."
-    },
-    {
-      "timestamp": 1787211734875,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "AWS Systems Manager Session Manager가 접속 시 띄우는 셸은 계정별 SSM 문서 `SSM-SessionManagerRunShell`로 결정되고, 이건 이 프로젝트 어디에도 IaC로 관리되지 않는 순수 콘솔/CLI 수동 설정이다(2026-08-20 실측). team(hub) 계정에는 이 문서가 있었고(`shellProfile.linux: \"exec /bin/bash\\r\\ncd\\r\\nclear\"`) — Amazon Linux 계열의 `~/.bashrc`→`/etc/bashrc`가 인터랙티브 셸이면 `/etc/profile.d/*.sh`를 순회 소싱하는 관례 덕에 workbench의 `alias k=kubectl`·krew PATH가 자동 적용됐다. asset(spoke) 계정에는 이 문서가 아예 없어(`get-document`가 `InvalidDocument`) 같은 workbench 모듈로 만든 인스턴스인데도 alias/krew가 안 먹는 것처럼 보였다. 해법: `aws ssm create-document --name SSM-SessionManagerRunShell --document-type Session ...`으로 hub와 동일한 content를 asset 계정에도 만든다(완료). ⚠️ 재발 조건: 새 spoke 계정을 부트스트랩할 때마다 이 설정을 빠뜨리기 쉽다 — `bootstrap/bootstrap.sh`가 다루는 범위(OIDC·Role·state 버킷) 밖의 계정 설정이라 자동으로 안 따라간다."
-    },
-    {
       "timestamp": 1787211741161,
       "source": "manual",
       "category": "open-items",
@@ -126,6 +102,30 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-24 — spoke(dev) teardown 재검증(실제 destroy 재수행) 및 재배포 완주, 그 과정에서 진짜 네트워크 버그(hub→spoke TGW 라우트 누락, gotcha 별도 기록) 발견·근본 수정까지 완료. teardown 재검증(10~13절)은 문서와 완전히 일치, 새 어긋남 없음. 재배포 중 hub networking 재적용이 API 타임아웃으로 부분 실패 → 재시도 apply가 실제 누락을 놓침 → dev Application 8개 전부 SYNC=Unknown까지 악화 → Reachability Analyzer+flow log로 원인 특정(`aws_route.vpc_to_spoke`의 for_each key가 attachment ID라 spoke 재배포마다 불필요하게 replace됨) → `live/hub/networking/main.tf`·`.github/workflows/deploy-hub-network.yml` 수정(commit 223c54b, key를 spoke_account_id로 안정화 + vm-uniq RT 누락 수정 + apply 후 수렴 검증 CI 스텝 신설) → hub networking 재적용 성공(재-plan \"No changes\" 확인) → 연결 CONNECT_OK 실측 → dev Application 8/8 Synced/Healthy 최종 확인. 7절 완료 판정 6항목 전부 통과(bootstrap drift 없음·노드 2/2 Ready·root-app sync revision 일치·Application 8/8·네트워크 실측·CI green). 다음 세션 착수 후보: 없음 — hub·dev(spoke) 둘 다 정상 가동 중, 이번에 고친 for_each key 설계는 앞으로 spoke를 몇 번 재배포해도 재발하지 않아야 한다(검증됨)."
+    },
+    {
+      "timestamp": 1787534491574,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-24 — 이 repo의 목적 변경 결정: \"EKS GitOps 패턴의 레퍼런스\"로 전환, 이 repo가 GitOps 절차·runbook(hub/spoke lifecycle 등)의 새 SSOT가 된다(모듈 repo는 Terraform 모듈 설계 자체만 유지). 단, iac-module-library가 지금 자기 docs 개편을 진행 중이므로, 그 개편 결과를 먼저 보고 나서 이 repo의 CLAUDE.md·docs 구조에 반영하기로 사용자가 확정(동시 진행 아님, 순서 있음). 착수 조건: iac-module-library 문서 개편 완료 확인 후. 착수 내용: (1) CLAUDE.md 「0. 설계는 이 repo에 없다」 절 자체를 GitOps 절차 SSOT 이관에 맞게 재작성, (2) 03-hub-lifecycle.md·04-spoke-lifecycle.md 등 절차 문서를 모듈 repo에서 이 repo로 이관(복사 아닌 이관 — 원본은 모듈 repo에서 제거해 갈라짐 방지), (3) \"무엇이 어느 repo에 있나\" 표 갱신. 이번 세션엔 착수하지 않음 — spoke teardown은 이 결정과 별개로 기존 문서 기준 그대로 진행."
+    },
+    {
+      "timestamp": 1787539333096,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "2026-08-24 — ArgoCD ApplicationSet 기반 spoke teardown에서 cluster-secret 매칭 라벨 제거 후, karpenter 컨트롤러 Application(`eks-demo-dev-an2-main-01-karpenter`)이 karpenter-nodepool Application(NodePool·EC2NodeClass CR)보다 먼저 prune되면서 EC2NodeClass `default`의 `karpenter.k8s.aws/termination` finalizer가 영구 스턱되는 버그를 실측 확인. 원인: 이 finalizer는 Karpenter 컨트롤러 자신이 실행 중이어야 처리(제거)되는데, ApplicationSet이 두 Application을 병렬/무순서로 동시에 삭제 처리해 컨트롤러 파드가 먼저 사라지면 그 뒤에 남은 finalizer를 처리할 주체가 영영 없어진다(NodePool CR 자체는 finalizer 없이 정상 삭제됐고, EC2NodeClass만 `deletionTimestamp` 찍힌 채 finalizers=[karpenter.k8s.aws/termination]로 방치됨 — `kubectl get ec2nodeclasses`가 계속 남아있는데 argocd-application-controller 로그는 \"1 objects remaining for deletion\"을 무한 반복). 복구: AWS 실물(Launch Template) 오르판이 없음을 `aws ec2 describe-launch-templates` 태그 필터로 먼저 확인(이 dev에서 Karpenter 노드가 한 번도 뜬 적 없어 애초에 정리할 실물이 없었음 확인) 후 `kubectl patch ec2nodeclass default --type merge --patch-file=<{\"metadata\":{\"finalizers\":[]}}>`로 강제 제거 — 즉시 GC됨. 일반화: Karpenter를 포함하는 ApplicationSet fan-out teardown에서는 CR(NodePool/EC2NodeClass)이 컨트롤러보다 반드시 먼저(또는 최소 동시에 안전하게) 정리되도록 순서를 보장해야 한다 — 현재 `04-spoke-lifecycle.md` 10절은 이 순서 위험을 언급하지 않는다(다음 문서 갱신 시 반영 필요, 현재는 이 repo가 문서 SSOT 이관 대기 중이라 project memory에만 기록). 이 발견 이후 11~12절(destroy 워크플로 2개 + teardown-verify.sh)까지 전부 정상 완주, flow-log 로그 그룹 1건(알려진 패턴) 수동 삭제 후 exit 0 잔존물 없음 확인 — spoke(dev) teardown 완전히 종료."
+    },
+    {
+      "timestamp": 1787542400038,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-24 — hub teardown(L1~L2, VPC+EKS) 리허설 완료, 부트스트랩(state 버킷·OIDC·2단 Role)은 그대로 유지. **현재 team 계정에는 살아있는 EKS 클러스터가 하나도 없다** — dev(spoke)는 이번 세션 초반 완전 teardown, hub도 이어서 L1~L2 teardown 완료(사용자 확정: \"절차 검증을 위한 리허설 — 끝나면 다시 세운다\"). teardown-verify.sh(ENVIRONMENT=hub, AWS_PROFILE=team) exit 0 잔존물 없음 확인(flow-log 로그 그룹 1건 수동 삭제 후). **다음 세션 최우선 착수**: 03-hub-lifecycle.md 4절(네트워크 L1)부터 hub 재배포 — 부트스트랩은 살아있으므로 3절(부트스트랩)은 건너뛰고 바로 4절부터 시작. 재배포 순서: hub networking apply → hub eks apply(workbench+EKS) → argocd-seed.sh 재시딩(ArgoCD가 통째로 사라졌으므로 처음 세울 때처럼 완전 재시딩 필요, 초기 비밀번호 교체까지) → hub 자체 addon(aws-lbc·karpenter·kyverno·cluster-autoscaler·keda) GitOps 반영 확인 → 이후 spoke(dev)도 04-spoke-lifecycle.md 세우기 절차로 재배포(hub가 없으면 spoke의 cross-account trust·TGW 라우트 전부 의미 없으므로 hub 먼저 완전히 살려야 함)."
+    },
+    {
+      "timestamp": 1787542413421,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "2026-08-24 — hub teardown(11절, IaC 밖 자원 선처리) 절차를 AWS 공식 문서로 실제 검증. AWS 공식 \"Delete a cluster\" 가이드(docs.aws.amazon.com/eks/latest/userguide/delete-cluster.html)의 Prerequisite steps가 \"EXTERNAL-IP 붙은 Service 삭제 → Ingress 삭제\"를 명시 — 이 repo의 11절 ②와 정확히 일치. 같은 문서의 \"EKS Capabilities(ACK·Argo CD·kro)는 클러스터 삭제 전 먼저 지워야 한다\"는 조항은 **AWS가 완전관리하는 별개 제품**(EKS Capability for Argo CD)에 대한 것으로, 이 프로젝트가 쓰는 self-managed ArgoCD(Helm 기반)와는 무관함을 확인 — 즉 ArgoCD·addon(aws-lbc·kyverno 등)을 EKS 클러스터 destroy 전에 별도로 언인스톨할 필요가 없다는 이 repo의 기존 판단이 맞았다(EKS 컨트롤 플레인이 사라지면 그 안의 모든 K8s API 객체가 함께 사라지므로). Karpenter 공식 troubleshooting 문서(karpenter.sh/docs/troubleshooting)는 \"컨트롤러를 먼저 언인스톨하면 노드에 finalizer가 남아 삭제가 막힌다\"는 케이스를 다룸 — 이는 dev(spoke) teardown 때 실제로 겪은 EC2NodeClass finalizer 스턱 버그와 근본 원인이 같다(다른 memory 항목 참조). hub teardown에서는 반대로 **컨트롤러를 살려둔 채 NodePool·EC2NodeClass를 먼저 삭제**해 finalizer 문제 없이 깔끔하게 처리됨 — 공식 문서가 암시하는 올바른 순서를 실제로 검증한 사례. 결론: 04-spoke-lifecycle.md·03-hub-lifecycle.md의 현재 절차 설계는 AWS·Karpenter 공식 가이드와 일치하며 임시방편이 아니다 — 이 사실은 이 repo가 GitOps 절차 SSOT를 이관받을 때(다른 open-item 참조) 문서에 \"공식 근거\" 각주로 반영할 가치가 있다."
     }
   ],
   "userDirectives": [],
