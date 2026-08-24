@@ -42,6 +42,10 @@ terraform.rc
 .idea/
 .vscode/
 
+# Python 캐시 (scripts/*.py 실행 시 생성)
+__pycache__/
+*.pyc
+
 # OMC 런타임 상태 (커밋 제외)
 #
 # 규칙 순서에 의미가 있다. 함부로 재배열하지 말 것.
