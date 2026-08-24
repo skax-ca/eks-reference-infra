@@ -193,10 +193,19 @@ module "vpc" {
 # "TGW ID가 plan 시점에 unknown"이라 Invalid for_each argument로 실패한다(hub를 완전히
 # destroy한 뒤 재배포할 때 실물 재현, 2026-08-24). live/hub/tgw README.md 참조 —
 # 배포 순서는 그 root가 먼저다.
+#
+# ⚠️ **state 필터가 필수다** — AWS는 destroy된 TGW도 한동안 State=deleted로
+#    DescribeTransitGateways에 계속 반환한다(2026-08-24 실측: 2026-08-20에 이미 destroy한
+#    TGW의 유령 항목이 tag:Name 필터만으로는 그대로 매칭됐다). 그 유령 항목의 route table은
+#    당연히 없어 아래 aws_ec2_transit_gateway_route_table 조회가 "no matching" 에러를 낸다.
 data "aws_ec2_transit_gateway" "hub" {
   filter {
     name   = "tag:Name"
     values = ["tgw-${var.workload}-${var.env}-${var.region_code}-hub"]
+  }
+  filter {
+    name   = "state"
+    values = ["available"]
   }
 }
 
