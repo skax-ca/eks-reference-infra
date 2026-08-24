@@ -102,8 +102,9 @@ tofu -chdir=live/hub/networking plan
 
 ### 이 루트가 만들지 **않는** 것
 
-TGW·attachment · 온프레미스 대역 라우트 · prefix list · KMS 키. 전부 foundation(공유 리소스)
-소관이거나 운영 라우트다. `outputs.tf` 의 `route_table_ids_by_group` 이 나중에 얹을 앵커다(D3).
+TGW 본체·RAM 공유·prefix list·KMS 키. TGW 관련은 `live/hub/tgw`(2026-08-24 분리 — 이
+디렉토리는 그 TGW를 data source로 조회해 **hub 자신의 attachment**만 만든다) 소관이다.
+KMS 는 foundation(공유 리소스) 소관이다.
 
 ---
 

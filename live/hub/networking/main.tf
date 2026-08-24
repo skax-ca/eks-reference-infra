@@ -187,104 +187,38 @@ module "vpc" {
 #    VPC 의 pod-dup 대역(100.64.0.0/16)을 모든 스포크가 그대로 재사용하는 설계라, 실제
 #    라우팅 대상(uniq 대역)이 안 겹쳐도 dup 대역이 겹치는 것만으로 peering 자체가 거부된다.
 #    자세한 근거는 모듈 repo 문서 참조.
-resource "aws_ec2_transit_gateway" "hub" {
-  # description 은 AWS API 가 ASCII 만 허용한다(2026-08-20 실측: InvalidParameterValue).
-  description = "hub-spoke cross-account routing for ArgoCD"
-
-  # 연결·전파 둘 다 끈다 — AWS 가 TGW 생성의 부산물로 만드는 "기본" 라우트테이블에
-  # 기대지 않고, 아래 aws_ec2_transit_gateway_route_table 을 직접 만들어 쓰기 위해서다.
-  # 그 묵시적 기본 라우트테이블은 Terraform 이 생성 API 를 호출하지 않아 provider 의
-  # default_tags 가 안 붙는다(2026-08-20 실측: 무태그 확인) — 명시적으로 만든 라우트테이블은
-  # provider 가 직접 만드는 리소스라 태그가 그대로 적용된다(모듈 repo
-  # docs/06-conventions.md 「2」 강제 방식 6번). 자동 전파는 애초에 attachment 의 VPC 전
-  # CIDR(uniq+dup)을 그대로 전파해 peering 과 같은 dup 대역 충돌을 재현하므로 끈다 —
-  # uniq 대역만 정적 라우트(아래)로 명시한다.
-  default_route_table_association = "disable"
-  default_route_table_propagation = "disable"
-
-  # RAM 공유로 들어오는 attachment 를 자동 수락한다 — RAM principal association 이 이미
-  # 정확한 계정으로 좁혀 놓았으므로(아래) 자동 수락이 신뢰 경계를 넓히지 않는다.
-  auto_accept_shared_attachments = "enable"
-
-  tags = {
-    Name = "tgw-${var.workload}-${var.env}-${var.region_code}-hub"
-  }
-}
-
-# 명시적으로 소유하는 라우트테이블 — TGW 생성의 부산물(default_route_table_association 로
-# 자동 연결되는 것)이 아니라 이 resource 블록이 직접 만든다. provider 가 직접 만드는
-# 리소스라 default_tags 가 그대로 적용된다(위 주석 참조).
-resource "aws_ec2_transit_gateway_route_table" "hub" {
-  transit_gateway_id = aws_ec2_transit_gateway.hub.id
-
-  tags = {
-    Name = "tgwrt-${var.workload}-${var.env}-${var.region_code}-main"
-  }
-}
-
-# ── RAM 공유 — spoke 계정만 정확히 지정한다(IAM 신뢰와 같은 "정확한 대상만" 원칙) ──────
-resource "aws_ram_resource_share" "tgw" {
-  name = "ram-${var.workload}-${var.env}-${var.region_code}-tgw-share"
-
-  # true — hub·spoke(asset) 둘 다 조직(o-rs1oivwow6) 소속이지만, 초대 없는 조직 내부 공유는
-  # 조직 관리 계정(694171854892, 우리는 멤버 계정)에서 enable-sharing-with-aws-organization을
-  # 먼저 실행해야 켜진다(2026-08-20 실측: 그 상태로 apply 시 RAM AssociateResourceShare가
-  # "Principal ... is not in your AWS organization"으로 거부). 관리 계정 권한이 없으므로
-  # 표준 계정 간 공유(초대)로 간다 — spoke가 aws_ram_resource_share_accepter로 수락해야 한다.
-  allow_external_principals = true
-
-  tags = {
-    Name = "ram-${var.workload}-${var.env}-${var.region_code}-tgw-share"
-  }
-}
-
-resource "aws_ram_resource_association" "tgw" {
-  resource_arn       = aws_ec2_transit_gateway.hub.arn
-  resource_share_arn = aws_ram_resource_share.tgw.arn
-}
-
-resource "aws_ram_principal_association" "spoke_dev" {
-  principal          = var.spoke_account_id
-  resource_share_arn = aws_ram_resource_share.tgw.arn
-}
-
-# ── 관리형 접두사 목록 — 허브의 uniq CIDR을 RAM으로 공유 ────────────────────────
+# ── TGW 자체는 live/hub/tgw root 소관이다(2026-08-24 분리) ──────────────────────────
 #
-# 스포크(dev)가 허브로 가는 라우트·SG 규칙에서 "10.53.0.0/16" 을 CIDR 텍스트로 하드코딩하지
-# 않게 한다. TGW ID 를 발견하는 것과 같은 원칙("이름이 아니라 RAM resource_arns 로 발견")을
-# CIDR 에도 적용한다 — 태그로는 계정 경계를 못 넘지만(2026-08-20 실측), RAM 이 공유하는
-# 리소스 자체(resource_arns)는 넘는다. 프리픽스 리스트는 그 성질을 갖는 리소스다(AWS 공식:
-# RAM 으로 공유된 관리형 접두사 목록은 참가자 계정이 SG 규칙·라우트에서 직접 참조할 수 있다).
-#
-# ⚠️ 반대 방향(스포크의 CIDR)은 바꾸지 않는다 — 스포크가 여럿이면 허브가 spoke_account_id 를
-#    사람에게 안내받는 자리(위 aws_ram_principal_association)에서 CIDR 도 같이 받는 편이
-#    낫다(모듈 repo docs/02-choose-your-path.md 「값 발견」 참조). 프리픽스 리스트는 1:N
-#    발행자(허브)가 자기 값을 공표하는 방향에서만 성립한다.
-resource "aws_ec2_managed_prefix_list" "hub_uniq" {
-  name           = "pl-${var.workload}-${var.env}-${var.region_code}-uniq"
-  address_family = "IPv4"
-  max_entries    = 1 # 허브 자신의 uniq CIDR 하나만 담는다. max_entries 는 mutable(교체 아님) — 필요해지면 늘린다.
-
-  entry {
-    cidr        = local.cidr_uniq
-    description = "hub uniq CIDR"
-  }
-
-  tags = {
-    Name = "pl-${var.workload}-${var.env}-${var.region_code}-uniq"
+# TGW가 이 root와 같은 apply에서 새로 생기면, 아래 spoke 자동 발견 로직의 for_each가
+# "TGW ID가 plan 시점에 unknown"이라 Invalid for_each argument로 실패한다(hub를 완전히
+# destroy한 뒤 재배포할 때 실물 재현, 2026-08-24). live/hub/tgw README.md 참조 —
+# 배포 순서는 그 root가 먼저다.
+data "aws_ec2_transit_gateway" "hub" {
+  filter {
+    name   = "tag:Name"
+    values = ["tgw-${var.workload}-${var.env}-${var.region_code}-hub"]
   }
 }
 
-resource "aws_ram_resource_association" "prefix_list" {
-  resource_arn       = aws_ec2_managed_prefix_list.hub_uniq.arn
-  resource_share_arn = aws_ram_resource_share.tgw.arn
+# transit-gateway-id 필터만으로 유일하게 좁혀진다 — live/hub/tgw의 TGW는
+# default_route_table_association/propagation = "disable"이라 자동 생성되는 default RT가
+# 없고, 명시로 만든 라우트테이블 하나만 존재한다.
+data "aws_ec2_transit_gateway_route_table" "hub" {
+  filter {
+    name   = "transit-gateway-id"
+    values = [data.aws_ec2_transit_gateway.hub.id]
+  }
 }
+
+data "aws_caller_identity" "current" {}
 
 # ── 허브 자신의 attachment — ArgoCD(argocd-application-controller)가 도는 서브넷 ──────
+# VPC(위 module.vpc)가 있어야 만들 수 있어 live/hub/tgw로 옮길 수 없다(순환 의존) —
+# live/hub/tgw README.md 「3」 참조.
 resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.subnet_ids_by_group["node-uniq"]
-  transit_gateway_id = aws_ec2_transit_gateway.hub.id
+  transit_gateway_id = data.aws_ec2_transit_gateway.hub.id
 
   tags = {
     Name = "tgwa-${var.workload}-${var.env}-${var.region_code}-main"
@@ -306,11 +240,11 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
 # EC2 Transit Gateways") — 이래저래 hub(TGW owner)가 명시적 연결 리소스로 양쪽을 끌어와야 한다.
 resource "aws_ec2_transit_gateway_route_table_association" "hub" {
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub.id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
+  transit_gateway_route_table_id = data.aws_ec2_transit_gateway_route_table.hub.id
   replace_existing_association   = true
 }
 
-# ── spoke 자동 발견 — 이 TGW 에 RAM 으로 붙은 attachment 전부(허브 자신 제외) ──────────
+# ── spoke 자동 발견 — 이 TGW 에 RAM 으로 붙은 attachment 전부 ──────────────────────────
 # 복수형 데이터소스는 "없으면 빈 리스트"다(단수형과 달리 에러가 아니다) — spoke 가 하나도
 # 없어도, 여러 개여도 이 apply 는 그대로 성공한다. repo 변수로 spoke 의 attachment ID 를
 # 수동 전달받던 방식(2026-08-20 최초 구현)을 걷어낸다 — 다음 spoke 를 추가할 때 이 파일을
@@ -319,7 +253,7 @@ resource "aws_ec2_transit_gateway_route_table_association" "hub" {
 data "aws_ec2_transit_gateway_vpc_attachments" "spokes" {
   filter {
     name   = "transit-gateway-id"
-    values = [aws_ec2_transit_gateway.hub.id]
+    values = [data.aws_ec2_transit_gateway.hub.id]
   }
   filter {
     name   = "state"
@@ -327,20 +261,30 @@ data "aws_ec2_transit_gateway_vpc_attachments" "spokes" {
   }
 }
 
-data "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
-  for_each = toset([
-    for id in data.aws_ec2_transit_gateway_vpc_attachments.spokes.ids :
-    id if id != aws_ec2_transit_gateway_vpc_attachment.hub.id
-  ])
+# ⚠️ 허브 자신의 attachment도 이 for_each에 포함된 채로 발견된다(2026-08-24 재설계) — 이름을
+# "spoke"가 아니라 "discovered"로 둔 이유다. attachment ID로 허브 것을 미리 제외하지 않는다 —
+# 그 ID(aws_ec2_transit_gateway_vpc_attachment.hub.id)는 이 apply에서 새로 생기는 값이라
+# plan 시점엔 여전히 unknown이고, 그걸 for_each 조건에 섞으면 위 TGW 분리로 없앤 버그가
+# 그대로 재현된다. 아래 local.spoke_attachments 에서 vpc_owner_id(항상 known-at-plan)로
+# 걸러낸다.
+data "aws_ec2_transit_gateway_vpc_attachment" "discovered" {
+  for_each = toset(data.aws_ec2_transit_gateway_vpc_attachments.spokes.ids)
 
   id = each.value
 }
 
+locals {
+  spoke_attachments = {
+    for k, v in data.aws_ec2_transit_gateway_vpc_attachment.discovered : k => v
+    if v.vpc_owner_id != data.aws_caller_identity.current.account_id
+  }
+}
+
 resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
-  for_each = data.aws_ec2_transit_gateway_vpc_attachment.spoke
+  for_each = local.spoke_attachments
 
   transit_gateway_attachment_id  = each.value.id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
+  transit_gateway_route_table_id = data.aws_ec2_transit_gateway_route_table.hub.id
   # 옛 묵시적 기본 RT 에서 옮겨온 이력이 있는 spoke(dev)를 위해 유지한다 — 이미 우리 RT 에
   # 정확히 연결된 spoke 에는 no-op 이라 신규 spoke 에도 그대로 재사용해도 안전하다.
   replace_existing_association = true
@@ -351,8 +295,9 @@ resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
 #    조회 시 빈 배열/null 반환 확인, aws_ram_resource_share 데이터소스의 tags 도 마찬가지).
 #    대신 attachment 의 vpc_owner_id(태그가 아니라 EC2 API 고유 속성이라 cross-account 로도
 #    보인다, 실측 확인)로 spoke 를 식별해 아래 지도에서 CIDR 을 찾는다. hub 는 spoke 마다
-#    RAM 초대를 보내려면 이미 계정 ID 를 알아야 하므로(위 aws_ram_principal_association) —
-#    같은 자리에 CIDR 하나만 더 적는다. 새 수동 단계가 아니라 기존 단계의 확장이다.
+#    RAM 초대를 보내려면 이미 계정 ID 를 알아야 하므로(live/hub/tgw 의
+#    aws_ram_principal_association) — 같은 자리에 CIDR 하나만 더 적는다. 새 수동 단계가
+#    아니라 기존 단계의 확장이다.
 locals {
   spoke_uniq_cidrs = {
     (var.spoke_account_id) = "10.51.0.0/16" # dev(asset 계정) — live/dev/networking 의 cidr_uniq
@@ -386,7 +331,7 @@ locals {
     )),
     [for account_id, cidr in local.spoke_uniq_cidrs : account_id
       if contains(
-        [for a in data.aws_ec2_transit_gateway_vpc_attachment.spoke : a.vpc_owner_id],
+        [for a in local.spoke_attachments : a.vpc_owner_id],
         account_id,
     )]
   )
@@ -397,7 +342,7 @@ resource "aws_route" "vpc_to_spoke" {
 
   route_table_id         = each.value[0]
   destination_cidr_block = local.spoke_uniq_cidrs[each.value[1]]
-  transit_gateway_id     = aws_ec2_transit_gateway.hub.id
+  transit_gateway_id     = data.aws_ec2_transit_gateway.hub.id
 
   # AWS 공식 문서(aws_route)의 delete 기본 타임아웃은 5m — 위 key 안정화로 이 리소스가
   # replace 되는 경우는 이제 거의 없어야 하지만, 예외적으로 필요할 때를 대비한 안전망이다.
@@ -417,7 +362,7 @@ resource "aws_route" "vpc_to_spoke" {
 resource "aws_ec2_transit_gateway_route" "hub_via_hub_attachment" {
   destination_cidr_block         = local.cidr_uniq # hub 자신의 값 — 이 파일 상단 locals 에 이미 있다
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub.id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
+  transit_gateway_route_table_id = data.aws_ec2_transit_gateway_route_table.hub.id
 
   depends_on = [aws_ec2_transit_gateway_route_table_association.hub]
 }
@@ -426,11 +371,11 @@ resource "aws_ec2_transit_gateway_route" "hub_via_hub_attachment" {
 # local.spoke_uniq_cidrs 에서 vpc_owner_id 로 찾는다. spoke 가 늘어도(지도에 계정 ID·CIDR
 # 한 줄만 추가하면) 이 리소스 블록 자체는 그대로다(for_each 가 알아서 늘어난다).
 resource "aws_ec2_transit_gateway_route" "tgw_rt_to_spoke" {
-  for_each = data.aws_ec2_transit_gateway_vpc_attachment.spoke
+  for_each = local.spoke_attachments
 
   destination_cidr_block         = local.spoke_uniq_cidrs[each.value.vpc_owner_id]
   transit_gateway_attachment_id  = each.value.id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
+  transit_gateway_route_table_id = data.aws_ec2_transit_gateway_route_table.hub.id
 
   depends_on = [aws_ec2_transit_gateway_route_table_association.spoke]
 }

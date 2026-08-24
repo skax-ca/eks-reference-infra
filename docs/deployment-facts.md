@@ -30,6 +30,7 @@
 | 실행 Role **이름** | `iamr-demo-dev-an2-gha-exec-01`(dev) · `iamr-demo-hub-an2-gha-exec-01`(hub) | ARN은 아래 「2」. **각자 소유**, 공유 아님 |
 | 입구 Role **이름** | `iamr-demo-dev-an2-gha-entry-01`(dev) · `iamr-demo-hub-an2-gha-entry-01`(hub) | ARN은 아래 「2」. **각자 소유**, 공유 아님 |
 | VPC `Name` 태그 | `vpc-demo-dev-an2-main` · `vpc-demo-hub-an2-main` | ID는 계정 식별로 이어지므로 적지 않는다 |
+| tgw state key | hub: `hub/tgw.tfstate`(hub 버킷) | backend `key`. dev(spoke)는 이 root가 없다 — RAM 공유를 이름으로 조회한다(2026-08-24 `live/hub/networking`에서 분리) |
 | networking state key | dev: `dev/networking.tfstate`(dev 버킷) · hub: `hub/networking.tfstate`(hub 버킷) | backend `key`, **버킷도 dev·hub 각자** |
 | eks state key | dev: `dev/eks.tfstate`(dev 버킷) · hub: `hub/eks.tfstate`(hub 버킷) | backend `key`, **버킷도 dev·hub 각자** |
 | GitHub App slug | `skax-ca-module-reader` | 모듈 소싱 인증(D20) |

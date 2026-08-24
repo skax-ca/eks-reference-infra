@@ -54,25 +54,8 @@ output "nat_gateway_ids" {
   value       = module.vpc.nat_gateway_ids
 }
 
-output "transit_gateway_id" {
-  description = <<-EOT
-    spoke 로 향하는 Transit Gateway ID(tgw-...). AWS 가 생성 시점에 무작위로 부여해 결정적
-    합성이 불가능하다. ⚠️ spoke 는 이 출력을 repo 변수로 받지 않는다 — RAM 공유를 이름으로
-    조회해(data.aws_ram_resource_share) 그 안의 resource_arns 에서 직접 파싱한다(2026-08-20
-    재설계, 모듈 repo docs/02-choose-your-path.md 「값 발견」 절). 이 출력은 계약이 실제로
-    동작함을 보이는 용도로만 남긴다.
-  EOT
-  value       = aws_ec2_transit_gateway.hub.id
-}
-
-output "tgw_resource_share_arn" {
-  description = <<-EOT
-    TGW 를 spoke 에 공유하는 RAM resource share ARN. ⚠️ spoke 는 이 출력을 repo 변수로 받지
-    않는다 — 같은 이름(name)으로 자기 계정에서 직접 조회한다(data.aws_ram_resource_share,
-    resource_owner="OTHER-ACCOUNTS"). 이 출력은 계약이 실제로 동작함을 보이는 용도로만 남긴다.
-  EOT
-  value       = aws_ram_resource_share.tgw.arn
-}
+# ⚠️ transit_gateway_id · tgw_resource_share_arn 출력은 2026-08-24 TGW 분리로
+#    live/hub/tgw/outputs.tf 로 옮겼다 — 그 리소스들이 이제 이 root 에 없다.
 
 output "flow_log_group_name" {
   description = <<-EOT

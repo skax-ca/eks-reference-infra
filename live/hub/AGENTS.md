@@ -15,7 +15,8 @@ Role은 dev·hub 각자 갖는다(공유하는 유일한 예외는 OIDC provider
 
 | 디렉토리 | 목적 | State Key |
 |---------|------|-----------|
-| `networking/` | VPC + 서브넷 + NAT + Flow Logs (`networking/AGENTS.md` 참고) | `hub/networking.tfstate` |
+| `tgw/` | Transit Gateway + RAM 공유 + prefix list (`tgw/AGENTS.md` 참고, 2026-08-24 networking에서 분리) | `hub/tgw.tfstate` |
+| `networking/` | VPC + 서브넷 + NAT + Flow Logs + hub 자신의 TGW attachment (`networking/AGENTS.md` 참고) | `hub/networking.tfstate` |
 | `eks/` | EKS 클러스터 + 노드 그룹 + Karpenter + ArgoCD hub Pod Identity 전제 (`eks/AGENTS.md` 참고) | `hub/eks.tfstate` |
 
 ## 진행 기록
@@ -28,7 +29,10 @@ Role은 dev·hub 각자 갖는다(공유하는 유일한 예외는 OIDC provider
 ## AI 에이전트 가이드
 
 ### 배포 순서
-`networking`이 반드시 **먼저** apply되어야 한다 — `eks` 루트가 태그로 VPC를 조회하기 때문이다:
+`tgw` → `networking` → `eks` 순서다(2026-08-24 tgw 분리 이후). `tgw`가 먼저인 이유는
+`networking`의 spoke 자동 발견 로직이 그 TGW를 data source로 조회하기 때문이다(TGW가
+없으면 `Invalid for_each argument`로 실패 — `tgw/README.md` 참조). `networking`이
+`eks`보다 먼저인 이유는 `eks` 루트가 태그로 VPC를 조회하기 때문이다:
 ```hcl
 data "aws_vpc" "this" {
   filter { name = "tag:Name";     values = ["vpc-demo-hub-an2-main"] }
