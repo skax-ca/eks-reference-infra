@@ -4,6 +4,9 @@
 
 **레퍼런스 소비 repo.** `iac-module-library`의 모듈을 git tag로 소싱하는 **배포 루트**다.
 실 고객사 배포가 아니라 **소비 경로 리허설**이고, 통과한 형태를 고객사 repo로 복사해 준다.
+동시에 **hub-spoke EKS GitOps 패턴의 레퍼런스**이기도 하다(2026-08-24 역할 확정) —
+그 패턴의 세우기·걷어내기·운영 절차(`docs/hub-lifecycle.md`·`spoke-lifecycle.md`·
+`runbooks.md`)를 이 repo가 SSOT로 소유한다.
 
 **스택**: OpenTofu(`tofu`) + GitHub Actions(OIDC) + S3 backend(`use_lockfile`)
 
@@ -15,8 +18,9 @@
 
 | repo | 역할 |
 |------|------|
-| `iac-module-library` | 모듈·**설계**의 SSOT |
-| **이 repo** | 그 설계의 **첫 이행 인스턴스**. 배포 루트와 배포 사실만 소유 |
+| `iac-module-library` | 모듈·**소비 규약**(네이밍·backend·OIDC 체인 등)의 SSOT |
+| **이 repo** | 그 규약의 **첫 이행 인스턴스**이자 hub-spoke 패턴의 **운영 절차 SSOT**(세우기·걷어내기·day-2 운영, 2026-08-24 이관) |
+| `eks-platform-gitops` | 그 패턴의 GitOps 매니페스트(계층 2) |
 | `terraform-enterprise-poc` | **동결**. TFE 제안서 레퍼런스 전용 — 고치지 않는다 |
 
 - 아래 각 절의 규칙(부트스트랩을 IaC로 하지 않는 이유·버킷명을 git에 두지 않는 이유·2단 Role
@@ -26,19 +30,24 @@
 - 설계 변경 없이 구현을 시작하지 않는다: **설계(모듈 repo) → 검토 → 구현(여기) → 검증**.
 - **이 규칙은 코드 규약에만 그치지 않는다 — 문서 작성 규칙도 같은 SSOT를 따른다.**
   이 repo가 쓰는 모든 문서(`docs/*.md`·`README.md`·`AGENTS.md`·`CLAUDE.md`, `.omc/` 제외)는
-  모듈 repo `docs/06-conventions.md`의 「8. 문서 작성 규칙」을 그대로 따른다 — 규칙 텍스트를
+  모듈 repo `docs/conventions.md`의 「8. 문서 작성 규칙」을 그대로 따른다 — 규칙 텍스트를
   여기 다시 적지 않는다(두 곳에 적으면 갈라진다). 기계 판정 가능한 3개(절 번호 인용 금지·
   비표준 이모지 금지·400줄 제한)는 `scripts/validate-doc-conventions.py`가 pre-commit에서
   강제한다(「6. 검증」 참조). 나머지 4개(첫 줄에 "읽는 사람" 명시·변경 이력 금지·표/명령 우선·
   정정 서술 금지)는 문맥 판단이 필요해 사람이 검토한다.
+- **문체 규칙(stop-slop, em-dash 금지 등)도 2026-08-24 채택했다** — 모듈 repo
+  `docs/conventions.md` 「9. 문체 규칙」을 그대로 따른다. 신규·변경 문서에만 적용하고,
+  이관 시점에 이미 있던 em-dash는 소급 정리하지 않는다(모듈 repo가 채택한 것과 같은
+  grandfather 방식) — 전면 정리는 별도 후속 작업이다.
 
 ### 무엇이 어느 repo에 있나
 
 | 대상 | 위치 |
 |------|------|
 | 소비 **규약**(소싱 인증·backend 규약·OIDC 체인·plan artifact 규칙) | 모듈 repo `docs/` — SSOT |
-| **문서 작성 규칙** | 모듈 repo `docs/06-conventions.md`의 「8. 문서 작성 규칙」 — SSOT |
+| **문서 작성 규칙** | 모듈 repo `docs/conventions.md`의 「8. 문서 작성 규칙」·「9. 문체 규칙」 — SSOT |
 | 이 인스턴스의 배포 **사실** | 이 repo `docs/deployment-facts.md` |
+| hub-spoke 패턴의 **세우기·걷어내기·운영 절차** | 이 repo `docs/hub-lifecycle.md`·`spoke-lifecycle.md`·`runbooks.md` — SSOT(2026-08-24 이관) |
 
 ---
 

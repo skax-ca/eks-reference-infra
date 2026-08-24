@@ -20,14 +20,21 @@ repo로 복사해 주는 것이 이 repo의 존재 이유다.
 
 ## 설계 문서는 어디에 있나
 
-⛔ **설계는 이 repo에 없다.** 소비 경로 규약의 SSOT는 모듈 repo에 있다:
+소비 **규약**(네이밍·backend·OIDC 체인 등)의 SSOT는 여전히 모듈 repo에 있다. 다만
+hub-spoke EKS GitOps 패턴의 **세우기·걷어내기·운영 절차**는 2026-08-24부터 이 repo가
+SSOT다(모듈 repo에서 이관 — 그 repo는 여러 패턴이 재사용할 자산의 카탈로그이지, 특정
+패턴의 운영 절차를 소유하지 않는다):
 
 | 문서 | 내용 |
 |------|------|
-| `iac-module-library`의 [`docs/`](https://github.com/skax-ca/iac-module-library/tree/main/docs) | 소비 경로 규약의 SSOT. 이 repo의 모든 구조가 여기서 나온다 |
+| `iac-module-library`의 [`docs/`](https://github.com/skax-ca/iac-module-library/tree/main/docs) | 소비 경로 **규약**의 SSOT. 이 repo의 모든 구조가 여기서 나온다 |
+| 이 repo `docs/hub-lifecycle.md` | hub 세우기·걷어내기 — **이 repo가 SSOT** |
+| 이 repo `docs/spoke-lifecycle.md` | spoke 세우기·걷어내기 — **이 repo가 SSOT** |
+| 이 repo `docs/runbooks.md` | day-2 운영 절차 — **이 repo가 SSOT** |
 | 이 repo `docs/deployment-facts.md` | 이 **인스턴스**의 배포 사실 — 값이 아니라 **어디에 있는지**를 기록한다 |
 
-이렇게 나누는 이유: **규약은 모듈 repo(모든 소비 repo가 따르는 계약), 사실은 소비 repo(인스턴스 값).**
+이렇게 나누는 이유: **규약은 모듈 repo(모든 소비 repo가 따르는 계약), 절차·사실은 이
+repo(특정 패턴을 실제로 세우고 운영한 인스턴스).**
 
 ## 구조
 

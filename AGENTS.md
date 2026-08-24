@@ -9,8 +9,10 @@
 
 - ⛔ **모듈 repo가 아니다.** `modules/`가 없고 `tofu test`도 없다. 여기에 모듈을 만들지 않는다 —
   모듈은 `iac-module-library`에 만들고 태그로 소싱한다.
-- ⛔ **설계 문서 소유자가 아니다.** 규약을 바꿔야 하면 모듈 repo의 `docs/`를 고치고 여기로
-  내려온다. 역방향은 drift다.
+- ⛔ **소비 규약의 설계 문서 소유자가 아니다.** 규약을 바꿔야 하면 모듈 repo의 `docs/`를
+  고치고 여기로 내려온다. 역방향은 drift다. 단, hub-spoke 패턴의 **세우기·걷어내기·운영
+  절차**(`docs/hub-lifecycle.md`·`spoke-lifecycle.md`·`runbooks.md`)는 2026-08-24부터 이
+  repo가 SSOT다(모듈 repo가 아니다) — `CLAUDE.md` 「0」 참조.
 - ⛔ **실 고객사 배포가 아니다.** 리허설이고, 통과한 형태를 복사해 준다.
 
 ## 디렉토리별 소유 관심사
@@ -23,6 +25,8 @@
 | `live/dev/eks/` | EKS 배포 루트 (apply 완료) | `backend.tf`는 networking과 같은 부분 설정 패턴이다 |
 | `.github/workflows/` | plan → 승인 → apply (네트워킹·eks 각 워크플로) | **한 run 두 job**을 유지한다. 쪼개면 "승인한 계획 ≠ 적용된 계획" 구멍이 열린다 |
 | `docs/deployment-facts.md` | 이 인스턴스의 사실 | **값이 아니라 포인터**를 적는다. 계정 ID·버킷명·Role ARN을 여기 쓰지 않는다 |
+| `docs/hub-lifecycle.md`·`spoke-lifecycle.md`·`runbooks.md` | hub-spoke 패턴의 세우기·걷어내기·운영 절차. **이 repo가 SSOT**(2026-08-24 이관) | 모듈 repo로 역방향 이관하지 않는다 — repo 경계가 확정됐다 |
+| `scripts/argocd-seed.sh` | self-managed ArgoCD 부트스트랩. `eks-platform-gitops`가 vendoring | 고칠 일이 생기면 여기(SSOT)를 고치고 그 repo에 다시 복사한다 — 사본을 직접 고치지 않는다 |
 
 ## 이것을 하면 설계가 깨진다
 
@@ -65,7 +69,8 @@ bootstrap/verify.sh                                    # 부트스트랩 drift
 | `.githooks/` | `pre-commit` / `pre-push` 훅 + 활성화 방법 |
 | `.github/workflows/` | 두 배포 워크플로 아키텍처 (deploy-network · deploy-eks) |
 | `bootstrap/` | S3 버킷 · OIDC · 2단 Role 생성 스크립트 + verify.sh 계약 |
-| `docs/` | deployment-facts.md만 (값x 포인터o 원칙) |
+| `docs/` | deployment-facts.md(값x 포인터o) + hub/spoke-lifecycle·runbooks(운영 절차 SSOT) |
+| `scripts/` | argocd-seed.sh·teardown-verify.sh(운영 스크립트) + validate-doc-conventions.py |
 | `live/dev/` | 배포 루트 묶음 (networking + eks 독립 배포) |
 | `live/dev/networking/` | VPC 배포 루트 (apply 완료) |
 | `live/dev/eks/` | EKS 배포 루트 (apply 완료) |

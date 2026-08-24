@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 모듈 repo(iac-module-library) docs/06-conventions.md §8(문서 작성 규칙)에서 이식.
+# 모듈 repo(iac-module-library) docs/conventions.md §8(문서 작성 규칙)에서 이식.
 # 규칙 SSOT는 그 문서다 — 여기서 규칙 텍스트를 다시 쓰지 않는다(CLAUDE.md §0).
 # 7개 규칙 중 기계로 판정 가능한 3개만 검사한다.
 # 나머지 규칙(1 "읽는 사람" 첫 줄 · 2 변경 이력 금지 · 5 표/명령 · 7 정정 서술 금지)은
@@ -10,6 +10,9 @@
 #  2. 규칙 3 — 이모지는 고정 7종(✅⏳❌⚠️⛔🔴🔑)만 허용. 그 밖의 이모지 범위 문자를 잡는다.
 #  3. 규칙 4 — 문서 400줄 제한. `docs/aws-naming-abbreviations.md`(데이터 카탈로그)는 규칙이
 #     명시한 예외라 건너뛴다.
+#  4. §9 문체 규칙(2026-08-24 채택) — em-dash("—") 금지. 이관 시점에 이미 있던 파일은
+#     LEGACY_EM_DASH_ALLOWLIST로 grandfather한다(신규 위반 예방이 목적이지 기존 문서
+#     소급 정리가 아니다 — 모듈 repo가 같은 규칙을 채택할 때 쓴 방식과 동일).
 #
 #  적용 범위: §8이 스스로 선언한 범위와 같다 — docs/*.md · 저장소 전역 README.md·AGENTS.md ·
 #  루트 CLAUDE.md. .omc/는 제외(에이전트 전용 운영 기록).
@@ -24,6 +27,34 @@ import sys
 ALLOWED_EMOJI = {"✅", "⏳", "❌", "⚠️", "⛔", "🔴", "🔑"}
 LINE_LIMIT = 400
 LINE_LIMIT_EXCEPTIONS = {"docs/aws-naming-abbreviations.md"}
+# 2026-08-24 §9 채택 시점에 이미 em-dash를 구조적 장치로 쓰고 있던 파일 전부(22개, 실측
+# 확인 — 이관된 3문서·scripts/README.md뿐 아니라 이 저장소 기존 문서 대부분이 해당된다).
+# 신규 파일·이 목록 밖 파일에서만 강제한다 — 기존 위반의 소급 정리는 별도 후속 작업이다.
+LEGACY_EM_DASH_ALLOWLIST = {
+    "AGENTS.md",
+    "CLAUDE.md",
+    "README.md",
+    "bootstrap/AGENTS.md",
+    "bootstrap/README.md",
+    "docs/AGENTS.md",
+    "docs/deployment-facts.md",
+    "docs/hub-lifecycle.md",
+    "docs/runbooks.md",
+    "docs/spoke-lifecycle.md",
+    "live/dev/AGENTS.md",
+    "live/dev/eks/AGENTS.md",
+    "live/dev/eks/README.md",
+    "live/dev/networking/AGENTS.md",
+    "live/dev/networking/README.md",
+    "live/hub/AGENTS.md",
+    "live/hub/eks/AGENTS.md",
+    "live/hub/eks/README.md",
+    "live/hub/networking/AGENTS.md",
+    "live/hub/networking/README.md",
+    "live/hub/tgw/AGENTS.md",
+    "live/hub/tgw/README.md",
+    "scripts/README.md",
+}
 
 # 이모지가 몰려 있는 유니코드 블록 두 개만 본다 — 주 이모지 블록(1F300-1FAFF)과
 # misc symbols·dingbats(2600-27BF). "→"·"⇒"·"↔" 같은 화살표 블록(2190-21FF·2B00-2BFF)은
@@ -88,6 +119,13 @@ def check_file(path: str) -> list[str]:
     if path not in LINE_LIMIT_EXCEPTIONS and len(lines) > LINE_LIMIT:
         errors.append(f"{path}: 규칙 4 위반 — {len(lines)}줄 (한도 {LINE_LIMIT}줄)")
 
+    if path not in LEGACY_EM_DASH_ALLOWLIST:
+        for i, line in enumerate(lines, 1):
+            if in_fence[i - 1]:
+                continue
+            if "—" in line:
+                errors.append(f"{path}:{i}: §9 위반 — em-dash('—'). 마침표·쉼표·괄호로 바꾼다")
+
     return errors
 
 
@@ -100,7 +138,7 @@ def main() -> int:
     if all_errors:
         for e in all_errors:
             print(f"[ERROR] {e}")
-        print(f"\n문서 작성 규칙(§8) 위반 {len(all_errors)}건")
+        print(f"\n문서 작성 규칙(§8·§9) 위반 {len(all_errors)}건")
         return 1
 
     print(f"문서 작성 규칙 검사 통과 — {len(targets)}개 파일")

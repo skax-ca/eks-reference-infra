@@ -6,13 +6,19 @@
 **읽는 사람**: 이 repo에서 작업하는 AI 에이전트.
 
 ## 목적
-이 인스턴스의 배포 사실과 증거. **실측으로 증명된 사실**만 이곳에 — 설계나 의견은 아니다.
+두 종류를 담는다. ① 이 인스턴스의 배포 사실과 증거 — **실측으로 증명된 사실**만(설계나
+의견은 아니다). ② hub-spoke 패턴의 세우기·걷어내기·운영 절차 — 2026-08-24
+`iac-module-library`에서 이관됐다(그 repo의 자체 재구성 계획 Decision E — "패턴별
+배포·운영 절차는 이 repo가 아니라 그 패턴의 레퍼런스 배포 repo가 소유한다").
 
 ## 주요 파일
 
 | 파일 | 설명 |
 |------|------|
 | `deployment-facts.md` | 이 배포 루트의 모든 실측 사실에 대한 **SSOT** |
+| `hub-lifecycle.md` | hub 세우기·걷어내기(2026-08-24 이관, 이 repo가 SSOT) |
+| `spoke-lifecycle.md` | spoke 세우기·걷어내기(2026-08-24 이관, 이 repo가 SSOT) |
+| `runbooks.md` | day-2 운영 절차(2026-08-24 이관, 이 repo가 SSOT) |
 
 ## AI 에이전트 가이드
 
@@ -21,7 +27,8 @@
 | 내용 | 위치 |
 |------|------|
 | 이 repo run의 실측 값 | `deployment-facts.md` |
-| 설계 결정과 근거 | `iac-module-library`의 `docs/`(SSOT) |
+| hub-spoke 패턴의 세우기·걷어내기·운영 절차 | `hub-lifecycle.md`·`spoke-lifecycle.md`·`runbooks.md`(이 repo가 SSOT) |
+| 소비 **규약**(네이밍·backend·OIDC 체인 등)의 설계 결정과 근거 | `iac-module-library`의 `docs/`(SSOT, 변경 없음) |
 | 고객사 배포용 문서 | 고객사 repo(이 repo는 템플릿임) |
 
 ### 핵심 원칙
