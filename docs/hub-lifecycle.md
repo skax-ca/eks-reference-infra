@@ -1,13 +1,13 @@
-# 03. hub 계정 생애주기: 세우기와 걷어내기
+# 03. hub 계정 생애주기: 구축과 철거
 
-**읽는 사람**: hub(team 계정)의 인프라를 세우거나 걷어내는 사람.
+**읽는 사람**: hub(team 계정)의 인프라를 구축하거나 철거하는 사람.
 
 레퍼런스 구현이 `eks-reference-infra`의 `live/hub/`에 있다. spoke(예: dev)는
-`spoke-lifecycle.md`를 본다(hub가 먼저 서 있어야 spoke를 세울 수 있다).
+`spoke-lifecycle.md`를 본다(hub가 먼저 구축되어 있어야 spoke를 구축할 수 있다).
 
 ---
 
-## 세우기
+## 구축
 
 ### 0. 준비물
 
@@ -175,7 +175,7 @@ gh repo create <org>/<project>-platform-gitops --private
 
 ---
 
-## 걷어내기
+## 철거
 
 ### 8. 시작 전에: 공용 계정이면 특히 읽는다
 
@@ -331,7 +331,7 @@ CloudWatch가 같은 이름을 자동으로 만든다. state에 없으니 다음
 
 ### 14. 부분 삭제
 
-**GitOps만 걷어내기**: 클러스터는 두고 ArgoCD만 뺀다. Git에서 매니페스트를 지우고 ArgoCD가
+**GitOps만 철거**: 클러스터는 두고 ArgoCD만 뺀다. Git에서 매니페스트를 지우고 ArgoCD가
 반영한 뒤 제거한다(컨트롤러를 먼저 죽이지 않는다, Git과 클러스터가 조용히 갈라진다).
 
 ```bash

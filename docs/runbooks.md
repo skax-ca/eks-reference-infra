@@ -1,8 +1,8 @@
 # 07. 운영 런북
 
-**읽는 사람**: 이미 선 환경을 운영하는 사람.
+**읽는 사람**: 이미 구축된 환경을 운영하는 사람.
 
-환경을 **만들고 걷어내는** 절차는 hub는 [`hub-lifecycle.md`](hub-lifecycle.md),
+환경을 **구축하고 철거하는** 절차는 hub는 [`hub-lifecycle.md`](hub-lifecycle.md),
 spoke는 [`spoke-lifecycle.md`](spoke-lifecycle.md)가 소유한다.
 
 ---

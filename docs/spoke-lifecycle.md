@@ -1,22 +1,22 @@
-# 04. spoke 계정 생애주기: 세우기와 걷어내기
+# 04. spoke 계정 생애주기: 구축과 철거
 
-**읽는 사람**: spoke(예: asset 계정의 dev)의 인프라를 세우거나 걷어내는 사람.
+**읽는 사람**: spoke(예: asset 계정의 dev)의 인프라를 구축하거나 철거하는 사람.
 
-> ⚠️ **hub가 먼저 서 있어야 한다.** spoke는 hub의 `argocd_hub_pod_identity` Role·TGW·프리픽스
+> ⚠️ **hub가 먼저 구축되어 있어야 한다.** spoke는 hub의 `argocd_hub_pod_identity` Role·TGW·프리픽스
 > 리스트에 의존한다. `hub-lifecycle.md`부터 본다.
-> **검증 상태**: 세우기·걷어내기 둘 다 `eks-reference-infra`의 dev(spoke 첫 인스턴스)로
+> **검증 상태**: 구축·철거 둘 다 `eks-reference-infra`의 dev(spoke 첫 인스턴스)로
 > 실환경 검증했다. spoke 단독 teardown 시 hub 쪽 잔존물 처리(13절)는 **열린 질문**이다.
 
 레퍼런스 구현이 `eks-reference-infra`의 `live/dev/`에 있다.
 
 ---
 
-## 세우기
+## 구축
 
 ### 0. 준비물
 
 hub와 같다: `tofu`·`aws`·`gh`·`session-manager-plugin`·`jq`, private repo면 GitHub App
-접근. hub 세우기 때 이미 설치했다면 이 절은 건너뛴다.
+접근. hub를 구축할 때 이미 설치했다면 이 절은 건너뛴다.
 
 ### 1. 착수 전에 확정할 값: hub와 다른 것만
 
@@ -37,7 +37,7 @@ live/dev/networking/       hub와 같은 repo에 env만 새로 추가
 live/dev/eks/
 ```
 
-`bootstrap/`·`.github/workflows/`는 hub 세우기 때 이미 있다. 새로 만들지 않는다.
+`bootstrap/`·`.github/workflows/`는 hub를 구축할 때 이미 있다. 새로 만들지 않는다.
 
 ### 3. 부트스트랩: `BOOTSTRAP_TARGET=spoke SPOKE_ENV=<env>`
 
@@ -138,7 +138,7 @@ ArgoCD가 없다.
 
 ---
 
-## 걷어내기
+## 철거
 
 ### 8. 시작 전에: 공용 계정이면 특히 읽는다
 
@@ -202,7 +202,7 @@ kubectl get nodepools 2>&1   # Karpenter를 쓰면 NodePool CR도 없어야 함(
 **순서가 중요하다.** ①~⑤를 건너뛰고 Secret을 한 번에 지우면 hub의 Application 추적
 기록은 사라지지만 실제 addon과 워크로드 잔존물은 spoke에 orphan으로 남는다. spoke
 EKS 클러스터 자체를 destroy(11절)하면 결국 함께 사라지므로 destroy 자체를 막지는
-않지만, 클러스터를 재파괴하지 않고 addon만 걷어내려는 시나리오(예: 재구성 리허설)에서는
+않지만, 클러스터를 재파괴하지 않고 addon만 철거하려는 시나리오(예: 재구성 리허설)에서는
 치명적이다.
 
 ### 11. 2단계 · 3단계: destroy
