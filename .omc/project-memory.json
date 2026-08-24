@@ -8,12 +8,6 @@
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
     {
-      "timestamp": 1787272359472,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "iac-module-library의 scripts/validate-doc-conventions.py(docs/06-conventions.md 「8」 규칙 6 강제)는 \"§\" 문자 자체를 코드펜스 밖 어디서든 위반으로 잡는다(2026-08-21 실측: 03-hub-lifecycle.md 작성 중 자기 문서 안의 자기 절 참조 \"§10\"·\"§13\" 5곳에서 전부 걸림) — 다른 문서를 향한 절 번호 인용뿐 아니라 같은 문서 안의 자기 참조에도 예외가 없다. 스크립트 자체 주석(6~7행)에 \"'§' 등장 자체를 위반으로 본다\"고 명시돼 있다. 대체 표기는 이 저장소 기존 문서들의 관례 그대로 \"N절\"(예: \"10절 참조\") 또는 「N. 제목」 — 둘 다 정규식에 안 걸린다. 400줄 제한(규칙 4)도 같은 스크립트가 검사하며, 문서 초안 작성 시 여유를 두지 않으면(이번에 411→399줄로 12줄 압축 필요) 마지막에 문장을 계속 다듬어야 하니 애초에 목표를 380줄 안팎으로 잡는 게 낫다."
-    },
-    {
       "timestamp": 1787272368204,
       "source": "manual",
       "category": "gotcha",
@@ -126,6 +120,12 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-24 (이어서) — iac-module-library에서 hub/spoke-lifecycle·runbooks·운영 스크립트 2개를 이 repo로 이관 완료(commit 1c1a0e3, push 완료). 배경: iac-module-library가 docs/·modules/·examples/·scripts/ 전면 재구성 계획(v19, Architect APPROVE, Critic 최종검증만 대기)을 \"실행 직전\" 상태로 갖고 있었고, 그 계획의 Decision E·G(\"패턴별 배포·운영 절차는 모듈 카탈로그 repo가 아니라 그 패턴의 레퍼런스 배포 repo가 소유한다\")를 이 repo 쪽에서 먼저 이행. 사용자가 \"지금 바로 시작\"을 명시적으로 선택(모듈 repo가 아직 git rm 안 했지만 내용은 동일하므로 무관하다고 판단).\n\n**이관 내용**: docs/03-hub-lifecycle.md→docs/hub-lifecycle.md(399줄), docs/04-spoke-lifecycle.md→docs/spoke-lifecycle.md(280줄), docs/07-runbooks.md→docs/runbooks.md(384줄), scripts/argocd-seed.sh, scripts/teardown-verify.sh, scripts/README.md(vendoring 관계·private key SSM 전달 절차 등 282줄 전체 이관·재작성). repo명 전수 치환(iac-reference-infra→eks-reference-infra, iac-platform-gitops→eks-platform-gitops), 이관 문서 간 상호링크 정정, 두 스크립트 헤더의 죽은 링크(존재한 적 없거나 이미 사라진 옛 파일명 03-new-project.md·04-teardown.md) 정정, 모듈 repo 전용 문서(02-choose-your-path.md·05-modules.md·08-decisions.md) 참조를 그 repo의 재구성 후 새 경로(docs/architectures/eks-gitops-hub-spoke/choose-your-path.md·docs/module-index.md·docs/decisions.md)로 선제 갱신 — ⚠️ 모듈 repo가 아직 이 재구성을 실행하지 않았으므로 이 링크들은 그 repo의 PR이 머지될 때까지 일시적으로 깨져 있음(알려진, 수용된 타이밍 갭).\n\n**리서치 근거로 채택한 구조 원칙**: Diátaxis 프레임워크(Tutorials/How-to/Reference/Explanation — deployment-facts.md는 Reference, 이관 3문서는 How-to)와 Gruntwork \"infrastructure-live\" 컨벤션(이 repo의 live/ 네이밍이 이미 이 표준과 일치함을 재확인). docs/를 하위 디렉토리로 더 쪼개지 않고 평평하게 유지하기로 결정(패턴이 1개뿐이라 다중성 근거 없음 — 두 번째 패턴이 생기면 그때 재검토).\n\n**stop-slop(em-dash 금지 등 §9 문체 규칙) 전면 채택**: 사용자 승인. scripts/validate-doc-conventions.py에 em-dash 검사 추가하되, 채택 시점에 이 repo 전체 문서 22개(거의 전부)가 이미 em-dash를 구조적 장치로 광범위하게 쓰고 있음을 실측 확인(모듈 repo가 493건 위반을 겪은 것과 동일 클래스 문제) — LEGACY_EM_DASH_ALLOWLIST에 그 22개 파일 전부 등재해 grandfather. 신규 파일·목록 밖 파일에서만 강제. 기존 위반의 전면 정리는 별도 후속 작업(미착수).\n\nCLAUDE.md·AGENTS.md(루트+docs/)·README.md의 \"설계는 이 repo에 없다\" 원칙을 세분화 — 소비 규약(네이밍·backend·OIDC 등) SSOT는 여전히 모듈 repo, hub-spoke 패턴의 세우기·걷어내기·운영 절차 SSOT는 이제 이 repo. 문서 규약 검사(python3 scripts/validate-doc-conventions.py) 전체 23개 파일 통과 확인 완료.\n\n**다음 세션 후속 작업**:\n1. iac-module-library의 재구성 계획이 실제 실행(git mv/rm)되면, 방금 선제 갱신한 모듈 repo 경로 참조 3곳(hub-lifecycle.md 2곳, spoke-lifecycle.md 1곳, scripts/README.md 3곳)이 실제로 유효해지는지 재확인.\n2. eks-platform-gitops(별도 repo, ~/born2k/ai/iac-platform-gitops)의 bootstrap/argocd-seed.sh 벤더링 배너(\"SSOT: skax-ca/iac-module-library\")를 \"SSOT: skax-ca/eks-reference-infra\"로 갱신 필요 — 이번 세션에서 다루지 않음(repo 경계 원칙상 그 repo 자신의 세션에서 처리).\n3. hub 재배포(live/hub/tgw→networking→eks) 착수 시 이번에 이관된 docs/hub-lifecycle.md 4절부터 실제로 따라가며 문서 자체의 정확성도 함께 검증할 것 — 아직 실행으로 검증된 적 없는 새 위치의 문서다.\n4. em-dash 기존 위반 22개 파일의 전면 정리(원하면)."
+    },
+    {
+      "timestamp": 1787558386319,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-24 — CLAUDE.md·README.md·AGENTS.md·docs/deployment-facts.md를 전부 삭제한 상태로 세션 종료(git에는 남아 복구 가능, 커밋 예정). 다음 세션 착수 후보: (1) CLAUDE.md·README.md 재정의 — 사용자가 \"다시 정의할 것\"이라고 명시, 아직 미착수. (2) AGENTS.md류는 필요해지면(사용자 표현: \"모든 작업을 완료하고\") deepinit으로 재생성 — 지금 당장 만들 필요 없음. (3) module repo(iac-module-library)의 em-dash 정리는 사용자가 이 세션과 별도로 직접 진행하기로 함 — 이 repo 세션에서 추가로 손대지 않는다. (4) 남긴 3개 SSOT 문서(docs/hub-lifecycle.md·spoke-lifecycle.md·runbooks.md)는 stop-slop 8개 규칙 전체 검토 + em-dash 정리까지 이번 세션에 완료, 검증 스크립트(scripts/validate-doc-conventions.py) 통과 확인됨 — 재작업 불필요."
     }
   ],
   "userDirectives": [],

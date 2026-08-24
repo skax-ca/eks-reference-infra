@@ -1,9 +1,12 @@
 # Notepad — iac-reference-infra
 
 ## Priority Context
-eks-reference-infra(2026-08-24 rename, 구 iac-reference-infra) — iac-module-library 모듈을 git tag로 소싱하는 배포 루트이자 hub-spoke EKS GitOps 패턴의 레퍼런스. 소비 규약 SSOT는 iac-module-library(재구성 진행중 — docs/design/50 폐지, docs/conventions.md 등으로 개편). ⛑ hub-spoke 세우기·걷어내기·운영 절차 SSOT는 이제 이 repo: docs/hub-lifecycle.md·spoke-lifecycle.md·runbooks.md(2026-08-24 이관). backend는 부분설정: 버킷명·계정ID·Role ARN 전부 git에 없음. 최신 형상은 main.tf·docs/deployment-facts.md 참조.
+eks-reference-infra — hub-spoke EKS GitOps 패턴 레퍼런스이자 iac-module-library 모듈 소비 배포 루트. 2026-08-24: CLAUDE.md·README.md류(9개)·AGENTS.md류(13개)·docs/deployment-facts.md 전부 삭제(현행화 부담, 재정의 예정, git 이력엔 남음). 남은 SSOT 문서는 docs/hub-lifecycle.md·spoke-lifecycle.md·runbooks.md(stop-slop 8규칙+em-dash 정리 완료). 문체 규칙(§9)은 module repo docs/06-conventions.md가 SSOT. backend는 부분설정: 버킷명·계정ID·Role ARN 전부 git에 없음.
 
 ## Working Memory
+### 2026-08-24 07:59
+2026-08-24 — CLAUDE.md·README.md(9개)·AGENTS.md(13개)·docs/deployment-facts.md 삭제(사용자 지시, "현행화하기만 어렵다"는 이유 — 필요시 재정의/deepinit으로 재생성 예정). module repo(iac-module-library) docs/06-conventions.md에 §9 문체 규칙을 신규 작성해 SSOT 실체를 채움(이전엔 이 repo CLAUDE.md가 「9. 문체 규칙」을 참조만 하고 실체가 없던 drift). em-dash 규칙: grandfather 폐지, 즉시 전면 정리로 전환. 남긴 3개 SSOT 문서(hub-lifecycle·spoke-lifecycle·runbooks)는 stop-slop 8개 규칙 전체로 재검토 완료(실질 위반은 em-dash뿐, 나머지는 이미 충족) — 검증 스크립트 통과. em-dash 일괄정리용 서브에이전트 6개를 병렬로 띄웠으나 전부 계정 단위 세션 한도(리셋 6:50pm KST)에 걸려 실패, 부분 진행분만 남아 직접 이어서 완료했음(subagent 위임은 실패 시 진행 상황이 uncommitted 상태로만 남고 알림도 사후에 옴 — 대량 문서 편집엔 신뢰도 낮음, 기록할 가치). module repo 쪽 남은 em-dash 정리는 사용자가 별도 세션에서 진행하기로 함(이 세션 스코프 아님).
+
 
 ## MANUAL
 

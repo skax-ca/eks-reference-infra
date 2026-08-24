@@ -36,7 +36,7 @@ aws --profile <profile> --region <region> ec2 describe-instances \
 
 ---
 
-## 2. ArgoCD 웹 UI 접속 — 2홉
+## 2. ArgoCD 웹 UI 접속: 2홉
 
 ArgoCD `Service`는 `ClusterIP`다. 노출을 만들지 않고 기존 인증 채널 위에 스트림만 얹는다.
 
@@ -49,17 +49,17 @@ setsid nohup kubectl -n argocd port-forward svc/argocd-server 18080:443 \
 # 2홉: 로컬에서 SSM 포트 포워딩
 aws --profile <profile> --region <region> ssm start-session \
   --target <instance-id> --document-name AWS-StartPortForwardingSession \
-  --parameters '{"portNumber":["18080"],"localPortNumber":["18080"]}'
+  --parameters '{"portNumber":["8080"],"localPortNumber":["8080"]}'
 ```
 
-브라우저에서 **https://localhost:18080**. 자체 서명 인증서 경고는 통과한다.
+브라우저에서 **https://localhost:8080**. 자체 서명 인증서 경고는 통과한다.
 
 | 증상 | 원인 | 대응 |
 |------|------|------|
 | 갑자기 끊긴다 | SSM 세션 **유휴 타임아웃**(기본 20분) | 2홉만 다시 실행한다. 1홉은 살아 있다 |
 | 재부팅·교체 후 안 된다 | 1홉이 사라졌다 | 1홉부터 다시 |
 
-두 홉이 필요한 이유가 서로 다르다. 안쪽은 **`ClusterIP`가 가상 IP**라서 —
+두 홉이 필요한 이유가 서로 다르다. 안쪽은 **`ClusterIP`가 가상 IP**라서,
 실재하는 주소가 아니라 각 **노드**의 kube-proxy가 DNAT할 뿐이고, 노드가 아닌 workbench엔 그 규칙이 없다.
 바깥쪽은 **workbench에 인바운드가 0**이라서다.
 
@@ -84,7 +84,7 @@ kubectl -n argocd delete secret argocd-initial-admin-secret
 |------|------|
 | `--core`는 쓸 수 없다 | argocd-server를 우회해 **세션 토큰이 없다**. 신원이 필요한 작업은 `--port-forward` |
 | `--insecure`의 뜻 | **클라이언트** 인증서 검증 생략이다. 서버 TLS를 끄는 것이 아니다 |
-| `broken pipe` 로그 | 포워더가 CLI 안에서 돌아 stderr로 섞인다. **실패가 아니다** — `2>`로 분리한다 |
+| `broken pipe` 로그 | 포워더가 CLI 안에서 돌아 stderr로 섞인다. **실패가 아니다**(`2>`로 분리한다) |
 | 새 비밀번호 | `^.{8,32}$`를 만족해야 한다 |
 
 교체 확인:
@@ -119,10 +119,10 @@ kubectl -n argocd get secret argocd-initial-admin-secret     # NotFound 여야 �
 **한 커밋에 몰지 않는다.** 순서가 의존성 그래프에 맡겨지고, 모듈이 심어 둔 순서
 (vpc-cni의 `before_compute`)는 **최초 생성**에서 옳도록 설계된 것이지 업그레이드 기준이 아니다.
 
-승인 관점에서도 나뉘는 편이 낫다 — 컨트롤플레인 업그레이드는 되돌리기 어렵고(7일 rollback 창),
+승인 관점에서도 나뉘는 편이 낫다: 컨트롤플레인 업그레이드는 되돌리기 어렵고(7일 rollback 창),
 노드 교체는 워크로드 중단을 동반한다. 한 plan에 섞이면 **승인자가 무엇을 승인하는지 분간할 수 없다.**
 
-### 값을 조회하는 법 — 추정하지 않는다
+### 값을 조회하는 법: 추정하지 않는다
 
 ```bash
 # 현재 버전
@@ -178,7 +178,7 @@ gh workflow run deploy-eks.yml --ref main \
 ```
 
 교체 후 kubeconfig · 도구 · 프로파일은 `user_data`가 다시 만든다.
-**다시 서지 않는 것은 port-forward뿐이다** — 위 2절을 다시 실행한다.
+**다시 서지 않는 것은 port-forward뿐이다.** 위 2절을 다시 실행한다.
 
 `instance_type`을 기본값보다 작게 잡지 않는다. 부팅 중 `dnf`가 OOM으로 죽어
 도구가 설치되지 않은 채 인스턴스만 정상으로 보인다.
@@ -222,17 +222,17 @@ kubectl get nodes -l karpenter.sh/nodepool
 
 ---
 
-## 9. Karpenter + Cluster Autoscaler 동시 운영 — taint 전략
+## 9. Karpenter + Cluster Autoscaler 동시 운영: taint 전략
 
 **적용 대상**: app 워크로드는 전부 Karpenter로, 필수 addon·OSS(redis·postgresql·mongodb 등
 상태 저장 워크로드)는 관리형 노드그룹 + Cluster Autoscaler로 분리하고 싶은 경우.
 
-### 원리 — taint와 nodeSelector는 하는 일이 다르다
+### 원리: taint와 nodeSelector는 하는 일이 다르다
 
 - **taint**(관리형 노드그룹에 부여) = 허용 안 한 파드를 **밀어낸다**
 - **nodeSelector/affinity**(addon·OSS 쪽에 부여) = 이 라벨이 있는 곳으로만 **끌어당긴다**
 
-toleration만 주고 nodeSelector를 빼먹으면 설계가 깨진다 — OSS 파드가 taint를 참더라도
+toleration만 주고 nodeSelector를 빼먹으면 설계가 깨진다: OSS 파드가 taint를 참더라도
 Karpenter 쪽 노드엔 그 taint가 없으니, 여유가 없으면 Karpenter가 그 파드를 위해 새 노드를
 띄워버릴 수 있다. **taint(밀어내기)와 nodeSelector(끌어당기기) 둘 다 있어야** 워크로드가
 결정적으로 한쪽에만 간다.
@@ -242,20 +242,20 @@ Karpenter 쪽 노드엔 그 taint가 없으니, 여유가 없으면 Karpenter가
 | 대상 | taint | nodeSelector/affinity |
 |---|---|---|
 | 시스템 관리형 노드그룹(`managed_node_groups`) | `workload-class=system:NO_SCHEDULE` 부여 | 라벨 `workload-class=system` 부여 |
-| coredns · metrics-server · **ebs-csi controller**(Deployment) · **efs-csi controller**(Deployment) | — | `nodeSelector: workload-class=system` + toleration 명시 필요 |
-| vpc-cni · eks-pod-identity-agent (DaemonSet) | — | 명시 불필요 — 차트 기본값이 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다(실측: `aws/eks-charts`·`aws/eks-pod-identity-agent` 저장소의 `values.yaml`) |
-| ebs-csi node (DaemonSet) | — | `node.tolerateAllTaints = true` 명시 필요 — 기본 toleration은 `effect: NoExecute`만 커버해 우리가 부여하는 `NoSchedule`을 통과하지 못한다 |
-| **efs-csi node**(DaemonSet) | — | 명시 불필요 — ebs-csi node와 달리 차트 기본값이 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다(실측: `kubernetes-sigs/aws-efs-csi-driver` `charts/aws-efs-csi-driver/values.yaml`) — vpc-cni·eks-pod-identity-agent와 같은 부류 |
-| kube-proxy | — | 손댈 필요 없음 — 기본 매니페스트가 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다 |
-| Cluster Autoscaler·Karpenter 컨트롤러 자체(helm) | — | `nodeSelector: workload-class=system` + toleration |
-| redis·postgresql·mongodb(helm) | — | `nodeSelector: workload-class=system` + toleration |
-| app 워크로드 | 아무것도 안 함 | 아무것도 안 함 — 기본값이 곧 Karpenter 영역 |
+| coredns · metrics-server · **ebs-csi controller**(Deployment) · **efs-csi controller**(Deployment) | 없음 | `nodeSelector: workload-class=system` + toleration 명시 필요 |
+| vpc-cni · eks-pod-identity-agent (DaemonSet) | 없음 | 명시 불필요: 차트 기본값이 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다(실측: `aws/eks-charts`·`aws/eks-pod-identity-agent` 저장소의 `values.yaml`) |
+| ebs-csi node (DaemonSet) | 없음 | `node.tolerateAllTaints = true` 명시 필요: 기본 toleration은 `effect: NoExecute`만 커버해 우리가 부여하는 `NoSchedule`을 통과하지 못한다 |
+| **efs-csi node**(DaemonSet) | 없음 | 명시 불필요: ebs-csi node와 달리 차트 기본값이 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다(실측: `kubernetes-sigs/aws-efs-csi-driver` `charts/aws-efs-csi-driver/values.yaml`), vpc-cni·eks-pod-identity-agent와 같은 부류 |
+| kube-proxy | 없음 | 손댈 필요 없음: 기본 매니페스트가 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다 |
+| Cluster Autoscaler·Karpenter 컨트롤러 자체(helm) | 없음 | `nodeSelector: workload-class=system` + toleration |
+| redis·postgresql·mongodb(helm) | 없음 | `nodeSelector: workload-class=system` + toleration |
+| app 워크로드 | 아무것도 안 함 | 아무것도 안 함(기본값이 곧 Karpenter 영역) |
 | Karpenter `NodePool` | 의도적으로 taint 안 둠 | 없음 |
 
 ⚠️ **DaemonSet에 `nodeSelector`를 걸면 안 된다.** vpc-cni·eks-pod-identity-agent·ebs-csi node·
 efs-csi node에 `nodeSelector: workload-class=system`을 주면 Karpenter 노드에서 네트워킹·
 Pod Identity·볼륨 마운트가 통째로 죽는다. vpc-cni·eks-pod-identity-agent·efs-csi node는
-위 표대로 애초에 손댈 필요가 없고, ebs-csi node만 toleration을 넓힌다 — 넷 다 nodeSelector는
+위 표대로 애초에 손댈 필요가 없고, ebs-csi node만 toleration을 넓힌다: 넷 다 nodeSelector는
 예외 없이 금지다.
 
 ⚠️ **Karpenter NodePool에 별도 taint를 두지 않는 것도 의도적 결정이다.** 위 분리로 이미 모든
@@ -264,17 +264,17 @@ app 쪽=기본값), "어느 컨트롤러가 반응할지 모호한 파드"가 �
 taint를 추가하면 모든 app Deployment가 toleration을 알아야 하는 마찰만 생긴다.
 
 🔴 **`aws-ebs-csi-driver`는 `node`(DaemonSet)와 `controller`(Deployment, 2 replica) 둘로
-나뉜다 — `configuration_values` 스키마도 `node.*`·`controller.*`로 완전히 분리돼 있다.**
+나뉜다: `configuration_values` 스키마도 `node.*`·`controller.*`로 완전히 분리돼 있다.**
 `node`만 고치고 `controller`를 빠뜨리면, taint 적용 순간 아무 제약도 없던 `controller` pod가
-system 노드에서 밀려나 "app 워크로드"와 같은 기본값 버킷(Karpenter 영역)으로 떨어진다 —
+system 노드에서 밀려나 "app 워크로드"와 같은 기본값 버킷(Karpenter 영역)으로 떨어진다.
 Karpenter가 이 pod들을 위해 **불필요한 새 노드를 만든다**(실측: `eks-reference-infra` dev
-클러스터에서 재현). `controller`는 coredns·metrics-server와 같은 취급이 맞다 — 컨트롤플레인
+클러스터에서 재현). `controller`는 coredns·metrics-server와 같은 취급이 맞다: 컨트롤플레인
 컴포넌트는 DaemonSet이 아닌 이상 반드시 `nodeSelector`까지 명시해야 한다.
 
-🔑 **`aws-efs-csi-driver`도 구조가 완전히 같다** — `node`(DaemonSet)·`controller`(Deployment,
+🔑 **`aws-efs-csi-driver`도 구조가 완전히 같다**: `node`(DaemonSet)·`controller`(Deployment,
 2 replica)로 분리돼 있고, 스키마도 `node.*`·`controller.*`로 나뉜다(`charts/aws-efs-csi-driver/
 values.yaml` 실측). 다른 점은 `node`의 기본 toleration이 이미 `[{operator: Exists}]`라 손댈
-필요가 없다는 것뿐 — `controller`는 EBS와 동일하게 `nodeSelector`+`tolerations` 없이는 taint
+필요가 없다는 것뿐: `controller`는 EBS와 동일하게 `nodeSelector`+`tolerations` 없이는 taint
 적용 순간 Karpenter 영역으로 떨어진다.
 
 ### addon toleration 주입 (`cluster_addons[name].configuration`)
@@ -282,7 +282,7 @@ values.yaml` 실측). 다른 점은 `node`의 기본 toleration이 이미 `[{ope
 각 addon이 `configuration_values`로 tolerations/nodeSelector를 지원하는지 EKS API로 직접
 확인했다(`aws eks describe-addon-configuration --addon-name <name> --addon-version <ver>`).
 **실제로 손대야 하는 것은 ebs-csi(node)·ebs-csi(controller)·efs-csi(controller)·coredns·
-metrics-server 다섯뿐이다** — vpc-cni·eks-pod-identity-agent·efs-csi(node)는 위 표대로
+metrics-server 다섯뿐이다**: vpc-cni·eks-pod-identity-agent·efs-csi(node)는 위 표대로
 기본값이 이미 요구를 만족한다.
 
 ```hcl
@@ -322,26 +322,26 @@ cluster_addons = {
 
 ⚠️ **불리언 필드가 있으면 그것을 쓰고, `tolerations` 배열은 되도록 직접 교체하지 않는다.**
 EKS는 `configuration_values`의 배열 필드를 addon 차트 기본값과 **병합하지 않고 통째로
-교체**한다 — vpc-cni·eks-pod-identity-agent에 좁은 `tolerations`를 직접 쓰면 기본값
+교체**한다: vpc-cni·eks-pod-identity-agent에 좁은 `tolerations`를 직접 쓰면 기본값
 (`operator: Exists`, 모든 taint 통과)보다 **좁아지는 후퇴**가 된다. `ebs-csi node`가
 `node.tolerateAllTaints`라는 불리언으로 같은 효과를 내는 것과 대비된다. `ebs-csi controller`·
 `efs-csi controller`는 그런 불리언이 없어(스키마 확인) coredns·metrics-server와 같은 방식으로
 갈 수밖에 없다. coredns·metrics-server·`ebs-csi controller`·`efs-csi controller`는
-`tolerations`를 교체해도 무해하다 — `nodeSelector`가 배치를 system 노드로 좁히므로, 그 노드에
+`tolerations`를 교체해도 무해하다: `nodeSelector`가 배치를 system 노드로 좁히므로, 그 노드에
 있는 taint는 `workload-class` 하나뿐이라 잃을 다른 toleration이 없다.
 
 ⚠️ **`vpc-cni`는 `enable_custom_networking = true` 환경에서 이 절 자체가 무의미하다.** 모듈
 (`modules/eks-cluster/addons.tf`의 vpc-cni 재주입 로직)이 커스텀 네트워킹을 켜면 vpc-cni의
-`configuration_values`를 env·eniConfig로 **통째로 재주입해 소비자 입력을 덮어쓴다** — 여기에
+`configuration_values`를 env·eniConfig로 **통째로 재주입해 소비자 입력을 덮어쓴다**. 여기에
 tolerations를 적어도 반영되지 않는다. 다행히 위 표대로 손댈 필요도 없다.
 
 `kube-proxy`는 `configuration_values` 스키마에 `tolerations` 필드 자체가 없다
-(`aws/containers-roadmap#2604`가 이 부재를 지적하는 미해결 기능 요청) — 이미 하드코딩된
+(`aws/containers-roadmap#2604`가 이 부재를 지적하는 미해결 기능 요청), 이미 하드코딩된
 `operator: Exists`로 모든 taint를 통과하기 때문에 손댈 것이 없다.
 
 ### 테스트 절차 (workbench에서)
 
-workbench 접속 자체는 「1. 클러스터에 접근하기」 그대로다 — SSM 세션 시작 후 `kubectl`이 바로 된다.
+workbench 접속 자체는 「1. 클러스터에 접근하기」 그대로다: SSM 세션 시작 후 `kubectl`이 바로 된다.
 아래는 접속 이후, taint/toleration이 실제로 반영됐는지 보는 단계다.
 
 ```bash
