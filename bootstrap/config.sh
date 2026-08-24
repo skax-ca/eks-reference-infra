@@ -96,7 +96,7 @@ readonly OIDC_URL="token.actions.githubusercontent.com"
 readonly OIDC_AUD="sts.amazonaws.com"
 readonly GH_ORG_ID="310520211"
 readonly GH_REPO_ID="1316830050"
-readonly SUB_BASE="repo:skax-ca@${GH_ORG_ID}/iac-reference-infra@${GH_REPO_ID}"
+readonly SUB_BASE="repo:skax-ca@${GH_ORG_ID}/eks-reference-infra@${GH_REPO_ID}"
 
 # ⛔ 와일드카드로 뭉치지 않는다 — org 내 다른 repo 가 assume 할 수 있게 된다.
 # 두 패턴만 쓴다(pull_request 없음) — 이 repo 워크플로는 애초에 PR 트리거가 없다(CLAUDE.md 「4」).

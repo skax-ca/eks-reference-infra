@@ -38,7 +38,7 @@ variable "region_code" {
 variable "repository" {
   description = "거버넌스 태그 Repository 값. 리소스에서 이 repo 로 역추적하는 경로다."
   type        = string
-  default     = "skax-ca/iac-reference-infra"
+  default     = "skax-ca/eks-reference-infra"
 }
 
 variable "execution_role_arn" {

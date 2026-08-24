@@ -1,6 +1,6 @@
 ---
 name: notepad-sync
-description: 이 프로젝트(iac-reference-infra)의 .omc/notepad.md·project-memory.json 관리 절차. 전역 session-start/session-end 스킬이 3단계(세션 태스크 확인/메모리 갱신)에서 이 스킬이 있으면 호출하도록 위임한다. OMC가 이 머신에서 비활성 상태(~/.claude/.omc-enabled 없음)면 조용히 건너뛴다.
+description: 이 프로젝트(eks-reference-infra)의 .omc/notepad.md·project-memory.json 관리 절차. 전역 session-start/session-end 스킬이 3단계(세션 태스크 확인/메모리 갱신)에서 이 스킬이 있으면 호출하도록 위임한다. OMC가 이 머신에서 비활성 상태(~/.claude/.omc-enabled 없음)면 조용히 건너뛴다.
 ---
 
 # Notepad Sync (project-scoped)
@@ -27,7 +27,7 @@ OMC 소스(`dist/lib/worktree-paths.js` `validateWorkingDirectory`) 실측 확�
 (의도된 worktree 격리 — 버그 아님). 그래서 **iac-module-library를 프로젝트 루트로 연 세션
 안에서는 이 repo를 대상으로 이 툴을 쓸 수 없다** — 다른 프로젝트를 세션 중간에 대상으로
 지정해도 조용히 iac-module-library에 쓴다(2026-08-14/19 두 차례 실제 오사고 발생, 둘 다
-`git checkout`으로 복구). **이 repo 작업은 iac-reference-infra를 프로젝트 루트로 하는 별도
+`git checkout`으로 복구). **이 repo 작업은 eks-reference-infra를 프로젝트 루트로 하는 별도
 Claude Code 세션에서 한다** — 그 세션 안에서는 이 절 전체가 iac-module-library와 완전히
 동일하게 동작한다.
 

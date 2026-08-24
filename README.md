@@ -1,4 +1,4 @@
-# iac-reference-infra
+# eks-reference-infra
 
 **읽는 사람**: 이 배포 루트에서 작업하거나, 고객사 repo로 복사할 형태를 확인하는 사람.
 
@@ -85,7 +85,7 @@ bootstrap/verify.sh        # 부트스트랩 drift 완화책
 | 부트스트랩 | state 버킷·OIDC provider·2단 IAM Role | ✅ |
 | `live/dev/networking` | VPC(`vpc-v0.3.0`) | ✅ apply 완료 |
 | `live/dev/eks` | EKS(`eks-cluster-v0.5.0`) + workbench(`workbench-v0.6.0`) | ✅ apply 완료 |
-| 플랫폼 GitOps | `skax-ca/iac-platform-gitops` — self-managed ArgoCD + addon | ✅ seed·흡수 완료 |
+| 플랫폼 GitOps | `skax-ca/eks-platform-gitops` — self-managed ArgoCD + addon | ✅ seed·흡수 완료 |
 
 ⛔ **완료 조건 1건 미이행** — ArgoCD 초기 비밀번호 교체 + `argocd-initial-admin-secret` 삭제
-(`skax-ca/iac-platform-gitops`의 README 참조). 선택이 아니라 완료 조건이다.
+(`skax-ca/eks-platform-gitops`의 README 참조). 선택이 아니라 완료 조건이다.

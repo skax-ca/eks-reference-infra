@@ -5,7 +5,7 @@ description: hub ArgoCD 콘솔(https://localhost:8080)에 접속하기 위한 2�
 
 # ArgoCD Tunnel Connect
 
-`iac-reference-infra`의 hub workbench(private EKS 클러스터의 유일한 접근 지점)를 거쳐
+`eks-reference-infra`의 hub workbench(private EKS 클러스터의 유일한 접근 지점)를 거쳐
 hub ArgoCD 콘솔을 로컬 브라우저에서 열 수 있게 하는 2단 터널을 연다.
 
 ```

@@ -88,8 +88,8 @@ policy가 대신 그 자리를 맡는다 — 아래 「5」).
 "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
 "StringLike": {
   "token.actions.githubusercontent.com:sub": [
-    "repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main",
-    "repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev"
+    "repo:skax-ca@310520211/eks-reference-infra@1316830050:ref:refs/heads/main",
+    "repo:skax-ca@310520211/eks-reference-infra@1316830050:environment:dev"
   ]
 }
 ```

@@ -208,7 +208,7 @@ module "workbench" {
   # helm 은 GitOps(pull) 전제와 무관하게 **필수**다 — self-managed ArgoCD 를 workbench 에서
   #    `helm install` 로 seed 하는 것이 부트스트랩 경로이기 때문이다(scripts/argocd-seed.sh 참조,
   #    모듈 repo 소유). helm 이 없으면 손으로 설치해야 하고, 그 상태는 인스턴스와 함께 사라진다.
-  # 핀의 SSOT 는 모듈 repo(`iac-platform-gitops`의 부트스트랩 문서)다. ⛔ 최신은 v4 계열이지만
+  # 핀의 SSOT 는 모듈 repo(`eks-platform-gitops`의 부트스트랩 문서)다. ⛔ 최신은 v4 계열이지만
   #    **일부러 v3** 다 — chart argo-cd 10.3.0 은 helm 3 시대 산물이고, 최초 부트스트랩에
   #    메이저 CLI 변경까지 겹치면 실패 시 원인이 둘로 갈린다(진단 가능성도 비용 항목이다).
   helm_version = "v3.21.3"
@@ -219,7 +219,7 @@ module "workbench" {
   #  ① `argocd admin cluster stats -n argocd` 로 cluster Secret 이 내장 in-cluster 를
   #     **대체**함을 확인한다(중복 아님) — kubectl 로는 절반만 보이는 항목이다.
   #     `argocd admin` 계열은 API 서버가 아니라 **k8s 를 직접 읽어 port-forward 도 login 도 없다.**
-  #  ② `argocd account update-password` — seed 완료 조건이다(`iac-platform-gitops`의 README 참조).
+  #  ② `argocd account update-password` — seed 완료 조건이다(`eks-platform-gitops`의 README 참조).
   #     🔴 `argocd-server` 는 **ClusterIP** 라 workbench 에서는 **CLI 가 있어도 port-forward 가
   #     필요**하다. CLI 가 없애는 것은 **브라우저 UI 의존과 운영자 노트북까지의 터널**이다 —
   #     port-forward 가 인스턴스 로컬 루프백으로 축소된다.
@@ -533,7 +533,7 @@ module "eks" {
   enable_karpenter = true
 
   # system 관리형 노드그룹 전용 오토스케일러 IAM 전제조건(eks-cluster-v0.6.0 신설).
-  # helm 설치는 GitOps(iac-platform-gitops) 카탈로그 opt-in 소관 — 이 값은 그 전제조건만
+  # helm 설치는 GitOps(eks-platform-gitops) 카탈로그 opt-in 소관 — 이 값은 그 전제조건만
   # 만든다(Pod Identity 연결 + ASG node-template/* 태그, managed_node_groups.system의
   # labels·taints를 그대로 미러링). Karpenter가 담당하는 app 워크로드와는 무관하다 —
   # 켜지 않아도 Karpenter·taint/toleration 배선은 전혀 영향받지 않는다(모듈 코드 확인:

@@ -1,4 +1,4 @@
-# 이 루트의 출력은 **GitOps 저장소(iac-platform-gitops)가 소비하는 앵커**다.
+# 이 루트의 출력은 **GitOps 저장소(eks-platform-gitops)가 소비하는 앵커**다.
 # EKS 는 IaC 가 클러스터·IAM 전제까지만 만들고, helm/NodePool/애플리케이션은 GitOps(pull)가 맡는다.
 # 그 경계를 넘겨주는 값이 아래다 — cluster 등록 정보 · Karpenter/컨트롤러 IAM ARN.
 #

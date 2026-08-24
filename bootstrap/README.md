@@ -102,15 +102,15 @@ hub `sub` 2패턴 — `pull_request`가 없다: hub workflow는 애초에 PR 트
 「4」) — 쓰이지 않는 패턴을 만들어 두지 않는다:
 
 ```
-repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main
-repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:hub
+repo:skax-ca@310520211/eks-reference-infra@1316830050:ref:refs/heads/main
+repo:skax-ca@310520211/eks-reference-infra@1316830050:environment:hub
 ```
 
 spoke `sub` 2패턴 — `environment:` 값은 `SPOKE_ENV`다. `SPOKE_ENV=dev`일 때:
 
 ```
-repo:skax-ca@310520211/iac-reference-infra@1316830050:ref:refs/heads/main
-repo:skax-ca@310520211/iac-reference-infra@1316830050:environment:dev
+repo:skax-ca@310520211/eks-reference-infra@1316830050:ref:refs/heads/main
+repo:skax-ca@310520211/eks-reference-infra@1316830050:environment:dev
 ```
 
 > `ref:refs/heads/main` 값은 hub·spoke가 **동일**하다 — 같은 repo·브랜치라 sub가 env가 아니라

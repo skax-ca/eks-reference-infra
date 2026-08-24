@@ -275,9 +275,9 @@ cat <<OUT
     region = "$REGION"       use_lockfile = true
 
   변수 등록:
-    gh variable set HUB_TF_STATE_BUCKET    -R skax-ca/iac-reference-infra -b '$HUB_BUCKET'
-    gh variable set HUB_AWS_ENTRY_ROLE_ARN -R skax-ca/iac-reference-infra -b '$(role_arn "$HUB_ENTRY_ROLE")'
-    gh variable set HUB_AWS_EXEC_ROLE_ARN  -R skax-ca/iac-reference-infra -b '$(role_arn "$HUB_EXEC_ROLE")'
+    gh variable set HUB_TF_STATE_BUCKET    -R skax-ca/eks-reference-infra -b '$HUB_BUCKET'
+    gh variable set HUB_AWS_ENTRY_ROLE_ARN -R skax-ca/eks-reference-infra -b '$(role_arn "$HUB_ENTRY_ROLE")'
+    gh variable set HUB_AWS_EXEC_ROLE_ARN  -R skax-ca/eks-reference-infra -b '$(role_arn "$HUB_EXEC_ROLE")'
 
   검증:  ./verify.sh
 OUT
@@ -302,9 +302,9 @@ cat <<OUT
     region = "$REGION"         use_lockfile = true
 
   변수 등록:
-    gh variable set DEV_TF_STATE_BUCKET    -R skax-ca/iac-reference-infra -b '$SPOKE_BUCKET'
-    gh variable set DEV_AWS_ENTRY_ROLE_ARN -R skax-ca/iac-reference-infra -b '$(role_arn "$SPOKE_ENTRY_ROLE")'
-    gh variable set DEV_AWS_EXEC_ROLE_ARN  -R skax-ca/iac-reference-infra -b '$(role_arn "$SPOKE_EXEC_ROLE")'
+    gh variable set DEV_TF_STATE_BUCKET    -R skax-ca/eks-reference-infra -b '$SPOKE_BUCKET'
+    gh variable set DEV_AWS_ENTRY_ROLE_ARN -R skax-ca/eks-reference-infra -b '$(role_arn "$SPOKE_ENTRY_ROLE")'
+    gh variable set DEV_AWS_EXEC_ROLE_ARN  -R skax-ca/eks-reference-infra -b '$(role_arn "$SPOKE_EXEC_ROLE")'
 OUT
 else
 cat <<OUT
