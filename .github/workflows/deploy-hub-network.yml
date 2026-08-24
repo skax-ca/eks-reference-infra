@@ -374,6 +374,32 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}
         run: tofu apply -no-color -lock-timeout=5m tfplan
 
+      # 2026-08-24 신설 — "apply 가 exit 0 이면 실제로 다 반영됐다"는 가정이 깨진 전례가
+      # 있다(aws_route 의 destroy 단계가 API 응답 지연으로 timeout 났는데, 재시도한 apply의
+      # plan 이 상태 기준으로 "0 added"라 판단해 실제로는 누락된 라우트가 조용히 남았다 —
+      # AWS 실물과 대조하기 전까진 몰랐다). apply 직후 읽기 전용 재-plan 으로 실제 수렴
+      # 여부를 종료 코드로 증명한다 — "두 번째 apply 가 No changes 인가"(CLAUDE.md 「2」)를
+      # 사람이 다음 run 을 기다렸다 확인하는 대신 **같은 run 안에서** 검증한다.
+      - name: apply 후 수렴 검증 (읽기 전용 재-plan)
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          TF_VAR_execution_role_arn: ${{ vars.HUB_AWS_EXEC_ROLE_ARN }}
+          TF_VAR_spoke_account_id: ${{ vars.DEV_ACCOUNT_ID }}
+        run: |
+          DESTROY=""
+          [ "${{ inputs.action }}" = "destroy" ] && DESTROY="-destroy"
+
+          set +e
+          tofu plan $DESTROY -no-color -lock-timeout=5m -detailed-exitcode -refresh=true
+          code=$?
+          set -e
+          if [ "$code" = 2 ]; then
+            echo "::error::apply 직후인데 재-plan 이 여전히 변경사항을 보고한다 — 일부 리소스가 반영되지 않았을 가능성이 높다(예: destroy 단계 타임아웃 후 create 가 누락됨). AWS 콘솔/CLI로 실물을 직접 대조할 것."
+            exit 1
+          elif [ "$code" != 0 ]; then
+            exit "$code"
+          fi
+
       - name: apply 결과 요약
         if: always()
         working-directory: ${{ env.TF_ROOT }}

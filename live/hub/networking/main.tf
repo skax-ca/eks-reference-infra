@@ -359,12 +359,36 @@ locals {
   }
 }
 
-# 허브 VPC 라우트테이블(node-uniq)에서 발견된 spoke 마다 라우트를 하나씩 얹는다.
-# ⚠️ route_table_ids_by_group["node-uniq"] 는 AZ 별 RT 리스트라 (RT × spoke) 곱집합을 만든다.
+# 허브 VPC 라우트테이블(node-uniq·vm-uniq — 둘 다 실제 hub→spoke 트래픽 발생원이다:
+# node 는 ArgoCD 파드가 SNAT 되어 나가는 소스, vm-uniq 는 workbench 자신의 소스)에서
+# 발견된 spoke 마다 라우트를 하나씩 얹는다.
+# ⚠️ route_table_ids_by_group[...] 는 AZ 별 RT 리스트라 (RT × spoke) 곱집합을 만든다.
+#
+# ⚠️ **key 는 attachment ID 가 아니라 spoke_account_id 로 고정한다**(2026-08-24 정정 —
+# 이전엔 keys(data.aws_ec2_transit_gateway_vpc_attachment.spoke) 를 그대로 key 에 섞어
+# 썼는데, attachment ID 는 spoke 를 destroy→재배포할 때마다 새로 발급되는 "원격 API가
+# 만드는 값"이다. Terraform 공식 문서(language/meta-arguments/for_each)가 정확히 이 패턴을
+# 피하라고 명시한다 — for_each 의 key 는 리소스의 실제 주소(type.name[key])가 되므로,
+# key 가 바뀌면 이 리소스 자체가 destroy+create 로 강제 교체된다. 이 route 의 실제
+# 인자(destination_cidr_block·transit_gateway_id)는 애초에 attachment ID 와 무관한데도
+# 그 불안정한 값을 key 에 섞은 탓에 spoke 재배포마다 불필요하게 파괴·재생성됐고, 그
+# destroy 단계가 AWS API 응답 지연(5분 delete 타임아웃, aws_route 문서 기본값)에 걸려
+# 실제로 apply 가 실패한 전례가 있다(2026-08-24 실측, live/hub/networking 재적용 중).
+# spoke_account_id 는 설정값이라 재배포해도 안 바뀐다 — 이 key 로 바꾸면 spoke 를 몇 번
+# 갈아엎어도 이 리소스는 그대로 유지되고(0 changes), 이 버그 클래스 자체가 사라진다.
+# attachment 존재 여부는 key 가 아니라 필터 조건으로만 쓴다(그 spoke 가 지금 실제로
+# 붙어있을 때만 route 를 만든다).
 locals {
   hub_rt_x_spoke = setproduct(
-    toset(module.vpc.route_table_ids_by_group["node-uniq"]),
-    keys(data.aws_ec2_transit_gateway_vpc_attachment.spoke)
+    toset(concat(
+      module.vpc.route_table_ids_by_group["node-uniq"],
+      module.vpc.route_table_ids_by_group["vm-uniq"],
+    )),
+    [for account_id, cidr in local.spoke_uniq_cidrs : account_id
+      if contains(
+        [for a in data.aws_ec2_transit_gateway_vpc_attachment.spoke : a.vpc_owner_id],
+        account_id,
+    )]
   )
 }
 
@@ -372,8 +396,14 @@ resource "aws_route" "vpc_to_spoke" {
   for_each = { for pair in local.hub_rt_x_spoke : "${pair[0]}-${pair[1]}" => pair }
 
   route_table_id         = each.value[0]
-  destination_cidr_block = local.spoke_uniq_cidrs[data.aws_ec2_transit_gateway_vpc_attachment.spoke[each.value[1]].vpc_owner_id]
+  destination_cidr_block = local.spoke_uniq_cidrs[each.value[1]]
   transit_gateway_id     = aws_ec2_transit_gateway.hub.id
+
+  # AWS 공식 문서(aws_route)의 delete 기본 타임아웃은 5m — 위 key 안정화로 이 리소스가
+  # replace 되는 경우는 이제 거의 없어야 하지만, 예외적으로 필요할 때를 대비한 안전망이다.
+  timeouts {
+    delete = "15m"
+  }
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.hub]
 }
