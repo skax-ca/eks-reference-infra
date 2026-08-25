@@ -316,39 +316,45 @@ locals {
 # 발견된 spoke 마다 라우트를 하나씩 얹는다.
 # ⚠️ route_table_ids_by_group[...] 는 AZ 별 RT 리스트라 (RT × spoke) 곱집합을 만든다.
 #
-# ⚠️ **key 는 attachment ID 가 아니라 spoke_account_id 로 고정한다** — 이전엔
-# keys(data.aws_ec2_transit_gateway_vpc_attachment.spoke) 를 그대로 key 에 섞어
-# 썼는데, attachment ID 는 spoke 를 destroy→재배포할 때마다 새로 발급되는 "원격 API가
-# 만드는 값"이다. Terraform 공식 문서(language/meta-arguments/for_each)가 정확히 이 패턴을
-# 피하라고 명시한다 — for_each 의 key 는 리소스의 실제 주소(type.name[key])가 되므로,
-# key 가 바뀌면 이 리소스 자체가 destroy+create 로 강제 교체된다. 이 route 의 실제
-# 인자(destination_cidr_block·transit_gateway_id)는 애초에 attachment ID 와 무관한데도
-# 그 불안정한 값을 key 에 섞은 탓에 spoke 재배포마다 불필요하게 파괴·재생성됐고, 그
-# destroy 단계가 AWS API 응답 지연(5분 delete 타임아웃, aws_route 문서 기본값)에 걸려
-# 실제로 apply 가 실패한 전례가 있다(live/hub/networking 재적용 중 재현됨).
-# spoke_account_id 는 설정값이라 재배포해도 안 바뀐다 — 이 key 로 바꾸면 spoke 를 몇 번
-# 갈아엎어도 이 리소스는 그대로 유지되고(0 changes), 이 버그 클래스 자체가 사라진다.
-# attachment 존재 여부는 key 가 아니라 필터 조건으로만 쓴다(그 spoke 가 지금 실제로
-# 붙어있을 때만 route 를 만든다).
+# ⚠️ **key 는 attachment ID 도, 라우트테이블 ID 도 아니라 그룹명+인덱스+spoke_account_id 로
+# 고정한다** — 이전엔 attachment ID 를 key 에 섞어 destroy→재배포마다 불필요한 교체를
+# 겪은 전례가 있어 spoke_account_id 로 옮겼는데(그 수정은 유지), 라우트테이블 ID 자체를
+# key 조합(`toset(concat(...))`)에 쓰는 것도 같은 문제의 다른 얼굴이다: hub VPC 를
+# 처음부터 새로 만드는 apply 에서는 그 ID 들이 plan 시점에 전부 unknown 이고,
+# `toset()`은 unknown 원소가 하나라도 있으면 중복 제거를 못 해 결과 집합 전체를
+# "known after apply" 로 만들어버린다 — 그게 setproduct·for_each key 까지 전염돼
+# `Invalid for_each argument` 로 이어진다(hub 완전 재배포 1회차에서 실물 재현).
+# 그룹명("node-uniq"·"vm-uniq")·인덱스(range 로 뽑은 정수)·spoke_account_id 는 전부
+# config 값만으로 plan 시점에 이미 확정되므로, 이 셋을 key 로 쓰고 실제 라우트테이블 ID는
+# 리소스 인자(route_table_id) 자리에서만 참조한다 — 인자 값은 unknown 이어도 된다,
+# key 만 known 이면 된다.
 locals {
-  hub_rt_x_spoke = setproduct(
-    toset(concat(
-      module.vpc.route_table_ids_by_group["node-uniq"],
-      module.vpc.route_table_ids_by_group["vm-uniq"],
-    )),
-    [for account_id, cidr in local.spoke_uniq_cidrs : account_id
-      if contains(
-        [for a in local.spoke_attachments : a.vpc_owner_id],
-        account_id,
-    )]
-  )
+  hub_rt_indices = merge([
+    for group_name in ["node-uniq", "vm-uniq"] : {
+      for idx in range(length(module.vpc.route_table_ids_by_group[group_name])) :
+      "${group_name}.${idx}" => { group = group_name, idx = idx }
+    }
+  ]...)
+
+  spoke_account_ids_attached = [for account_id, cidr in local.spoke_uniq_cidrs : account_id
+    if contains(
+      [for a in local.spoke_attachments : a.vpc_owner_id],
+      account_id,
+  )]
+
+  hub_rt_x_spoke = merge([
+    for rt_key, rt in local.hub_rt_indices : {
+      for account_id in local.spoke_account_ids_attached :
+      "${rt_key}.${account_id}" => merge(rt, { account_id = account_id })
+    }
+  ]...)
 }
 
 resource "aws_route" "vpc_to_spoke" {
-  for_each = { for pair in local.hub_rt_x_spoke : "${pair[0]}-${pair[1]}" => pair }
+  for_each = local.hub_rt_x_spoke
 
-  route_table_id         = each.value[0]
-  destination_cidr_block = local.spoke_uniq_cidrs[each.value[1]]
+  route_table_id         = module.vpc.route_table_ids_by_group[each.value.group][each.value.idx]
+  destination_cidr_block = local.spoke_uniq_cidrs[each.value.account_id]
   transit_gateway_id     = data.aws_ec2_transit_gateway.hub.id
 
   # AWS 공식 문서(aws_route)의 delete 기본 타임아웃은 5m — 위 key 안정화로 이 리소스가
