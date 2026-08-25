@@ -8,12 +8,6 @@
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
     {
-      "timestamp": 1787272378763,
-      "source": "manual",
-      "category": "open-items",
-      "content": "2026-08-21 — spoke(dev) teardown+재배포 리허설 준비 세션. (1) deletion_protection 관련 이전 open-item(hub/networking false 방치)은 해소됨 — 실측 결과 dev·hub 전부(networking+eks) 코드·AWS 실물 양쪽 이미 false였고, 사용자가 \"모듈 v1.0 출시 전까지 의도적으로 false 유지\"로 결정, deployment-facts.md 5.9절에 기록 완료(commit e72e0db). (2) iac-module-library의 03-new-project.md·04-teardown.md(hub-spoke 분리 이전, 단일 클러스터 전제)를 03-hub-lifecycle.md·04-spoke-lifecycle.md로 재편 완료(commit ddedf35) — spoke 문서에 이번에 발견한 3간극을 반영: ArgoCD 컨트롤러 정지는 hub의 cluster-secret 제거로 해야 함(10절), cluster-secret.yaml 재등록 절차 신설(14절), spoke 단독 teardown 시 hub TGW 잔존 라우트 처리는 **아직 실측 안 됨 — 열린 질문으로 명시**(13절, 다음 리허설에서 확인 후 문서 갱신 필요). (3) 리허설 사전 조치로 iac-platform-gitops의 dev cluster-secret.yaml 삭제를 커밋(36d706c)만 해두고 **push는 보류** — 사용자가 \"실제 리허설 시작할 때\" push하기로 결정. (4) 태그 기준(Workload=demo) dev 자원 현황 조사 완료: EC2 3대(관리형 시스템 노드그룹 2대+workbench 1대, Karpenter 노드 0대), ALB/NLB 0개, EBS available 0개 — IaC 밖 자원 선처리 단계가 예상보다 가벼울 것으로 보임. 다음 세션 착수 시 순서: iac-platform-gitops push → hub에서 Application prune 확인 → dev workbench에서 남은 IaC 밖 자원 정리(현재 거의 없음) → deploy-dev-eks.yml→deploy-dev-network.yml destroy dispatch → teardown-verify.sh(AWS_PROFILE=asset 필수) → hub TGW 잔존 라우트 실측 후 04-spoke-lifecycle.md 13절 갱신."
-    },
-    {
       "timestamp": 1787277763689,
       "source": "manual",
       "category": "open-items",
@@ -126,6 +120,12 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-25 세션에서 남긴 후속 작업 후보(우선순위 무관, 병렬 가능): (1) 인프라 액션 — hub 재배포 착수(docs/hub-lifecycle.md 4절부터, TGW→네트워크→EKS→GitOps 순서. 부트스트랩은 살아있어 3절은 건너뜀. team 계정에 현재 살아있는 EKS 클러스터 없음, 2026-08-24 리허설 teardown 이후 미재배포). (2) 문서 — .github/workflows/deploy-hub-eks.yml:17과 deploy-hub-network.yml:32 주석의 bootstrap/README.md 죽은 링크 정정(후자는 docs/deployment-facts.md §3 참조도 같이 죽어있음), bootstrap/config.sh:50,59의 docs/deployment-facts.md §2 참조·config.sh:23의 README.md「6」 참조도 죽어있어 함께 정리 필요. (3) TGW 철거 절차를 hub-lifecycle.md에 문서화하기 전에 실제 destroy 순서(네트워크 먼저 vs TGW 먼저)를 실측 또는 근거 확인 — AWS TGW는 attachment가 남아있으면 삭제가 안 되므로 논리적으로는 \"네트워크(hub attachment 포함) destroy → TGW destroy\" 순서가 맞을 것으로 추정되나 미검증."
+    },
+    {
+      "timestamp": 1787622200067,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-25 (이어서) 갱신: 지난 세션에 남겼던 \"bootstrap/README.md·docs/deployment-facts.md 죽은 참조\" 항목(deploy-hub-eks.yml:17·deploy-hub-network.yml:32·bootstrap/config.sh:23,50,59)은 이번 세션의 코드 주석 정리(§5 규칙 적용) 과정에서 전부 해소됐다 — 더 이상 유효한 open-item 아님. 새로 남은 것: (1) hub 재배포 착수(변동 없음, 여전히 최우선 — docs/hub-lifecycle.md 4절부터). (2) TGW 철거 순서 미검증(변동 없음). (3) [신규] 코드 주석 규칙(module repo docs/conventions.md §5: 날짜·D번호·문서절 인용 금지)을 이번에 워크플로 YAML·부트스트랩 스크립트·live/**/*.tf 122건 수동 정리했으나, 재발 방지용 자동 검증(scripts/validate-doc-conventions.py 같은 pre-commit 게이트)이 없다 — 다음에 여유 있으면 신설 검토."
     }
   ],
   "userDirectives": [],
