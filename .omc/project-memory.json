@@ -8,18 +8,6 @@
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
     {
-      "timestamp": 1787281997415,
-      "source": "manual",
-      "category": "open-items",
-      "content": "2026-08-21 — spoke(dev) 재배포+검증 완주(이전 open-item 전부 대체). 04-spoke-lifecycle.md 4~7절 절차를 실제로 처음부터 끝까지 실행: bootstrap은 기존 것 재사용, live/dev/networking apply → live/dev/eks apply → iac-platform-gitops cluster-secret 재등록 → hub root-app 반영 → dev Application 8/8 Synced/Healthy 확인. 과정에서 완전 신규 spoke 첫 apply에서만 드러나는 실제 버그 3건(hub RAM principal association drift, RAM 초대 PENDING/ACTIVE 순환, aws_route.to_hub의 for_each known-after-apply)을 발견·수정·모듈 repo 문서화(iac-module-library commit 69f2f96) 완료. hub TGW 쪽도 spoke networking apply 이후 재적용해 양방향 라우트 정상 채워짐 — 별도 정리 불필요. 다음 세션 착수 후보: 특별히 없음, 현재 hub+dev(spoke) 둘 다 정상 가동 중."
-    },
-    {
-      "timestamp": 1787285133384,
-      "source": "manual",
-      "category": "open-items",
-      "content": "2026-08-21 (이어서) — RAM 초대 수락 설계를 근본적으로 재작업 완료(이전 open-item의 \"①·②는 CLI+import로 일회성 우회했었다\"를 대체). HashiCorp provider 소스 확인으로 aws_ram_resource_share_accepter의 delete가 DisassociateResourceShare를 직접 호출한다는 근본 원인을 확정하고, AWS RAM 공식 문서의 권장 패턴(GetResourceShareInvitations 자동 모니터링)에 맞춰 \"수락\"을 Terraform 리소스에서 CI 단계(deploy-dev-network.yml plan job)로 이관, 기존 accepter는 removed 블록으로 전환. 실제 CI 2회 apply로 no-op 경로·removed 동작·AWS 실물 보존을 전부 실증하고 두 번째 apply No changes까지 확인. iac-module-library docs/02-choose-your-path.md 「RAM 초대 수락」 절(ff6a3f0)·docs/04-spoke-lifecycle.md 4절 정정, iac-reference-infra 262b49b. 다음 세션 착수 후보: 없음 — spoke teardown·재배포·완전 신규 배포 셋 다 사람 개입 없이 CI가 처리."
-    },
-    {
       "timestamp": 1787532595373,
       "source": "manual",
       "category": "gotcha",
@@ -126,6 +114,18 @@
       "source": "manual",
       "category": "gotcha",
       "content": "2026-08-25 — team 계정(hub, 533616270150)은 실측 결과 \"이 hub-spoke 프로젝트 팀만 쓰는 계정\"이 아니라 회사 내 여러 개인이 각자 샌드박스로 쓰는 훨씬 넓은 공용 계정이다(EC2 인스턴스 목록에 yg-os-test·litellm-gateway-cjh220·lsh-ec2-win·yg-eks-bastion·eks-scale-lab 등 이 프로젝트와 무관한 개인/팀 리소스가 다수 확인됨). 이 사실이 GitHub App private key 같은 자격증명을 SSM Parameter Store에 상시 보관할지 논의에서 결정적이었다 — AmazonSSMManagedInstanceCore의 ssm:GetParameter가 Resource:\"*\"라 파라미터를 지우지 않고 남기면 \"우리 팀\"이 아니라 \"이 계정에 개인 인스턴스를 가진 모르는 사람들\"까지 복호화 가능해진다. 결론(사용자 확정): GitHub App(skax-ca-gitops-reader, App ID 4512318, Installation ID 151838919) private key는 로컬(~/.config/gh-apps/skax-ca-gitops-reader.pem)에만 두고, argocd-seed 실행 시에만 SSM SecureString에 일시 업로드→workbench에서 복호화→사용 후 파라미터·workbench 사본 모두 삭제하는 기존 patttern을 유지한다(상시 저장 채택 안 함). 이 절차 자체의 상세(왜 send-command 직접전달·Secrets Manager는 기각됐는지)는 scripts/README.md 복원 항목([[project-memory:scripts-readme-restore]] 별도 open-item)에 있다. 참고로 이번 세션에서 이 계정이 \"공용\"이라는 판단 기준 자체가 이전보다 훨씬 구체화됐다 — CLAUDE.md 8절의 \"여러 개가 나오면 공용 계정\"은 맞았지만 그 공유 범위가 예상(같은 프로젝트 팀)보다 훨씬 넓다는 것까지는 이전 세션들에 기록된 적 없었다."
+    },
+    {
+      "timestamp": 1787635550253,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-25 (이어서) — scripts/README.md·bootstrap/README.md 복원 완료(이전 open-item \"scripts/README.md 복원 필요\" 완전히 해소). 8/24 삭제된 README.md 8개 중 이 2개만 코드가 대체할 수 없는 판단 근거(bootstrap/config.sh가 스스로 \"README.md 표가 SSOT다\"라고 선언, scripts/argocd-seed.sh의 GitHub App private key SSM 전달 절차와 기각 대안 4가지)를 담고 있어 복원했다. 나머지 live/{hub,dev}/{networking,eks}/README.md 4개는 backend.tf·variables.tf 코드 주석 자체가 이미 완결적 설명(근거·주입경로·경고 전부 인라인)이라 README에 실제로 위임된 내용이 없었고, 과거 모듈 버전 stale 문제(eks-cluster-v0.4.0 등)로 유지보수 부담이 컸던 전례까지 감안해 복원하지 않기로 사용자와 합의했다(유지보수 비용 최소화가 목적). 루트 README.md도 기능적 참조가 없어 보류. 죽은 참조 4곳(bootstrap/verify.sh:11, bootstrap/config.sh:23, docs/hub-lifecycle.md:66-68, docs/spoke-lifecycle.md:51-52)도 함께 정정했다. WebSearch로 runbook 작성 모범사례(신규 팀원이 그대로 따라할 수 있는지가 테스트 기준)를 확인한 뒤 원문의 결정식별자·문서절 인용을 전부 걷어내고 현재 스크립트 실물과 대조해 재작성했다. 재검토에서 실제 결함 3건(절 번호 인용 오류 2곳, 헤딩 불일치 1곳, 불필요한 플레이스홀더 1곳)을 추가로 찾아 수정, validate-doc-conventions.py 재검증 통과. 아직 git commit 전. 다음 세션 착수 후보: 이 건은 없음 — 인프라 쪽은 여전히 hub 재배포(docs/hub-lifecycle.md부터)가 최우선 후보(변동 없음)."
+    },
+    {
+      "timestamp": 1787635554954,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "2026-08-25 — scripts/validate-doc-conventions.py(문서 규약 검사)는 코드펜스(``` ``` 안) 내부의 §·비표준 이모지·em-dash를 검사하지 않는다(의도된 예외 — 예시 명령의 리터럴 출력이 오탐되는 것을 막기 위함). 또한 이 저장소는 \"§\" 문자 자체만 금지할 뿐, 「N. 제목」처럼 절 번호를 포함한 브래킷 인용은 허용되는 관례다(docs/hub-lifecycle.md:169 등에 이미 실사용 중 — 검증 스크립트의 에러 메시지 자체가 \"문서 링크 또는 「절 제목」 참조로 바꾼다\"고 이 형식을 대안으로 제시한다). 단 브래킷 안 텍스트는 대상 헤딩과 문자 그대로 일치해야 하고, 번호도 실제 절 번호와 정확히 맞아야 한다 — bootstrap/README.md 작성 중 절 두 개를 병합하면서 상단 요약표의 「N.」 인용 2곳이 실제 절 번호와 어긋난 채 남았던 실수가 있었고(재검토에서 발견·수정), scripts/README.md에서도 「자기소멸 원칙」 인용이 실제 헤딩 텍스트와 글자 그대로 안 맞은 사례가 있었다. 일반화: 새 문서에 「N. 제목」 인용을 쓸 때는 작성 직후 grep으로 실제 헤딩과 반드시 대조할 것 — 눈으로 검토해서는 놓치기 쉽다."
     }
   ],
   "userDirectives": [],
