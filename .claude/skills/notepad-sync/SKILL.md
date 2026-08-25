@@ -49,7 +49,7 @@ Claude Code 세션에서 한다** — 그 세션 안에서는 이 절 전체가 
      됐던 패턴과 같다.
    - Priority Context는 `notepad_write_priority`로 **전체 교체**한다(append 아님), 500자 이내 유지.
    - `docs/*.md`(`docs/deployment-facts.md` 등)에는 날짜·사건 서술을 쓰지 않는다(`CLAUDE.md`
-     「0. 설계는 이 repo에 없다」가 모듈 repo `docs/06-conventions.md` §8을 그대로 적용) —
+     「0. 설계는 이 repo에 없다」가 모듈 repo `docs/conventions.md` §8을 그대로 적용) —
      `remember`가 "docs"를 저장 후보로 제안해도 서술형 내용이면 notepad로 돌린다.
    - `project-memory.json`은 `.gitignore` 화이트리스트로 git 커밋 대상이다(notepad.md와 함께
      크로스 머신 SSOT) — 이 머신에만 유효한 임시 정보는 넣지 않는다.

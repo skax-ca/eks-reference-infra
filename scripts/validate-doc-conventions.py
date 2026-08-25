@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 모듈 repo(iac-module-library) docs/06-conventions.md §8(문서 작성 규칙)·§9(문체 규칙)에서 이식.
+# 모듈 repo(iac-module-library) docs/conventions.md §8(문서 작성 규칙)·§9(문체 규칙)에서 이식.
 # 규칙 SSOT는 그 문서다 — 여기서 규칙 텍스트를 다시 쓰지 않는다(CLAUDE.md §0).
 # 8개 규칙 중 기계로 판정 가능한 4개만 검사한다.
 # 나머지 규칙(§8의 1 "읽는 사람" 첫 줄 · 2 변경 이력 금지 · 5 표/명령 · 7 정정 서술 금지, §9의
@@ -49,7 +49,7 @@ def strip_fenced_code(lines: list[str]) -> list[bool]:
     """줄 인덱스별로 코드펜스(``` ... ```) 안인지 표시한다.
 
     펜스 안은 예시 명령·출력이라 "§"·이모지가 리터럴로 등장해도 위반이 아니다
-    (예: docs/06-conventions.md의 grep 예시가 검색 대상으로 "§"를 쓴다).
+    (예: docs/conventions.md의 grep 예시가 검색 대상으로 "§"를 쓴다).
     """
     in_fence = [False] * len(lines)
     inside = False
