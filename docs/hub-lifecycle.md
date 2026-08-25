@@ -63,9 +63,8 @@ cd bootstrap && ./bootstrap.sh             # BOOTSTRAP_TARGET=hub 가 기본값
 ./verify.sh                                # drift 확인만
 ```
 
-기대 상태(SSOT)는 `../bootstrap/config.sh`가 가진다: 값을 여기 다시 적지 않는다. (⚠️
-원래 SSOT였던 `bootstrap/README.md`는 2026-08-24 문서 정리로 삭제되어 재정의 전이다.
-`config.sh`의 헤더 주석이 현재 유일하게 살아 있는 기대 상태 설명이다.)
+기대 상태(SSOT)는 `../bootstrap/README.md`가 가진다: 값을 여기 다시 적지 않는다.
+`config.sh`는 그 코드 측면이다.
 
 **순서가 자유롭지 않다**: OIDC provider → 입구 Role(신뢰=OIDC) → 실행 Role(신뢰=입구) → 입구
 inline 정책(Resource=실행 Role). IAM은 신뢰 정책의 principal이 실제로 존재하는지 검증한다:

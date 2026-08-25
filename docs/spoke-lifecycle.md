@@ -48,8 +48,8 @@ BOOTSTRAP_TARGET=spoke SPOKE_ENV=dev AWS_PROFILE=asset ./bootstrap.sh
 BOOTSTRAP_TARGET=spoke SPOKE_ENV=dev AWS_PROFILE=asset ./verify.sh
 ```
 
-기대 상태(SSOT)는 `../bootstrap/config.sh`가 가진다(⚠️ 원래 SSOT였던
-`bootstrap/README.md`는 2026-08-24 문서 정리로 삭제되어 재정의 전이다). **`AWS_PROFILE`을
+기대 상태(SSOT)는 `../bootstrap/README.md`가 가진다(`config.sh`는 그 코드 측면이다).
+**`AWS_PROFILE`을
 반드시 spoke 계정 프로파일로 지정한다.** 기본 프로파일이 hub(team) 계정이면 조용히 hub를
 다시 건드린다.
 

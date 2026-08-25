@@ -19,8 +19,8 @@
 # spoke 처럼 여러 인스턴스가 필요하지 않다.
 #
 # team 계정에 남아 있던 옛 dev Role/버킷(iamr-demo-dev-an2-gha-*, s3-demo-dev-an2-tfstate-*)은
-# 대상이 사라진 채 orphan 으로 남았던 것을 이번에 정리한다(bootstrap 스크립트가 아니라
-# 1회성 수동 조치 — README.md 「6」 참조).
+# 대상이 사라진 채 orphan 으로 남아 있었다 — bootstrap 스크립트가 아니라 사람이
+# 1회성 수동 조치로 정리했다.
 
 set -euo pipefail
 

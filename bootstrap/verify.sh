@@ -8,9 +8,7 @@
 #
 # ⚠️ 이 스크립트는 **음성 테스트로 증명해야 한다.** 리소스를 일부러 어긋나게 한 뒤
 #    exit 1 이 나오는 것을 보지 않으면, "완화책이 있다"는 착각만 남는다.
-#    증명 절차가 있던 README.md는 삭제되어 재정의 전이다: drift 를 일부러 주입(예: S3
-#    버저닝을 Suspended로, IAM Role 신뢰 정책을 조작)한 뒤 exit 1을 확인하고, 다시
-#    bootstrap.sh 를 돌려 exit 0으로 돌아오는지 보는 방식이었다.
+#    구체적인 주입·복구 절차는 README.md 에 있다.
 #
 # hub-spoke 토폴로지: bootstrap.sh 와 같은 BOOTSTRAP_TARGET(hub|spoke,
 # 기본 hub)·SPOKE_ENV(spoke 인스턴스 선택, 기본 dev)로 검사 대상을 고른다. 한 실행에서

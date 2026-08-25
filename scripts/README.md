@@ -1,0 +1,220 @@
+# scripts: 운영 절차 스크립트
+
+**읽는 사람**: hub에서 ArgoCD 부트스트랩·철수 검증을 실행하는 사람.
+
+| 스크립트 | 무엇을 하는가 | 설계 SSOT |
+|---|---|---|
+| `argocd-seed.sh` | self-managed ArgoCD 부트스트랩 seed. hub만 자기 자신을 seed한다 | `docs/hub-lifecycle.md` |
+| `teardown-verify.sh` | 철수 후 잔존물 검사(읽기 전용). 지우지 않고 남은 것만 찾는다 | `docs/hub-lifecycle.md`, `docs/spoke-lifecycle.md` |
+| `validate-doc-conventions.py` | 이 저장소 문서(`docs/*.md`·`README.md`·`AGENTS.md`·`CLAUDE.md`)의 작성 규칙 검사 | `.githooks/pre-commit` |
+
+⚠️ 모든 스크립트는 환경값을 하드코딩하지 않는다. 대상 계정·클러스터 이름 같은 값은 전부
+환경변수나 인자로 받는다.
+
+---
+
+## `argocd-seed.sh`
+
+### 무엇을 하는가
+
+GitOps 저장소를 pull하는 self-managed ArgoCD를 부트스트랩한다. 단계는 순서대로 실행되며
+각 단계가 다음 단계의 전제다.
+
+| # | 단계 | 비고 |
+|---|---|---|
+| 0 | `helm install argo-cd` | 저장소에 커밋된 values 파일 그대로 적용한다 |
+| 2 | GitHub App repository Secret | 아래 「자기소멸 원칙」의 유일한 예외 |
+| 3 | `platform` AppProject | |
+| 4 | cluster Secret | "클러스터 등록"이 아니라 라벨·이름 공급이 목적이다 |
+| 5 | root Application | 자기 자신을 흡수한다. 이후는 ArgoCD가 관리한다 |
+
+1단계(Access Entry)는 self-managed 구조에는 없다. ArgoCD가 클러스터 안에서 돈다. spoke
+클러스터를 붙일 때만 필요하고, 그건 Terraform이 맡는다.
+
+### 자기소멸 원칙 (self-superseding)
+
+이 스크립트는 매니페스트를 생성하지 않는다. GitOps 저장소에 커밋된 파일을 그대로
+`apply`한다. 생성하면 커밋본과 바이트가 달라지고, root App이 흡수한 순간 ArgoCD의
+`selfHeal`이 그 차이를 되돌린다. 증상은 "방금 넣은 설정이 사라진다"이고, 원인을
+가리키지 않는 증상이라 디버깅이 오래 걸린다.
+
+그래서 스크립트는 `helm --set`이나 인라인 heredoc 매니페스트를 쓰지 않는다. 대신 저장소가
+dirty하면(`git status --porcelain`) 실행을 거부하고, 로컬 HEAD가 upstream과 다르면
+경고한다. ArgoCD는 항상 원격을 읽기 때문이다.
+
+예외는 2단계 하나뿐이다. repository Secret에는 GitHub App private key가 들어가고, 이건
+저장소에 커밋할 수 없다. 이 Secret만 GitOps 관리 밖에 남는다. root App의 `prune: false`
+설정 덕에 지워지지는 않지만, ⚠️ **이것이 사라지면 모든 sync가 멈춘다.** 복구 절차는
+아래 「복구 절차」에 있다.
+
+### private key를 workbench로 옮기는 경로
+
+클러스터가 private이라 seed는 workbench 안에서 실행되는데, workbench는 SSM Session
+Manager 전용이라 `scp`가 없다. 스크립트는 키를 파일 경로로 받으므로(`--from-file=`),
+키의 실물 파일이 workbench 디스크에 있어야 한다. 그 경로로 **SSM Parameter Store
+SecureString**을 쓴다.
+
+이 방식을 고른 근거는 세 가지 확인된 사실이다.
+
+| 확인한 것 | 값 | 의미 |
+|---|---|---|
+| `AmazonSSMManagedInstanceCore` | `ssm:GetParameter`를 `Resource: "*"`로 포함 | workbench Role에 IAM 권한을 추가할 필요가 없다 |
+| `alias/aws/ssm` 키 정책 | `Principal: {"AWS":"*"}` + `kms:ViaService=ssm.<region>` 직접 부여 | SecureString 복호화에 `kms:Decrypt`를 따로 추가할 필요가 없다 |
+| Standard tier 파라미터 | 4KB, 과금 없음 | RSA 2048 PEM(약 1.7KB)이 넉넉히 들어간다 |
+
+#### 절차
+
+```bash
+# ── 1) 노트북에서 한 번 — 키를 SecureString으로 올린다 ──────────────────
+aws ssm put-parameter --region <region> \
+  --name /<workload>/<env>/gitops/github-app-private-key \
+  --type SecureString \
+  --description "ArgoCD seed 임시 저장 - GitHub App private key. seed 완료 후 삭제한다" \
+  --value file://~/.config/gh-apps/<app>.private-key.pem
+#  --description을 반드시 붙인다. 공용 계정에는 남의 파라미터가 섞여 있어서,
+#  정체를 밝히지 않으면 아무도 지우지 못하는 자격증명이 된다.
+
+# ── 2) workbench 안에서 — 파일로 내려받는다 ──────────────────────────
+umask 077                                    # 0600으로 만든다. chmod 전에 umask부터 건다
+aws ssm get-parameter \
+  --name /<workload>/<env>/gitops/github-app-private-key \
+  --with-decryption --query Parameter.Value --output text > ~/gh-app.pem
+#  리다이렉트가 핵심이다. 키가 터미널에 출력되지 않으므로 세션 로깅이 켜진
+#  계정에서도 로그에 남지 않는다. 내려받은 파일은 원본보다 1바이트 크다
+#  (--output text가 후행 개행을 붙인다). PEM은 이를 정상으로 받으므로
+#  체크섬이 다르다고 손상으로 오해하지 않는다. 검증하려면 openssl rsa -noout -check.
+
+export GH_APP_PRIVATE_KEY=~/gh-app.pem
+./scripts/argocd-seed.sh
+
+# ── 3) 완료 조건 — 위생이 아니라 필수 조건이다 ────────────────────────
+shred -u ~/gh-app.pem
+aws ssm delete-parameter --region <region> \
+  --name /<workload>/<env>/gitops/github-app-private-key
+```
+
+🔴 **3단계는 선택이 아니다.** `AmazonSSMManagedInstanceCore`가 `GetParameter`를
+`Resource: "*"`로 주기 때문에, 그 파라미터는 계정 안의 SSM 관리 인스턴스 전부가 읽을 수
+있다. 남겨 두면 노출 범위가 workbench 하나가 아니라 계정 전체가 된다. 이건 관리형
+정책의 성질이라 우리가 좁힐 수 없다.
+
+#### 복구 절차
+
+repository Secret이 사라지면 모든 sync가 멈춘다. 이때는 위 파라미터도 이미 지워져 있고
+노트북의 `.pem`도 영구 보관물이 아니다. 그래서 키를 다시 발급하는 것으로 복구한다.
+
+1. GitHub App 설정에서 새 private key를 발급하고 옛 키를 삭제한다(App당 여러 키를
+   가질 수 있어 발급과 삭제를 분리해도 무방하다)
+2. 위 절차 1~3을 그대로 다시 실행한다
+3. `./scripts/argocd-seed.sh --from 2 --to 2`로 2단계만 재적용한다
+
+🔑 **키를 보관해서 복구하는 게 아니라 재발급으로 복구한다.** 그래서 3단계의 즉시 삭제가
+복구 가능성을 해치지 않는다. 장기 자격증명을 계정에 남기지 않는 쪽이 항상 더 안전하다.
+
+#### 기각한 대안
+
+| 안 | 기각 사유 |
+|---|---|
+| SSM 세션에 키를 직접 붙여넣기 | 리소스는 추가로 안 들지만, 세션 로깅이 켜진 계정에서는 키 전체가 로그에 남는다. 감사 요건으로 세션 로깅을 켜 두는 경우가 흔해서 재사용 가능한 절차로 채택할 수 없다 |
+| `aws ssm send-command` | 명령 파라미터가 평문으로 command 히스토리와 CloudTrail에 남는다. 붙여넣기보다 나쁘다 |
+| Secrets Manager (workbench가 직접 조회) | 효과는 같지만 workbench Role에 `secretsmanager:GetSecretValue`가 없어 Terraform 변경이 필요하고, 시크릿당 매달 비용이 붙는다. 같은 값을 더 비싸게 사는 셈이다 |
+| External Secrets Operator | 컨트롤러와 IAM Role을 새로 두고 ArgoCD 밖의 예외를 하나 더 만드는 비용이, 재구축 빈도에 비해 과하다. ESO가 관리할 다른 시크릿이 생기면 재검토한다 |
+
+### 사용법
+
+```bash
+export GITOPS_REPO_DIR=~/eks-platform-gitops
+export CLUSTER_DIR=clusters/dev/eks-ref-dev-an2-main-01
+export GITOPS_REPO_URL=https://github.com/skax-ca/eks-platform-gitops.git
+export GH_APP_ID=<app_id> GH_APP_INSTALLATION_ID=<installation_id> \
+       GH_APP_PRIVATE_KEY=~/gh-app.pem   # 위 절차 2로 내려받은 파일
+
+./scripts/argocd-seed.sh --dry-run     # 먼저 이것부터. 노트북에서도 돌아간다
+./scripts/argocd-seed.sh               # 실제 실행은 workbench 안에서 (private endpoint)
+```
+
+⚠️ `GH_APP_PRIVATE_KEY`를 노트북의 키 원본으로 두지 않는다. 실행은 workbench 안에서
+일어나므로 그 경로는 workbench의 파일이어야 한다.
+
+선택 인자: `--from N`, `--to N`(단계 구간 재실행). `--help`로 전체 옵션을 본다.
+선택 환경변수: `ARGOCD_NAMESPACE`(기본 `argocd`), `ARGOCD_CHART_VERSION`(기본 `10.3.0`),
+`ARGOCD_VALUES`(기본 `bootstrap/argocd-values.yaml`, GitOps 저장소 기준 상대경로),
+`ARGOCD_RELEASE`(기본 `argocd`).
+
+### `--dry-run`이 실제로는 검증하지 않는 이유
+
+`--dry-run`은 kubectl을 아예 부르지 않는다. 오프라인에서 검증할 방법이 없기 때문이다.
+`AppProject`·`Application`은 CRD라 kubectl이 리소스를 인식하려면 discovery API를 쳐야
+하는데, 클러스터가 private이라 팀원 노트북에서는 그 호출이 항상 막힌다.
+
+그래서 `--dry-run`의 역할을 "무엇을 어디에 적용하는지 보여주기"로 좁혔다. 진짜 검증은
+실제 실행 경로에서 `kubectl apply --dry-run=server`가 한다. 사라진 게 아니라 실행
+시점으로 미뤄진 것이다.
+
+### 실행 후: 사람이 확인한다
+
+스크립트는 자동으로 성공을 선언하지 않는다. 실패 모드가 여러 겹이라 한 번에 하나씩만
+드러나기 때문이다.
+
+1. **root App이 저장소를 실제로 읽었는가.** `.status.sync.revision`이 실제 커밋 SHA여야
+   한다. 값이 `main`이면 아직 설정값일 뿐 pull에 성공한 게 아니다
+2. `Synced` / `Healthy` 상태인가
+3. cluster Secret이 내장 `in-cluster`를 대체했는지 중복인지(아직 공식 문서로 확인되지
+   않은 항목이다)
+4. UI 접근: `port-forward` 후 `https://localhost:8080` (자체 서명 인증서 경고는 정상이다)
+5. ⛔ **초기 비밀번호를 교체하고 `argocd-initial-admin-secret`을 삭제한다.** 선택이
+   아니라 완료 조건이다
+
+### 호환성
+
+bash 3.2 호환으로 작성했다. macOS 기본 bash가 3.2라 연상배열, `mapfile`, `${var^^}`를
+쓰지 않는다. 필요 도구: `kubectl`, `helm`, `git`.
+
+---
+
+## `teardown-verify.sh`
+
+철수(destroy) 뒤에 실제로 아무것도 남지 않았는지 확인하는 읽기 전용 스크립트다. 아무것도
+지우지 않는다. 삭제는 사람이 `tofu destroy`로 한다.
+
+```bash
+WORKLOAD=demo ENVIRONMENT=hub AWS_PROFILE=team ./scripts/teardown-verify.sh
+```
+
+비용이 계속 나는 자원(NAT Gateway, EC2, EBS, Elastic IP, 로드밸런서, EKS 컨트롤 플레인)부터
+검사하고, 이어서 삭제를 막는 자원(ENI, VPC), 마지막으로 보존 요건을 확인해야 하는 자원
+(CloudWatch 로그 그룹)을 본다. 대상 계정이 공용일 수 있으므로 모든 조회를 `WORKLOAD`/
+`ENVIRONMENT` 태그로 좁힌다. 태그가 없는 자원은 이 스크립트가 찾지 못하므로, 콘솔에서
+VPC 기준으로 한 번 더 확인하는 것이 안전하다.
+
+종료 코드: `0` = 잔존물 없음, `1` = 잔존물 있음, `2` = 실행 불가.
+
+---
+
+## GitOps 저장소 안의 사본
+
+`skax-ca/eks-platform-gitops`의 `bootstrap/argocd-seed.sh`는 이 파일의 사본이다.
+**이 파일이 SSOT다.** 고칠 일이 생기면 여기를 고치고 다시 복사한다. 사본을 직접
+편집하지 않는다.
+
+```bash
+# 배너(모든 줄이 #V#로 시작)를 보존한 채 본문만 갈아끼운다
+DST=<gitops-repo-경로>/bootstrap/argocd-seed.sh
+{ head -1 scripts/argocd-seed.sh; grep '^#V#' "$DST"; tail -n +2 scripts/argocd-seed.sh; } > "$DST.new"
+mv "$DST.new" "$DST" && chmod +x "$DST"
+
+# 드리프트 검사 — 배너를 뺀 나머지는 바이트 단위로 같아야 한다
+diff <(grep -v '^#V#' "$DST") scripts/argocd-seed.sh
+```
+
+⚠️ 이 절차에는 자동 게이트가 없다. 드리프트 검사를 사람이 기억해서 돌려야 한다.
+
+---
+
+## 열린 항목: `.sh` 파일은 어떤 게이트도 통과하지 않는다
+
+`.githooks/pre-commit`은 `.tf`·`.tfvars`·설정 파일과 `docs/*.md`·`README.md`만 검사하고
+`.sh`는 보지 않는다. 이 저장소의 CI(`.github/workflows/deploy-*.yml`)도 각 배포 루트의
+Terraform만 다루고 `scripts/`는 건드리지 않는다. 지금은 사람이 `bash -n`을 돌리는 것이
+유일한 방어다. 배포 워크플로 중 하나에 `bash -n scripts/*.sh`(가능하면 `shellcheck`)
+스텝을 추가하는 것을 검토할 만하다.
