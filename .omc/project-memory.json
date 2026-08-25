@@ -8,12 +8,6 @@
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
     {
-      "timestamp": 1787272368204,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "argocd-tunnel-connect 스킬(.claude/skills/argocd-tunnel-connect/scripts/connect.sh)의 멱등성 판단이 PID 파일(.omc/state/argocd-tunnel/local-watchdog.pid)만 신뢰해서, 그 파일 밖에서 살아남은 고아 프로세스를 못 잡는 결함이 있었다(2026-08-21 실측). workbench가 workbench-v0.7.0 업그레이드로 인스턴스 교체된 뒤에도, 옛 인스턴스 ID(i-0b89e05f17146bd40)를 향한 session-manager-plugin이 로컬 8080 포트를 계속 쥔 채 시간 단위로 남아 있었다(터미널 강제 종료 등 비정상 종료 경로로 추정) — 새 세션이 같은 포트에 바인딩 못 해 TCP는 연결되는데 TLS handshake가 무한 대기하는 조용한 행(hang)으로 나타났다. 증상 진단은 curl -v로 어느 프로토콜 단계에서 멈췄는지 보고, lsof -nP -iTCP:<port> -sTCP:LISTEN으로 실제 점유 프로세스를 찾는 순서로 했다. 수정: PID 파일 추적과 무관하게 LOCAL_PORT를 점유한 프로세스를 매번 lsof로 찾아 정리하는 단계를 PID 파일 검사 직후에 추가(connect.sh, 커밋 0c7427c). 일반화: \"내가 기록한 PID만 확인\"하는 멱등성 설계는 정상 종료 경로만 커버한다 — 비정상 종료(강제 종료·OOM 등)까지 잡으려면 실제 리소스(포트·락파일)를 직접 관측하는 두 번째 겹이 필요하다."
-    },
-    {
       "timestamp": 1787272378763,
       "source": "manual",
       "category": "open-items",
@@ -126,6 +120,12 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-24 — CLAUDE.md·README.md·AGENTS.md·docs/deployment-facts.md를 전부 삭제한 상태로 세션 종료(git에는 남아 복구 가능, 커밋 예정). 다음 세션 착수 후보: (1) CLAUDE.md·README.md 재정의 — 사용자가 \"다시 정의할 것\"이라고 명시, 아직 미착수. (2) AGENTS.md류는 필요해지면(사용자 표현: \"모든 작업을 완료하고\") deepinit으로 재생성 — 지금 당장 만들 필요 없음. (3) module repo(iac-module-library)의 em-dash 정리는 사용자가 이 세션과 별도로 직접 진행하기로 함 — 이 repo 세션에서 추가로 손대지 않는다. (4) 남긴 3개 SSOT 문서(docs/hub-lifecycle.md·spoke-lifecycle.md·runbooks.md)는 stop-slop 8개 규칙 전체 검토 + em-dash 정리까지 이번 세션에 완료, 검증 스크립트(scripts/validate-doc-conventions.py) 통과 확인됨 — 재작업 불필요."
+    },
+    {
+      "timestamp": 1787618051832,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-25 세션에서 남긴 후속 작업 후보(우선순위 무관, 병렬 가능): (1) 인프라 액션 — hub 재배포 착수(docs/hub-lifecycle.md 4절부터, TGW→네트워크→EKS→GitOps 순서. 부트스트랩은 살아있어 3절은 건너뜀. team 계정에 현재 살아있는 EKS 클러스터 없음, 2026-08-24 리허설 teardown 이후 미재배포). (2) 문서 — .github/workflows/deploy-hub-eks.yml:17과 deploy-hub-network.yml:32 주석의 bootstrap/README.md 죽은 링크 정정(후자는 docs/deployment-facts.md §3 참조도 같이 죽어있음), bootstrap/config.sh:50,59의 docs/deployment-facts.md §2 참조·config.sh:23의 README.md「6」 참조도 죽어있어 함께 정리 필요. (3) TGW 철거 절차를 hub-lifecycle.md에 문서화하기 전에 실제 destroy 순서(네트워크 먼저 vs TGW 먼저)를 실측 또는 근거 확인 — AWS TGW는 attachment가 남아있으면 삭제가 안 되므로 논리적으로는 \"네트워크(hub attachment 포함) destroy → TGW destroy\" 순서가 맞을 것으로 추정되나 미검증."
     }
   ],
   "userDirectives": [],

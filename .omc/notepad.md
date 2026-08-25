@@ -1,10 +1,20 @@
 # Notepad — iac-reference-infra
 
 ## Priority Context
-eks-reference-infra — hub-spoke EKS GitOps 패턴 레퍼런스이자 iac-module-library 모듈 소비 배포 루트. 2026-08-24: CLAUDE.md·README.md류(9개)·AGENTS.md류(13개)·docs/deployment-facts.md 전부 삭제(현행화 부담, 재정의 예정, git 이력엔 남음). 남은 SSOT 문서는 docs/hub-lifecycle.md·spoke-lifecycle.md·runbooks.md(stop-slop 8규칙+em-dash 정리 완료). 문체 규칙(§9)은 module repo docs/06-conventions.md가 SSOT. backend는 부분설정: 버킷명·계정ID·Role ARN 전부 git에 없음.
+eks-reference-infra — hub-spoke EKS GitOps 패턴 레퍼런스이자 iac-module-library 모듈 소비 배포 루트. 2026-08-25: CLAUDE.md 재정의 완료(module repo 262줄 상속 안 함, 소비 repo 기준 108줄 재작성). docs/hub-lifecycle.md·spoke-lifecycle.md·runbooks.md 실측 리뷰로 TGW 누락 절차·죽은 링크·잔재 번호 정정. 다음 세션 최우선: hub 재배포(hub-lifecycle.md 4절, TGW→네트워크→EKS 순서, team 계정에 살아있는 클러스터 없음). backend는 부분설정: 버킷명·계정ID·Role ARN 전부 git에 없음.
 
 ## Working Memory
 ### 2026-08-24 07:59
+2026-08-24 — CLAUDE.md·README.md(9개)·AGENTS.md(13개)·docs/deployment-facts.md 삭제(사용자 지시, "현행화하기만 어렵다"는 이유 — 필요시 재정의/deepinit으로 재생성 예정). module repo(iac-module-library) docs/06-conventions.md에 §9 문체 규칙을 신규 작성해 SSOT 실체를 채움(이전엔 이 repo CLAUDE.md가 「9. 문체 규칙」을 참조만 하고 실체가 없던 drift). em-dash 규칙: grandfather 폐지, 즉시 전면 정리로 전환. 남긴 3개 SSOT 문서(hub-lifecycle·spoke-lifecycle·runbooks)는 stop-slop 8개 규칙 전체로 재검토 완료(실질 위반은 em-dash뿐, 나머지는 이미 충족) — 검증 스크립트 통과. em-dash 일괄정리용 서브에이전트 6개를 병렬로 띄웠으나 전부 계정 단위 세션 한도(리셋 6:50pm KST)에 걸려 실패, 부분 진행분만 남아 직접 이어서 완료했음(subagent 위임은 실패 시 진행 상황이 uncommitted 상태로만 남고 알림도 사후에 옴 — 대량 문서 편집엔 신뢰도 낮음, 기록할 가치). module repo 쪽 남은 em-dash 정리는 사용자가 별도 세션에서 진행하기로 함(이 세션 스코프 아님).
+### 2026-08-25 00:34
+2026-08-25 — docs/hub-lifecycle.md·spoke-lifecycle.md·runbooks.md를 "Claude Code가 그대로 실행해도 되는가"·"팀 공유 가독성" 관점으로 실측 리뷰(코드·워크플로·git 이력 대조). 발견·수정: (1) hub-lifecycle.md 구축 절차에 TGW apply 단계가 통째로 누락 — deploy-hub-tgw.yml을 deploy-hub-network.yml보다 먼저 돌려야 하는데 문서엔 없어 재현 가능한 Invalid for_each argument 에러로 이어짐, §4를 "TGW와 네트워크(L1)"로 확장해 해결. (2) bootstrap/README.md가 8/24 문서 정리로 삭제됐는데 hub/spoke-lifecycle.md가 SSOT로 계속 링크 — bootstrap/config.sh로 교체(단, config.sh 자신도 deployment-facts.md §2를 가리키는 죽은 참조가 남아있음, 미해결). (3) spoke-lifecycle.md의 deployment-facts.md 죽은 참조("hub가 destroy된 경우" TGW 프리픽스리스트 재발급 절차)는 git 이력(c8db4b2~1)에서 원문을 찾아 인라인 복원. (4) runbooks.md §6이 존재하지 않는 deploy-eks.yml을 참조 — deploy-hub-eks.yml/deploy-dev-eks.yml로 정정. (5) 세 문서 제목의 03./04./07. 잔재 번호 제거(사용자 지적, module repo 연속 문서 체계 잔재였음). 전부 scripts/validate-doc-conventions.py 통과, 커밋 72d0147.
+
+이어서 CLAUDE.md 재정의: module repo(iac-module-library) CLAUDE.md(262줄)를 그대로 상속하지 않기로 결정 — 근거 (a) Claude Code 공식 문서 확인 결과 working directory 밖 @import는 팀원마다 승인 대화상자 뜨고 로컬 클론이 정확히 형제 디렉토리여야 동작해 팀 공유 파일에 부적합, (b) module CLAUDE.md 자체가 이미 공식 권장 200줄을 넘고 모듈 저작 전용 내용(facade·모듈별 semver·tofu test 게이트)이 태반이라 소비 repo와 무관. 대신 이 repo 사실 기준으로 108줄 새로 작성(repo 위치/SSOT 경계·저장소 구조·실행모델·네이밍·로컬게이트·브랜치PR규칙·문서규칙·모듈인자확인). 작업 중 module repo가 docs/06-conventions.md를 docs/conventions.md로 이미 리네임했음을 발견 — 이 repo의 scripts/validate-doc-conventions.py·.githooks/pre-commit·notepad-sync SKILL.md 3곳의 죽은 경로 참조를 같이 정정. 커밋 a77810c, 둘 다 push 완료(12c8fdc..a77810c).
+
+미해결로 남긴 것: ① bootstrap/README.md 죽은 링크가 .github/workflows/deploy-hub-eks.yml:17·deploy-hub-network.yml:32 주석에도 남아있음(후자는 deployment-facts.md §3도 같이 참조) — 오늘 범위(docs/*.md 3개) 밖이라 손대지 않음. ② TGW 철거(destroy) 절차가 hub-lifecycle.md 어디에도 없음(deploy-hub-tgw.yml은 destroy도 지원하는데 문서화 안 됨) — 정확한 순서(네트워크 destroy 먼저, TGW 나중)에 대한 실측 근거가 없어 추측으로 채우지 않고 보류.
+
+
+## 2026-08-24 07:59
 2026-08-24 — CLAUDE.md·README.md(9개)·AGENTS.md(13개)·docs/deployment-facts.md 삭제(사용자 지시, "현행화하기만 어렵다"는 이유 — 필요시 재정의/deepinit으로 재생성 예정). module repo(iac-module-library) docs/06-conventions.md에 §9 문체 규칙을 신규 작성해 SSOT 실체를 채움(이전엔 이 repo CLAUDE.md가 「9. 문체 규칙」을 참조만 하고 실체가 없던 drift). em-dash 규칙: grandfather 폐지, 즉시 전면 정리로 전환. 남긴 3개 SSOT 문서(hub-lifecycle·spoke-lifecycle·runbooks)는 stop-slop 8개 규칙 전체로 재검토 완료(실질 위반은 em-dash뿐, 나머지는 이미 충족) — 검증 스크립트 통과. em-dash 일괄정리용 서브에이전트 6개를 병렬로 띄웠으나 전부 계정 단위 세션 한도(리셋 6:50pm KST)에 걸려 실패, 부분 진행분만 남아 직접 이어서 완료했음(subagent 위임은 실패 시 진행 상황이 uncommitted 상태로만 남고 알림도 사후에 옴 — 대량 문서 편집엔 신뢰도 낮음, 기록할 가치). module repo 쪽 남은 em-dash 정리는 사용자가 별도 세션에서 진행하기로 함(이 세션 스코프 아님).
 
 
