@@ -47,6 +47,27 @@ dirty하면(`git status --porcelain`) 실행을 거부하고, 로컬 HEAD가 ups
 설정 덕에 지워지지는 않지만, ⚠️ **이것이 사라지면 모든 sync가 멈춘다.** 복구 절차는
 아래 「복구 절차」에 있다.
 
+### GitHub App 만들기
+
+`GITOPS_REPO_URL`이 가리키는 저장소가 private이면 ArgoCD와 workbench 양쪽이 GitHub App으로
+인증한다. 아직 App이 없다면(신규 온보딩이나 재발급 시) 아래 절차로 만든다.
+
+1. **등록**: GitHub 프로필 → Settings → Developer settings → GitHub Apps → New GitHub App.
+   이름·설명·Homepage URL만 입력한다(Webhook은 Active를 끈다).
+2. **권한**: `Repository permissions`에서 `Contents: Read-only` 하나만 준다. 이 App은 clone과
+   ArgoCD repository Secret 용도이고 push하지 않는다.
+3. **private key 발급**: App 설정 페이지의 `Private keys`에서 `Generate a private key`를 눌러
+   PEM을 받는다. ⚠️ GitHub는 public key만 보관하므로 다운로드한 파일이 유일한 원본이다.
+   분실하면 복구가 아니라 재발급(로테이션)만 가능하다.
+4. **설치**: 조직 설정 → Developer settings → GitHub Apps → 해당 App의 `Edit` → `Install App`
+   → `Only select repositories`로 대상 저장소(GitOps 저장소)만 선택한다.
+5. **Installation ID 확인**: 웹 UI에는 직접 표시되지 않는다. `Configure` 버튼을 눌렀을 때
+   URL의 마지막 세그먼트(`.../settings/installations/<ID>`)로 읽거나, App 인증 후
+   `GET /orgs/<org>/installation` API로 조회한다.
+
+발급된 App ID·Installation ID·PEM은 아래 「private key를 workbench로 옮기는 경로」와
+「사용법」에서 그대로 쓴다.
+
 ### private key를 workbench로 옮기는 경로
 
 클러스터가 private이라 seed는 workbench 안에서 실행되는데, workbench는 SSM Session
@@ -119,6 +140,49 @@ repository Secret이 사라지면 모든 sync가 멈춘다. 이때는 위 파라
 | `aws ssm send-command` | 명령 파라미터가 평문으로 command 히스토리와 CloudTrail에 남는다. 붙여넣기보다 나쁘다 |
 | Secrets Manager (workbench가 직접 조회) | 효과는 같지만 workbench Role에 `secretsmanager:GetSecretValue`가 없어 Terraform 변경이 필요하고, 시크릿당 매달 비용이 붙는다. 같은 값을 더 비싸게 사는 셈이다 |
 | External Secrets Operator | 컨트롤러와 IAM Role을 새로 두고 ArgoCD 밖의 예외를 하나 더 만드는 비용이, 재구축 빈도에 비해 과하다. ESO가 관리할 다른 시크릿이 생기면 재검토한다 |
+
+### GITOPS_REPO_DIR: private 저장소를 workbench로 clone하기
+
+`argocd-seed.sh`는 `GITOPS_REPO_DIR`로 로컬 clone 경로를 받는데, workbench에는 `gh` CLI도
+git credential helper도 없다(SSM Session Manager 전용 인스턴스이기 때문이다). 위 「GitHub App
+만들기」로 받은 PEM으로 installation access token을 직접 발급해 clone한다.
+
+```bash
+# ── workbench 안에서 실행. 위 절차로 받은 ~/gh-app.pem을 쓴다 ──────────
+GH_APP_ID=<app_id>
+GH_APP_INSTALLATION_ID=<installation_id>
+GH_APP_PRIVATE_KEY=~/gh-app.pem
+
+b64url() { openssl base64 -A | tr -d '=' | tr '/+' '_-'; }
+
+now=$(date +%s)
+header='{"alg":"RS256","typ":"JWT"}'
+payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((now-60))" "$((now+540))" "$GH_APP_ID")
+#  iat는 60초 과거로 잡는다. workbench 시계가 GitHub 서버보다 조금이라도 앞서면
+#  토큰이 즉시 거부된다. exp는 10분 이내로 잡는다. GitHub App JWT의 최대 유효 시간이다.
+
+signed=$(printf '%s.%s' "$(printf '%s' "$header"  | b64url)" \
+                         "$(printf '%s' "$payload" | b64url)")
+sig=$(printf '%s' "$signed" | openssl dgst -sha256 -sign "$GH_APP_PRIVATE_KEY" | b64url)
+JWT="$signed.$sig"
+
+TOKEN=$(curl -sf -X POST \
+  -H "Authorization: Bearer $JWT" \
+  -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/app/installations/$GH_APP_INSTALLATION_ID/access_tokens" \
+  | jq -r .token)
+#  installation access token은 1시간 뒤 만료된다. clone 한 번 쓰고 버리는 값이다.
+
+git clone "https://x-access-token:${TOKEN}@github.com/<org>/<gitops-repo>.git" "$GITOPS_REPO_DIR"
+
+# ── clone 직후. remote URL에서 토큰을 지운다 ────────────────────────────
+git -C "$GITOPS_REPO_DIR" remote set-url origin \
+  "https://github.com/<org>/<gitops-repo>.git"
+#  argocd-seed.sh는 로컬 파일만 읽고 push하지 않으므로 clone 이후 인증이 필요 없다.
+#  토큰을 .git/config에 남겨 두면 만료 전까지 workbench 디스크에 자격증명이 남는다.
+```
+
+필요 도구: `openssl`, `jq`, `curl`(workbench 기본 이미지에 이미 있다).
 
 ### 사용법
 

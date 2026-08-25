@@ -16,7 +16,7 @@
 | AWS 계정 + 관리자 권한 | `aws sts get-caller-identity` |
 | GitHub org + 저장소 생성 권한 | |
 | 로컬 도구 | `tofu` · `aws` · `gh` · `session-manager-plugin` · `jq` |
-| 이 저장소 접근 | private이면 배포 저장소가 읽을 GitHub App이 필요하다 |
+| 이 저장소 접근 | private이면 배포 저장소가 읽을 GitHub App이 필요하다([만드는 법](../scripts/README.md#github-app-만들기)) |
 
 ```bash
 brew install opentofu awscli gh jq
