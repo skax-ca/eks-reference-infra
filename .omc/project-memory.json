@@ -8,30 +8,6 @@
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
     {
-      "timestamp": 1787277763689,
-      "source": "manual",
-      "category": "open-items",
-      "content": "2026-08-21 — spoke(dev) teardown 완주. `iac-platform-gitops` cluster-secret 삭제(hub fan-out 중단, 올바른 2단계 순서로 재검증) → `deploy-dev-eks.yml` destroy(87 destroyed) → `deploy-dev-network.yml` destroy(70 destroyed) → 남은 CloudWatch flow-log 로그 그룹 수동 삭제 → `teardown-verify.sh`(AWS_PROFILE=asset) **exit 0, 잔존물 없음** 공식 확인. 다음 착수 후보(우선순위 순): (1) hub TGW route table에 dev CIDR(10.51.0.0/16) blackhole 라우트 2개(`aws_route.vpc_to_spoke`·`aws_ec2_transit_gateway_route.tgw_rt_to_spoke`)가 남아 있음 — 무해(트래픽 갈 곳 없음)하고 자동 정리 설계 이미 있음(아래 gotcha 참조), 다음 hub networking apply 시 자동으로 사라짐 — 급하지 않으면 방치해도 됨, 다음 spoke 재배포 전 정리해도 됨. (2) spoke 재배포: `04-spoke-lifecycle.md` 절차대로 asset 계정에 다시 세우기(bootstrap은 이미 돼 있으므로 `live/dev/{networking,eks}` apply부터). 이전 open-items(TGW 네트워크 경로·크로스 계정 인증·Pod 이름 가독성·SSM 셸 프로파일 등)는 전부 이걸로 대체 — 지난 spoke가 이미 정상 소멸했으므로 재배포 시 처음부터 다시 검증 필요."
-    },
-    {
-      "timestamp": 1787277772898,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "ArgoCD cluster-secret(argocd 네임스페이스, `secret-type: cluster` 라벨)은 두 역할을 겸한다: ①ArgoCD가 그 클러스터에 접속할 자격증명(`server`/`config`) ②ApplicationSet cluster generator가 팬아웃 대상으로 판단하는 라벨(`environment`·`tier`·`addon-*`). **이 Secret을 한 번에 통째로 지우면 addon이 정리되지 않는다**(2026-08-21 spoke teardown 리허설 3차 왕복 실측) — ArgoCD가 그 클러스터에 접속할 방법 자체를 잃어(`no clusters with this name`, argoproj/argo-cd#5817) cascade delete가 물리적으로 불가능해지고 Application 추적 기록만 사라진다. `kubectl delete application`로 직접 지우는 것도 안 통한다 — 매칭이 살아있는 동안은 selfHeal이 즉시 되살린다(deletionTimestamp도 안 찍힘, 5초 만에 재생성 확인). **올바른 순서**: ①매칭 라벨만 먼저 지우고 secret-type·server/config는 유지 → ApplicationSet이 더 이상 발견 못 해 Application을 정상 제거하는 동시에 ArgoCD는 여전히 접속 가능해 cascade delete가 실제로 완주(실측: NodePool CR까지 포함해 전부 삭제 확인) → ②그 다음에야 Secret 전체 삭제. `iac-module-library` `docs/04-spoke-lifecycle.md` 10절에 반영 완료(commit 76a0e36·9fdec11, 후자는 \"정정 서술 금지\" 규칙 위반 자가수정 + 원래 있던 워크로드 LB/PVC 선처리 단계 복원)."
-    },
-    {
-      "timestamp": 1787277780515,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "VPC destroy 후에도 CloudWatch 로그 그룹(`/aws/vpc/flow-log/...`)이 남을 수 있다 — Terraform 버그도 모듈 결함도 아니다(2026-08-21 AWS 공식 문서 확인). AWS의 flow-log IAM Role 최소 권한 정책 자체가 `logs:CreateLogGroup`을 요구하므로(docs.aws.amazon.com/vpc/latest/userguide/flow-logs-iam-role.html), destroy 도중 아직 배달 중이던 레코드가 도착하면 그 Role 권한으로 CloudWatch가 로그 그룹을 즉석 재생성한다(terraform-aws-modules/terraform-aws-vpc#435와 동일 증상). `flow_logs_retention_days`(모듈 기본값 30일)는 무관하다 — retention은 데이터 만료만 제어하지 로그 그룹 존재 자체는 못 지우고, 이 orphan은 애초에 Terraform이 만든 게 아니라 재생성 시 retention 미설정(None)으로 나타난다. `CreateLogGroup` 권한을 빼면 재생성을 막을 수 있지만 AWS 공식 최소 권한 요구사항을 벗어나는 트레이드오프라 재사용 모듈(`modules/vpc/flow-logs.tf`)에는 부적절 — 정해진 대응은 `teardown-verify.sh`가 잡아내면 수동 삭제(이미 hub/spoke-lifecycle.md에 문서화돼 있던 정답)."
-    },
-    {
-      "timestamp": 1787277786230,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "hub networking main.tf의 spoke TGW 라우트(`aws_route.vpc_to_spoke`·`aws_ec2_transit_gateway_route.tgw_rt_to_spoke`)는 `data.aws_ec2_transit_gateway_vpc_attachments`(필터 `state=available`)로 살아있는 attachment를 직접 discover하는 `for_each` 기반이라, spoke가 destroy돼 attachment가 `deleted`로 바뀌면 **코드 수정 없이 다음 hub networking apply 한 번**으로 그 spoke의 라우트만 자동 destroy된다(TGW 자체·RAM 공유·hub 자신의 attachment는 그대로 유지) — `04-spoke-lifecycle.md` 13절의 \"spoke 단독 teardown 시 hub TGW 잔존 라우트 처리, 미실측\" 항목에 대한 실제 답(2026-08-21 실측: attachment deleted 직후 해당 라우트가 AWS에 의해 자동으로 blackhole 상태가 됨 — 삭제되는 게 아니라 blackhole로 남고, 그걸 실제로 지우려면 hub apply가 필요함). CI의 `deploy-hub-network.yml`은 push(paths 필터라 빈 커밋으론 안 트리거됨)는 plan까지만, dispatch는 plan+apply가 같은 run 안에서 바로 이어져 \"미리 plan만 보고 멈추는\" 방법이 없다 — apply를 실제로 돌릴 각오가 있을 때만 dispatch한다."
-    },
-    {
       "timestamp": 1787281997415,
       "source": "manual",
       "category": "open-items",
@@ -126,6 +102,30 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-25 (이어서) 갱신: 지난 세션에 남겼던 \"bootstrap/README.md·docs/deployment-facts.md 죽은 참조\" 항목(deploy-hub-eks.yml:17·deploy-hub-network.yml:32·bootstrap/config.sh:23,50,59)은 이번 세션의 코드 주석 정리(§5 규칙 적용) 과정에서 전부 해소됐다 — 더 이상 유효한 open-item 아님. 새로 남은 것: (1) hub 재배포 착수(변동 없음, 여전히 최우선 — docs/hub-lifecycle.md 4절부터). (2) TGW 철거 순서 미검증(변동 없음). (3) [신규] 코드 주석 규칙(module repo docs/conventions.md §5: 날짜·D번호·문서절 인용 금지)을 이번에 워크플로 YAML·부트스트랩 스크립트·live/**/*.tf 122건 수동 정리했으나, 재발 방지용 자동 검증(scripts/validate-doc-conventions.py 같은 pre-commit 게이트)이 없다 — 다음에 여유 있으면 신설 검토."
+    },
+    {
+      "timestamp": 1787632950601,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-25 (세션 이어서) — hub 전체 재구축+철거 사이클 완주. docs/hub-lifecycle.md 4~7절(TGW→networking→EKS+workbench→GitOps seed) 순서대로 처음부터 끝까지 실행해 hub-demo-hub-an2 전 계층 정상 가동 확인 후, 8~13절(철거) 순서로 완전 철거, teardown-verify.sh(AWS_PROFILE=team) exit 0 잔존물 없음까지 확인. 과정에서 완전 신규 apply에서만 드러나는 실제 버그 2건 발견·수정 완료: (1) live/hub/networking main.tf의 aws_route.vpc_to_spoke for_each key가 라우트테이블 ID(fresh VPC라 plan 시점 unknown)를 toset()/setproduct()에 섞어 Invalid for_each argument로 실패 — 그룹명+인덱스+spoke_account_id로 key 재설계, PR #38 merge(commit 4f926e8). (2) eks-platform-gitops(별도 repo, ~/born2k/ai/iac-platform-gitops)의 bootstrap/root-app.yaml 등 9개 파일이 08-24 repo rename(iac-platform-gitops→eks-platform-gitops, iac-reference-infra→eks-reference-infra) 이후에도 옛 이름을 참조하고 있어 GitHub App(저장소 ID 스코프)이 \"Repository not found\"로 GitOps seed를 막았음 — 전수 치환 후 그 repo에 커밋 push(ff44ddb). TGW destroy 순서(networking 먼저 destroy로 hub 자신의 attachment 제거 → 그 다음 TGW destroy)를 오늘 처음 실측 확인해 docs/hub-lifecycle.md 12절에 반영(commit b1153cd) — 지난 세션 open-item(\"TGW 철거 순서 미검증\")이 완전히 해소됨. **현재 상태: hub·dev(spoke) 둘 다 미배포**(오늘 세션은 리허설 성격의 왕복이었고 마지막에 다시 철거함). 다음에 hub가 실제로 필요해지면 이번에 고친 코드 그대로 docs/hub-lifecycle.md 4절부터 재현하면 된다(같은 버그 재발 안 함, 검증됨)."
+    },
+    {
+      "timestamp": 1787632964730,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "2026-08-25 — Terraform/OpenTofu의 toset()/setproduct()는 원소 중 하나라도 \"known after apply\"(unknown)면 결과 컬렉션 전체를 unknown으로 만든다(개별 원소만 unknown 처리하지 않음) — 그 결과가 나중에 필터링되어 사실상 빈 집합이 될 상황이어도 마찬가지다. live/hub/networking main.tf의 hub_rt_x_spoke local이 이 패턴에 걸려, VPC를 완전히 새로 만드는 apply(라우트테이블 ID가 전부 unknown)에서 aws_route.vpc_to_spoke의 for_each가 Invalid for_each argument로 실패했다(기존에는 항상 \"이미 있는 VPC 위 증분 apply\"로만 실행돼 안 드러났음). 이건 223c54b에서 고친 \"attachment ID를 key에 직접 섞으면 안 된다\"는 교훈과 근본적으로 같은 클래스인데 발현 지점이 다르다 — 그때는 key 문자열에 unknown 값을 직접 섞은 경우였고, 이번엔 toset()/setproduct() 같은 컬렉션 함수에 unknown 값이 담긴 리스트를 통과시킨 경우다. 일반화: for_each에 쓰일 컬렉션을 만들 때는 (a) key 자체에 unknown 값을 넣지 않는 것뿐 아니라 (b) 그 컬렉션을 만드는 함수 체인 자체가 unknown 값을 다루는지도 확인해야 한다 — toset()·setproduct()·sort() 등은 원소 값을 알아야 결과를 결정할 수 있는 함수라 unknown 원소가 섞이면 체인 전체가 전염된다. 해법 패턴: 실제 리소스 ID(unknown 가능) 대신 그룹명·인덱스·설정값처럼 plan 시점에 항상 known인 값으로 key/컬렉션을 구성하고, unknown일 수 있는 실제 ID는 resource 본문의 인자(예: route_table_id = module.vpc.xxx[idx])로만 참조한다. 수정 커밋 4f926e8, live/hub/networking/main.tf."
+    },
+    {
+      "timestamp": 1787632975057,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-25 — scripts/README.md 복원 필요. 2026-08-24 \"README류 9개 일괄 삭제\"(commit c8db4b2)에 scripts/README.md도 부수적으로 휩쓸려 삭제됐음(당시 의도는 최상위 README·AGENTS류였지 이 파일의 실질 내용은 아니었을 가능성 높음). 원문은 git show c8db4b2^:scripts/README.md로 온전히 복구 가능 — argocd-seed.sh의 GitHub App private key를 workbench로 옮기는 절차(SSM Parameter Store SecureString 경유, 사용 직후 삭제하는 이유와 기각한 대안들: send-command 직접 전달·Secrets Manager·ESO)와 vendoring 드리프트 검사법을 담고 있어 이번 세션에 hub GitOps seed를 실행할 때 실측으로 다시 필요했던 문서다. 다음 세션에서 그 원문 그대로(또는 이번 세션에 확정된 GH App 정보 App ID 4512318·Installation ID 151838919 등 최신 사실 반영해) scripts/README.md로 재생성 권장."
+    },
+    {
+      "timestamp": 1787632992342,
+      "source": "manual",
+      "category": "gotcha",
+      "content": "2026-08-25 — team 계정(hub, 533616270150)은 실측 결과 \"이 hub-spoke 프로젝트 팀만 쓰는 계정\"이 아니라 회사 내 여러 개인이 각자 샌드박스로 쓰는 훨씬 넓은 공용 계정이다(EC2 인스턴스 목록에 yg-os-test·litellm-gateway-cjh220·lsh-ec2-win·yg-eks-bastion·eks-scale-lab 등 이 프로젝트와 무관한 개인/팀 리소스가 다수 확인됨). 이 사실이 GitHub App private key 같은 자격증명을 SSM Parameter Store에 상시 보관할지 논의에서 결정적이었다 — AmazonSSMManagedInstanceCore의 ssm:GetParameter가 Resource:\"*\"라 파라미터를 지우지 않고 남기면 \"우리 팀\"이 아니라 \"이 계정에 개인 인스턴스를 가진 모르는 사람들\"까지 복호화 가능해진다. 결론(사용자 확정): GitHub App(skax-ca-gitops-reader, App ID 4512318, Installation ID 151838919) private key는 로컬(~/.config/gh-apps/skax-ca-gitops-reader.pem)에만 두고, argocd-seed 실행 시에만 SSM SecureString에 일시 업로드→workbench에서 복호화→사용 후 파라미터·workbench 사본 모두 삭제하는 기존 patttern을 유지한다(상시 저장 채택 안 함). 이 절차 자체의 상세(왜 send-command 직접전달·Secrets Manager는 기각됐는지)는 scripts/README.md 복원 항목([[project-memory:scripts-readme-restore]] 별도 open-item)에 있다. 참고로 이번 세션에서 이 계정이 \"공용\"이라는 판단 기준 자체가 이전보다 훨씬 구체화됐다 — CLAUDE.md 8절의 \"여러 개가 나오면 공용 계정\"은 맞았지만 그 공유 범위가 예상(같은 프로젝트 팀)보다 훨씬 넓다는 것까지는 이전 세션들에 기록된 적 없었다."
     }
   ],
   "userDirectives": [],
