@@ -1,4 +1,4 @@
-# 07. 운영 런북
+# 운영 런북
 
 **읽는 사람**: 이미 구축된 환경을 운영하는 사람.
 
@@ -173,7 +173,12 @@ kubectl -n argocd get application root-app -o jsonpath='{.status.sync.revision}{
 **교체해야** 코드가 상태를 되찾는다(예: 클러스터보다 먼저 떠서 kubeconfig가 없는 경우).
 
 ```bash
-gh workflow run deploy-eks.yml --ref main \
+# hub
+gh workflow run deploy-hub-eks.yml --ref main \
+  -f action=apply -f replace='module.workbench.aws_instance.this[0]'
+
+# spoke(dev)
+gh workflow run deploy-dev-eks.yml --ref main \
   -f action=apply -f replace='module.workbench.aws_instance.this[0]'
 ```
 

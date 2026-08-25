@@ -1,4 +1,4 @@
-# 03. hub 계정 생애주기: 구축과 철거
+# hub 계정 생애주기: 구축과 철거
 
 **읽는 사람**: hub(team 계정)의 인프라를 구축하거나 철거하는 사람.
 
@@ -63,8 +63,9 @@ cd bootstrap && ./bootstrap.sh             # BOOTSTRAP_TARGET=hub 가 기본값
 ./verify.sh                                # drift 확인만
 ```
 
-기대 상태(SSOT)는 [`../bootstrap/README.md`](../bootstrap/README.md)가 소유한다: 값을
-여기 다시 적지 않는다.
+기대 상태(SSOT)는 `../bootstrap/config.sh`가 가진다: 값을 여기 다시 적지 않는다. (⚠️
+원래 SSOT였던 `bootstrap/README.md`는 2026-08-24 문서 정리로 삭제되어 재정의 전이다.
+`config.sh`의 헤더 주석이 현재 유일하게 살아 있는 기대 상태 설명이다.)
 
 **순서가 자유롭지 않다**: OIDC provider → 입구 Role(신뢰=OIDC) → 실행 Role(신뢰=입구) → 입구
 inline 정책(Resource=실행 Role). IAM은 신뢰 정책의 principal이 실제로 존재하는지 검증한다:
@@ -79,7 +80,16 @@ inline 정책(Resource=실행 Role). IAM은 신뢰 정책의 principal이 실제
 버킷명은 **git에 넣지 않는다.** GitHub 저장소 변수 `HUB_TF_STATE_BUCKET`과 로컬
 `backend.hcl`에만 둔다.
 
-### 4. 네트워크 (L1)
+### 4. TGW와 네트워크 (L1)
+
+TGW(`live/hub/tgw`)는 네트워킹과 **분리된 배포 루트**이고, **반드시 먼저 apply한다**(같은
+apply 안에 있으면 TGW ID가 plan 시점에 unknown이라 spoke 자동 발견 `for_each`가 `Invalid for_each argument`로 실패한다, 2026-08-24 실측. `needs:`로 순서 강제는 불가하다).
+
+아래 네트워크와 같은 방식으로 초기화한다(`key = "hub/tgw.tfstate"`). CIDR(`locals.cidr_uniq`)은 네트워크와 반드시 같아야 한다(state 미공유, 사람이 유지).
+
+```bash
+gh workflow run deploy-hub-tgw.yml --ref main -f action=apply
+```
 
 ```bash
 cat > live/hub/networking/backend.hcl <<'EOF'
@@ -157,7 +167,7 @@ gh repo create <org>/<project>-platform-gitops --private
 `--set`도, 인라인 heredoc 매니페스트도 쓰지 않는다.
 
 **완료 조건: 비밀번호 교체**는 선택이 아니다. 절차는 [`runbooks.md`](runbooks.md)
-「3. ArgoCD 초기 비밀번호 교체」가 소유한다.
+「3. ArgoCD 관리자 비밀번호 교체」가 소유한다.
 
 ### 7. 완료 판정
 

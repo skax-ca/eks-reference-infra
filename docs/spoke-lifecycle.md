@@ -1,4 +1,4 @@
-# 04. spoke 계정 생애주기: 구축과 철거
+# spoke 계정 생애주기: 구축과 철거
 
 **읽는 사람**: spoke(예: asset 계정의 dev)의 인프라를 구축하거나 철거하는 사람.
 
@@ -48,8 +48,10 @@ BOOTSTRAP_TARGET=spoke SPOKE_ENV=dev AWS_PROFILE=asset ./bootstrap.sh
 BOOTSTRAP_TARGET=spoke SPOKE_ENV=dev AWS_PROFILE=asset ./verify.sh
 ```
 
-기대 상태(SSOT)는 `../bootstrap/README.md`가 소유한다. **`AWS_PROFILE`을 반드시 spoke
-계정 프로파일로 지정한다.** 기본 프로파일이 hub(team) 계정이면 조용히 hub를 다시 건드린다.
+기대 상태(SSOT)는 `../bootstrap/config.sh`가 가진다(⚠️ 원래 SSOT였던
+`bootstrap/README.md`는 2026-08-24 문서 정리로 삭제되어 재정의 전이다). **`AWS_PROFILE`을
+반드시 spoke 계정 프로파일로 지정한다.** 기본 프로파일이 hub(team) 계정이면 조용히 hub를
+다시 건드린다.
 
 OIDC provider·입구/실행 Role은 **spoke 계정 안에 별도로** 생긴다(hub와 공유하지 않는다.
 OIDC provider는 URL당 계정에 1개 제약이라 계정이 다르면 각자 가진다). `sub` 2패턴의
@@ -229,8 +231,16 @@ WORKLOAD=<code> ENVIRONMENT=dev AWS_PROFILE=asset ./scripts/teardown-verify.sh
 
 ### 13. spoke 단독 teardown 시 hub TGW 잔존 라우트
 
-`deployment-facts.md`의 "teardown 후 재생성 시" 절은 **hub가 destroy된 경우**만 다룬다.
-spoke만 단독으로 destroy하고 hub는 그대로 두는 경우는 이 절이 다룬다.
+**hub가 destroy된 경우**는 다르다(이 사실은 원래 `deployment-facts.md`가 다뤘으나
+2026-08-24 문서 정리로 그 파일이 삭제됐다): hub networking을 destroy하면 프리픽스
+리스트·TGW·RAM 공유가 전부 사라져, spoke networking을 먼저 재생성해도
+`data.aws_ram_resource_share` 조회가 즉시 에러로 실패한다(순서를 잊어도 안전하게
+드러난다). 통상 순서(`hub networking → hub eks → spoke networking → spoke eks → hub
+networking 재적용`)를 그대로 반복하면 되고, **spoke eks apply를 생략하지 않는다**: hub
+재생성 시 프리픽스 리스트도 새 ID로 바뀌므로, spoke eks가 그 새 ID를 집으려면 apply가 한
+번은 돌아야 한다(data 소스는 이미 배포된 리소스를 저절로 갱신하지 않는다).
+
+spoke만 단독으로 destroy하고 hub는 그대로 두는 경우는 아래를 본다.
 
 hub의 spoke 라우트(`aws_route.vpc_to_spoke`·`aws_ec2_transit_gateway_route.tgw_rt_to_spoke`)는
 **살아있는 데이터소스**(`state=available` 필터의 attachment 자동 발견)로 개수가 결정되는
