@@ -54,7 +54,7 @@ output "nat_gateway_ids" {
   value       = module.vpc.nat_gateway_ids
 }
 
-# ⚠️ transit_gateway_id · tgw_resource_share_arn 출력은 2026-08-24 TGW 분리로
+# ⚠️ transit_gateway_id · tgw_resource_share_arn 출력은 TGW 분리로
 #    live/hub/tgw/outputs.tf 로 옮겼다 — 그 리소스들이 이제 이 root 에 없다.
 
 output "flow_log_group_name" {

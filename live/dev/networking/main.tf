@@ -178,14 +178,14 @@ module "vpc" {
 # 경로」 절). IAM 신뢰(cross-account-trust-role)는 "누가 인증되는가"만 답하고, 이 리소스들이
 # 허브 ArgoCD 가 spoke API 서버에 패킷을 보낼 실제 경로다.
 #
-# hub 의 TGW ID 는 repo 변수로 받지 않는다 — RAM 공유를 **이름으로** 조회한다(2026-08-20
-# 재설계). 이름은 hub main.tf 의 name 조합과 동일한 공식이라 결정적이다. 값이 없으면
+# hub 의 TGW ID 는 repo 변수로 받지 않는다 — RAM 공유를 **이름으로** 조회한다.
+# 이름은 hub main.tf 의 name 조합과 동일한 공식이라 결정적이다. 값이 없으면
 # (=hub 가 아직 없으면) 이 data 소스가 즉시 에러로 실패한다 — "hub 가 spoke 보다 먼저
 # 존재해야 한다"는 순서를 사람이 기억하지 않아도 되게 강제하는 가드다.
 #
 # ⚠️ CIDR 은 **태그**로 조회하지 않는다 — 태그는 종류를 가리지 않고 계정 경계를 못 넘는다
-#    (2026-08-20 실측: describe-tags·DescribeTransitGatewayVpcAttachments·
-#    aws_ram_resource_share 의 tags 전부 cross-account 조회 시 빈 배열/null). 대신 CIDR 을
+#    (describe-tags·DescribeTransitGatewayVpcAttachments·
+#    aws_ram_resource_share 의 tags 전부 cross-account 조회 시 빈 배열/null 을 반환한다). 대신 CIDR 을
 #    담은 관리형 접두사 목록(managed prefix list) 자체를 RAM 으로 공유받는다 — resource_arns
 #    (TGW·프리픽스 리스트 둘 다)는 RAM 의 본래 목적이라 다르게 동작해 그대로 쓸 수 있다.
 data "aws_ram_resource_share" "hub_tgw" {
@@ -194,8 +194,8 @@ data "aws_ram_resource_share" "hub_tgw" {
 }
 
 locals {
-  # resource_arns 에 공유된 리소스 ARN 이 전부 들어있다(TGW + 허브 uniq CIDR 프리픽스 리스트,
-  # 2026-08-20 이후 2종) — 타입별 substring 으로 걸러 각자의 ID 를 잘라낸다.
+  # resource_arns 에 공유된 리소스 ARN 이 전부 들어있다(TGW + 허브 uniq CIDR 프리픽스 리스트
+  # 2종) — 타입별 substring 으로 걸러 각자의 ID 를 잘라낸다.
   hub_transit_gateway_id = split("/", [
     for arn in data.aws_ram_resource_share.hub_tgw.resource_arns :
     arn if strcontains(arn, ":transit-gateway/")
@@ -217,9 +217,9 @@ locals {
 # 마다 hub의 aws_ram_principal_association을 hub state 모르게 실물에서 해제시키고,
 # (2) 재배포 때 새로 생기는 초대는 PENDING인데 그 상태를 조회하는 Terraform 데이터소스가
 # 없어(위 data.aws_ram_resource_share는 ACCEPTED 이후에만 찾는다) 스스로는 절대 수락할
-# 수 없는 순환에 빠진다(2026-08-21 실측, 최초엔 import 블록으로 일회성 우회했었다).
+# 수 없는 순환에 빠진다(최초엔 import 블록으로 일회성 우회했었다).
 #
-# 아래 removed 블록은 2026-08-21 이전에 이미 state에 들어있던 이 리소스를 "관리 대상에서
+# 아래 removed 블록은 이 CI 이관 이전에 이미 state에 들어있던 이 리소스를 "관리 대상에서
 # 뺀다"는 뜻이지 destroy가 아니다(lifecycle.destroy = false) — 다음 apply 한 번으로
 # state에서만 잊혀지고 AWS 실물(수락 상태)은 그대로 유지된다. 신규 spoke는 이 리소스가
 # 애초에 state에 있었던 적이 없으므로 이 블록 자체가 필요 없다.
@@ -249,8 +249,8 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
 # 🔴 for_each 는 **정적으로 알려진 인덱스**(0..len-1)를 키로 쓴다 — 리스트 자체(module 출력)를
 #    키로 쓰지 않는다. VPC 를 이 apply 안에서 처음 만드는 경우(완전 신규 spoke) 라우트테이블
 #    ID 는 apply 시점에야 정해져 리스트 전체가 "known after apply"가 되고, 그런 값을 for_each
-#    키로 쓰면 OpenTofu 가 "Invalid for_each argument"로 plan 자체를 거부한다(2026-08-21 실측 —
-#    2026-08-19 최초 배포 때는 이 hub 라우트가 없어 한 번도 안 겪었던 경로). local.node_cidrs
+#    키로 쓰면 OpenTofu 가 "Invalid for_each argument"로 plan 자체를 거부한다(최초 배포 때는
+#    이 hub 라우트가 없어 한 번도 안 겪었던 경로다). local.node_cidrs
 #    의 길이(정적 값)로 인덱스 집합만 만들고, 실제 라우트테이블 ID는 apply 시점에 그 인덱스로
 #    조회한다 — for_each는 **키 집합**만 plan 시점에 알려지면 되고 값은 몰라도 된다.
 resource "aws_route" "to_hub" {

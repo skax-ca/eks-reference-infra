@@ -1,7 +1,5 @@
 # live/hub/tgw — plan → (사람이 실행) → plan → apply
 #
-# ── 2026-08-24 신설 ────────────────────────────────────────────────────────────
-#
 # `deploy-hub-network.yml`을 그대로 복제했다 — 이 워크플로의 모든 설계 원칙(한 워크플로
 # 두 job · plan job에 environment 없음 · apply는 tofu apply tfplan · destroy 확인 게이트 등)
 # 은 그 파일의 상단 주석이 근거를 자세히 설명한다. 여기 반복하지 않는다.
@@ -10,8 +8,7 @@
 #    별도 워크플로 파일 사이에 `needs:`로 순서를 강제할 수 없다 — hub를 처음부터 세울 때
 #    (부트스트랩 이후) 이 워크플로의 apply가 끝난 뒤에 사람이 `deploy-hub-network.yml`을
 #    dispatch한다. 순서를 어기면 그 워크플로의 spoke 자동 발견 로직이
-#    `Invalid for_each argument`로 실패한다(TGW가 아직 없어서) — `live/hub/tgw/README.md`
-#    「1」 참조.
+#    `Invalid for_each argument`로 실패한다(TGW가 아직 없어서).
 
 name: deploy · live/hub/tgw
 

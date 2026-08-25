@@ -52,7 +52,7 @@ locals {
   # 같아야 한다: iamr-${workload}-${env}-${region_code}-argocd-hub → iamr-demo-dev-an2-argocd-hub.
   #
   # ⚠️ **순서가 반대여야 한다** — trust policy(스포크가 소유)는 Principal 대상이 실제로 존재해야
-  #    AWS 가 정책 생성을 허용한다("Invalid principal in policy" 로 즉시 거부, 실측 2026-08-19).
+  #    AWS 가 정책 생성을 허용한다(없으면 "Invalid principal in policy" 로 즉시 거부한다).
   #    반면 이 값을 소비하는 아래 argocd_hub_pod_identity 는 **permission policy**(sts:AssumeRole
   #    on resource)라 대상 존재를 검증하지 않는다 — 그래서 허브를 먼저 켜도 안전하다.
   spoke_argocd_trust_role_arn = "arn:aws:iam::${var.spoke_account_id}:role/iamr-demo-dev-an2-argocd-hub"
@@ -495,7 +495,7 @@ module "eks" {
   # ── 크로스 계정 확장 — 허브 ArgoCD → 스포크 EKS (eks-cluster-v0.8.0 신설) ──────
   # docs/02-choose-your-path.md 질문 D · docs/05-modules.md 「크로스 계정 확장」의 구현.
   # spoke(dev) 의 cross-account-trust-role 을 먼저 세우려다 "Invalid principal in policy" 로
-  # 실패했다(2026-08-19 실측) — trust policy 는 대상 Principal 이 존재해야 하고, 그 대상이
+  # 실패한 전례가 있다 — trust policy 는 대상 Principal 이 존재해야 하고, 그 대상이
   # 바로 이 값(허브의 argocd_hub_pod_identity Role)이었다. 순서를 뒤집어 허브를 먼저 켠다.
   # argocd_namespace 는 기본값 "argocd" 를 그대로 쓴다 — scripts/argocd-seed.sh 의
   # ARGOCD_NAMESPACE 기본값과 일치해야 한다(모듈 repo 규약).

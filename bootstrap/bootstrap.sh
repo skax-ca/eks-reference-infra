@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# 부트스트랩 (D21 — IaC 밖). state 버킷 · OIDC provider · 2단 Role 을 만든다.
+# 부트스트랩 (IaC 밖). state 버킷 · OIDC provider · 2단 Role 을 만든다.
 #
 # 멱등: 항목마다 먼저 검사하고 **다를 때만** 적용한다. 두 번째 실행은 changed=0 이어야 한다.
-#       그것이 D21 완화책 1의 수용 기준이고, 스크립트가 `apply` 의 수렴 성질을 흉내내는 방식이다.
+#       그것이 이 스크립트의 수용 기준이고, `apply` 의 수렴 성질을 흉내내는 방식이다.
 #
-# ⛔ AWSAFTExecution 을 건드리지 않는다(D27-1). update-assume-role-policy 가
+# ⛔ AWSAFTExecution 을 건드리지 않는다. update-assume-role-policy 가
 #    이 파일에 등장하면 안 된다 — 공용 계정(F13)에서 남의 Role 을 덮어쓰는 일이다.
 #
-# ── 2026-08-19: hub-spoke 토폴로지 확정 ─────────────────────────────────────
+# ── hub-spoke 토폴로지 확정 ──────────────────────────────────────────────────
 # hub 는 team 계정에 단일 고정. spoke 는 계정도 env 도 다를 수 있는 **여러** 인스턴스이고,
 # 그 첫 인스턴스가 team 계정을 떠나 별도 계정(asset)으로 옮긴 dev 다. BOOTSTRAP_TARGET 으로
 # 이번 실행이 hub 세트를 수렴할지 spoke 세트를 수렴할지 고르고, spoke 쪽은 SPOKE_ENV(기본
@@ -74,7 +74,7 @@ converge_bucket() {
   local prefix="$1" env="$2" label="$3" bucket
   bucket="$(find_bucket_by_prefix "$prefix")"
   if [[ -z "$bucket" ]]; then
-    # ⚠️ 버킷명은 git 에 없다(D25). 여기서 생성하고 **출력으로만** 알린다.
+    # ⚠️ 버킷명은 git 에 없다. 여기서 생성하고 **출력으로만** 알린다.
     #    AWS 는 예측 불가능한 버킷명을 권장한다(F12).
     bucket="${prefix}$(openssl rand -hex 6)"
     aws_ s3api create-bucket --bucket "$bucket" \
@@ -104,7 +104,8 @@ converge_bucket() {
     changed "[$label] 퍼블릭 액세스 차단"
   else ok "[$label] 퍼블릭 차단"; fi
 
-  # D29 — 버저닝 + use_lockfile 이 lock 객체 버전을 폭증시킨다(F8). 이것이 방어책이다.
+  # 버저닝 + use_lockfile 이 lock 객체 버전을 폭증시킨다(S3 공식 문서가 경고하는 동작이다).
+  # 이것이 방어책이다.
   if [[ "$(check_lifecycle "$bucket")" != ok ]]; then
     aws_ s3api put-bucket-lifecycle-configuration --bucket "$bucket" \
       --lifecycle-configuration "$(lifecycle_config)" >/dev/null
@@ -160,7 +161,7 @@ ok "OIDC provider 태그(Name=$OIDC_NAME)"
 #    아직 없는 Role 을 principal 로 쓸 수 없다 — 계산으로 끊을 수 있다는 가정은 **틀렸다**.
 #
 # 닭-달걀은 대신 **의존 방향이 한쪽뿐인 3단계**로 푼다:
-#    ① 입구 Role   신뢰 = OIDC provider (§2 에서 이미 만들었다)
+#    ① 입구 Role   신뢰 = OIDC provider (위 2절에서 이미 만들었다)
 #    ② 실행 Role   신뢰 = 입구 Role     (①이 존재하므로 통과)
 #    ③ 입구 inline 정책  Resource = 실행 Role ARN
 #       → Resource 는 principal 이 아니라서 **존재 검증을 받지 않는다.** 그래서 마지막이어도 된다.

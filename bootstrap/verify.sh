@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# drift 감지 (D21 완화책 3) — **read-only**. 아무것도 만들거나 고치지 않는다.
+# drift 감지 — **read-only**. 아무것도 만들거나 고치지 않는다.
 #
 # 부트스트랩이 IaC 밖이라 `tofu plan` 이 없다. 이 스크립트가 그 역할을 대신한다.
 # 기대 상태는 config.sh 가 bootstrap.sh 와 **공유**한다 — 기준이 갈리면 소음이 된다.
@@ -8,9 +8,11 @@
 #
 # ⚠️ 이 스크립트는 **음성 테스트로 증명해야 한다.** 리소스를 일부러 어긋나게 한 뒤
 #    exit 1 이 나오는 것을 보지 않으면, "완화책이 있다"는 착각만 남는다.
-#    증명 절차는 README.md §4 에 있다.
+#    증명 절차가 있던 README.md는 삭제되어 재정의 전이다: drift 를 일부러 주입(예: S3
+#    버저닝을 Suspended로, IAM Role 신뢰 정책을 조작)한 뒤 exit 1을 확인하고, 다시
+#    bootstrap.sh 를 돌려 exit 0으로 돌아오는지 보는 방식이었다.
 #
-# 2026-08-19: hub-spoke 토폴로지 확정 — bootstrap.sh 와 같은 BOOTSTRAP_TARGET(hub|spoke,
+# hub-spoke 토폴로지: bootstrap.sh 와 같은 BOOTSTRAP_TARGET(hub|spoke,
 # 기본 hub)·SPOKE_ENV(spoke 인스턴스 선택, 기본 dev)로 검사 대상을 고른다. 한 실행에서
 # hub·spoke 를 동시에 검사하지 않는다 — 애초에 서로 다른 계정이라 한 AWS_PROFILE 로는
 # 한쪽만 볼 수 있다.

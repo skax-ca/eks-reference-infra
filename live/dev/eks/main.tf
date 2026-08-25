@@ -82,7 +82,7 @@ locals {
 # ── 허브 uniq CIDR 발견 — networking 과 별도 state 라 같은 RAM 조회를 독립적으로 반복한다 ──
 # (이 루트는 remote_state 를 쓰지 않는다는 원칙과 같은 이유 — 이 파일 머리말 참조.
 #  live/dev/networking/main.tf 의 동일 블록과 로직이 같다 — state 는 분리해도 발견 방법은
-#  하나다. 태그로는 계정 경계를 못 넘지만(2026-08-20 실측) RAM resource_arns 는 넘는다.)
+#  하나다. 태그로는 계정 경계를 못 넘지만 RAM resource_arns 는 넘는다.)
 data "aws_ram_resource_share" "hub_tgw" {
   name           = "ram-${var.workload}-hub-${var.region_code}-tgw-share"
   resource_owner = "OTHER-ACCOUNTS"

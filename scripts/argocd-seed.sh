@@ -14,7 +14,7 @@
 #    ⚠️ 예외는 단 하나: repository Secret(2단계). private key 를 담아 커밋할 수 없다.
 #
 # ⚠️ 이 repo 는 배포하지 않는다. 이 스크립트는 **소비 프로젝트가 실행하는 절차**이며,
-#    여기서는 재사용 자산으로만 소유한다(하드코딩 금지 — architecture/01 §4).
+#    여기서는 재사용 자산으로만 소유한다(하드코딩 금지).
 #
 # ⚠️ bash 3.2 호환으로 쓴다 — macOS 기본 bash 가 3.2 이고(실측), 이 스크립트는 workbench(bash 5)
 #    뿐 아니라 팀원 노트북에서 --dry-run 으로도 돌린다. 연상배열·mapfile·${var^^} 를 쓰지 않는다.
@@ -211,7 +211,7 @@ apply_manifest() {
   step "$n" "$label"
   printf '     출처: %s\n' "${file#"$GITOPS_REPO_DIR"/}"
   if (( DRY_RUN )); then
-    # ⚠️ dry-run 에서는 **kubectl 을 아예 부르지 않는다.** 실측 2026-08-07 (VPC 밖에서):
+    # ⚠️ dry-run 에서는 **kubectl 을 아예 부르지 않는다.** VPC 밖에서 실행하면:
     #      ① `--dry-run=client`        → `failed to download openapi ... i/o timeout`
     #      ② `--dry-run=client --validate=false` → `unable to recognize ... /api i/o timeout`
     #    ②가 핵심이다 — AppProject·Application 은 **CRD** 라 kubectl 이 RESTMapping 을 풀려면

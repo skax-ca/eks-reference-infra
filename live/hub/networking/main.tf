@@ -15,7 +15,7 @@ locals {
   # primary 는 인프라 전용 소형으로 최소화하고 워크로드는 secondary 에 배치한다.
   #
   # ⚠️ 이 값들은 예제에서 **그대로 가져오지 않았다.** 대상 계정이 공용 개발 계정이라
-  #    실제 대역을 재조회해 비어 있는 것을 골랐다(2026-08-19, hub 신설 시점 전 VPC CIDR 전수 조회.
+  #    실제 대역을 재조회해 비어 있는 것을 골랐다(hub 신설 시점의 VPC CIDR 전수 조회 결과다.
   #    live/dev 가 쓰던 10.50/24·10.51/16 은 VPC 자체가 이미 파기됐지만, 코드는 남아 있어
   #    재사용하지 않고 새 대역을 골랐다):
   #      사용 중 · 10.0/16(×6)  10.1/16  10.10/16  10.10/21  10.20/16  10.38/16  10.90/16
@@ -176,27 +176,26 @@ module "vpc" {
 }
 
 # ── 크로스 계정 네트워크 경로 — Transit Gateway (모듈 repo docs/02-choose-your-path.md
-#    「네트워크 경로」 절, 2026-08-19) ───────────────────────────────────────────────
+#    「네트워크 경로」 절) ─────────────────────────────────────────────────────────
 #
 # IAM 신뢰(live/dev/eks 의 cross-account-trust-role)는 "누가 인증되는가"만 답한다.
 # private-only 엔드포인트에서 허브 ArgoCD 가 spoke API 서버에 패킷을 보낼 경로 자체가
 # 없으면 인증이 성립해도 도달하지 못한다 — 이 리소스들이 그 경로다.
 #
 # ⛔ **VPC Peering 이 아니다.** 처음엔 Peering 을 시도했으나 AWS 가
-#    "Failed due to ... overlapping CIDR range" 로 즉시 거부했다(2026-08-19 실측) — 이
+#    "Failed due to ... overlapping CIDR range" 로 즉시 거부했다. 이
 #    VPC 의 pod-dup 대역(100.64.0.0/16)을 모든 스포크가 그대로 재사용하는 설계라, 실제
 #    라우팅 대상(uniq 대역)이 안 겹쳐도 dup 대역이 겹치는 것만으로 peering 자체가 거부된다.
 #    자세한 근거는 모듈 repo 문서 참조.
-# ── TGW 자체는 live/hub/tgw root 소관이다(2026-08-24 분리) ──────────────────────────
+# ── TGW 자체는 live/hub/tgw root 소관이다 ───────────────────────────────────────────
 #
 # TGW가 이 root와 같은 apply에서 새로 생기면, 아래 spoke 자동 발견 로직의 for_each가
 # "TGW ID가 plan 시점에 unknown"이라 Invalid for_each argument로 실패한다(hub를 완전히
-# destroy한 뒤 재배포할 때 실물 재현, 2026-08-24). live/hub/tgw README.md 참조 —
-# 배포 순서는 그 root가 먼저다.
+# destroy한 뒤 재배포할 때 재현됨). 배포 순서는 live/hub/tgw root가 먼저다.
 #
 # ⚠️ **state 필터가 필수다** — AWS는 destroy된 TGW도 한동안 State=deleted로
-#    DescribeTransitGateways에 계속 반환한다(2026-08-24 실측: 2026-08-20에 이미 destroy한
-#    TGW의 유령 항목이 tag:Name 필터만으로는 그대로 매칭됐다). 그 유령 항목의 route table은
+#    DescribeTransitGateways에 계속 반환한다(이미 destroy한 TGW의 유령 항목이 tag:Name
+#    필터만으로는 그대로 매칭된 전례가 있다). 그 유령 항목의 route table은
 #    당연히 없어 아래 aws_ec2_transit_gateway_route_table 조회가 "no matching" 에러를 낸다.
 data "aws_ec2_transit_gateway" "hub" {
   filter {
@@ -222,8 +221,7 @@ data "aws_ec2_transit_gateway_route_table" "hub" {
 data "aws_caller_identity" "current" {}
 
 # ── 허브 자신의 attachment — ArgoCD(argocd-application-controller)가 도는 서브넷 ──────
-# VPC(위 module.vpc)가 있어야 만들 수 있어 live/hub/tgw로 옮길 수 없다(순환 의존) —
-# live/hub/tgw README.md 「3」 참조.
+# VPC(위 module.vpc)가 있어야 만들 수 있어 live/hub/tgw로 옮길 수 없다(순환 의존).
 resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.subnet_ids_by_group["node-uniq"]
@@ -239,7 +237,7 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
 #
 # ⚠️ hub 자신의 attachment 에도 이 방식을 쓴다 — attachment 리소스의
 # transit_gateway_default_route_table_association = false 로 먼저 시도했으나 실제로는 무동작
-# 이었다(2026-08-20 실측: "Modifications complete after 0s" 뒤에도 옛 RT 연결이 그대로 남아
+# 이었다("Modifications complete after 0s" 뒤에도 옛 RT 연결이 그대로 남아
 # AssociateTransitGatewayRouteTable 이 Resource.AlreadyAssociated 로 실패). AWS 공식 문서의
 # "두 리소스로 같은 연결을 관리하지 말라"는 경고와도 맞아 — 이 인자를 걷어내고
 # replace_existing_association 하나로 통일한다.
@@ -256,7 +254,7 @@ resource "aws_ec2_transit_gateway_route_table_association" "hub" {
 # ── spoke 자동 발견 — 이 TGW 에 RAM 으로 붙은 attachment 전부 ──────────────────────────
 # 복수형 데이터소스는 "없으면 빈 리스트"다(단수형과 달리 에러가 아니다) — spoke 가 하나도
 # 없어도, 여러 개여도 이 apply 는 그대로 성공한다. repo 변수로 spoke 의 attachment ID 를
-# 수동 전달받던 방식(2026-08-20 최초 구현)을 걷어낸다 — 다음 spoke 를 추가할 때 이 파일을
+# 수동 전달받던 방식을 걷어낸다 — 다음 spoke 를 추가할 때 이 파일을
 # 고치지 않아도 되는 것이 목적이다(모듈 repo docs/02-choose-your-path.md 「네트워크 경로」
 # 「값 발견」 절).
 data "aws_ec2_transit_gateway_vpc_attachments" "spokes" {
@@ -270,7 +268,7 @@ data "aws_ec2_transit_gateway_vpc_attachments" "spokes" {
   }
 }
 
-# ⚠️ 허브 자신의 attachment도 이 for_each에 포함된 채로 발견된다(2026-08-24 재설계) — 이름을
+# ⚠️ 허브 자신의 attachment도 이 for_each에 포함된 채로 발견된다 — 이름을
 # "spoke"가 아니라 "discovered"로 둔 이유다. attachment ID로 허브 것을 미리 제외하지 않는다 —
 # 그 ID(aws_ec2_transit_gateway_vpc_attachment.hub.id)는 이 apply에서 새로 생기는 값이라
 # plan 시점엔 여전히 unknown이고, 그걸 for_each 조건에 섞으면 위 TGW 분리로 없앤 버그가
@@ -299,11 +297,11 @@ resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
   replace_existing_association = true
 }
 
-# ⚠️ **CIDR 은 태그에서 읽지 않는다** — 2026-08-20 실측: EC2·RAM 태그는 종류를 가리지 않고
+# ⚠️ **CIDR 은 태그에서 읽지 않는다** — EC2·RAM 태그는 종류를 가리지 않고
 #    계정 경계를 못 넘는다(describe-tags·DescribeTransitGatewayVpcAttachments 모두 cross-account
-#    조회 시 빈 배열/null 반환 확인, aws_ram_resource_share 데이터소스의 tags 도 마찬가지).
+#    조회 시 빈 배열/null 을 반환한다, aws_ram_resource_share 데이터소스의 tags 도 마찬가지).
 #    대신 attachment 의 vpc_owner_id(태그가 아니라 EC2 API 고유 속성이라 cross-account 로도
-#    보인다, 실측 확인)로 spoke 를 식별해 아래 지도에서 CIDR 을 찾는다. hub 는 spoke 마다
+#    보인다)로 spoke 를 식별해 아래 지도에서 CIDR 을 찾는다. hub 는 spoke 마다
 #    RAM 초대를 보내려면 이미 계정 ID 를 알아야 하므로(live/hub/tgw 의
 #    aws_ram_principal_association) — 같은 자리에 CIDR 하나만 더 적는다. 새 수동 단계가
 #    아니라 기존 단계의 확장이다.
@@ -318,8 +316,8 @@ locals {
 # 발견된 spoke 마다 라우트를 하나씩 얹는다.
 # ⚠️ route_table_ids_by_group[...] 는 AZ 별 RT 리스트라 (RT × spoke) 곱집합을 만든다.
 #
-# ⚠️ **key 는 attachment ID 가 아니라 spoke_account_id 로 고정한다**(2026-08-24 정정 —
-# 이전엔 keys(data.aws_ec2_transit_gateway_vpc_attachment.spoke) 를 그대로 key 에 섞어
+# ⚠️ **key 는 attachment ID 가 아니라 spoke_account_id 로 고정한다** — 이전엔
+# keys(data.aws_ec2_transit_gateway_vpc_attachment.spoke) 를 그대로 key 에 섞어
 # 썼는데, attachment ID 는 spoke 를 destroy→재배포할 때마다 새로 발급되는 "원격 API가
 # 만드는 값"이다. Terraform 공식 문서(language/meta-arguments/for_each)가 정확히 이 패턴을
 # 피하라고 명시한다 — for_each 의 key 는 리소스의 실제 주소(type.name[key])가 되므로,
@@ -327,7 +325,7 @@ locals {
 # 인자(destination_cidr_block·transit_gateway_id)는 애초에 attachment ID 와 무관한데도
 # 그 불안정한 값을 key 에 섞은 탓에 spoke 재배포마다 불필요하게 파괴·재생성됐고, 그
 # destroy 단계가 AWS API 응답 지연(5분 delete 타임아웃, aws_route 문서 기본값)에 걸려
-# 실제로 apply 가 실패한 전례가 있다(2026-08-24 실측, live/hub/networking 재적용 중).
+# 실제로 apply 가 실패한 전례가 있다(live/hub/networking 재적용 중 재현됨).
 # spoke_account_id 는 설정값이라 재배포해도 안 바뀐다 — 이 key 로 바꾸면 spoke 를 몇 번
 # 갈아엎어도 이 리소스는 그대로 유지되고(0 changes), 이 버그 클래스 자체가 사라진다.
 # attachment 존재 여부는 key 가 아니라 필터 조건으로만 쓴다(그 spoke 가 지금 실제로
