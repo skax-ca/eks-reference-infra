@@ -220,7 +220,7 @@ aws --profile <p> --region <r> eks list-clusters
 **이것들을 먼저 치우지 않으면**: 노드는 계속 과금되고, ALB와 ENI는 VPC 삭제를 막는다.
 
 0단계 삭제 보호 해제 → 1단계 클러스터 안에서 IaC 밖 자원 선처리 → 2단계 L2 destroy(EKS·
-workbench) → 3단계 L1 destroy(VPC) → 4단계 잔존물 검증(destroy의 "성공" 보고를 믿지 않는다).
+workbench) → 3단계 L1 destroy(VPC·TGW 순) → 4단계 잔존물 검증(destroy의 "성공" 보고를 믿지 않는다).
 
 > 🔑 **삭제는 한 번의 명령이 아니라 수렴 과정이다.** ArgoCD가 지운 것을, CloudWatch가 지운
 > 로그 그룹을 각각 되살린다: "명령은 성공했는데 상태가 원래대로"다. 4단계는 마무리가 아니라
@@ -291,7 +291,7 @@ aws elbv2 describe-load-balancers --query 'LoadBalancers[?VpcId==`<vpc-id>`]'
 > 🔴 `kubectl get nodes`에 노드가 남아 있어도 실패가 아닐 수 있다: NodePool의 `NODES`가
 > 원래 `0`이면 남은 건 관리형 노드그룹(시스템 계층) 소속이라 2단계 `tofu destroy`가 회수한다.
 
-### 12. 2단계 · 3단계: destroy
+### 12. 2단계 · 3단계: destroy(EKS → 네트워크 → TGW)
 
 🔴 **파기도 워크플로로 한다.** 로컬 사용자가 계정 관리자여도 `sts assume-role`이
 `AccessDenied`다.
@@ -302,10 +302,15 @@ gh workflow run deploy-hub-eks.yml --ref main \
 
 gh workflow run deploy-hub-network.yml --ref main \
   -f action=destroy -f confirm='destroy live/hub/networking'
+
+gh workflow run deploy-hub-tgw.yml --ref main \
+  -f action=destroy -f confirm='destroy live/hub/tgw'
 ```
 
 `confirm`에 루트 이름을 손으로 적어야 한다. `plan`만 `-destroy`로 갈리고 apply는 생성과 같은
-job이다.
+job이다. **TGW는 반드시 마지막이다**: hub 자신의 attachment가 `live/hub/networking`
+소속이라, 그게 먼저 사라져야(attachment `deleted`) TGW destroy가 막히지 않는다(2026-08-25
+실측, networking→TGW 순서로 attachment 관련 에러 없이 완료 확인).
 
 > 🔴 **"읽고 누른다"의 "누른다"는 이미 지나간 뒤다.** `plan` job이 끝나자마자 `apply` job이
 > 자동으로 이어진다: 진짜 승인 지점은 **dispatch 자체를 누르기 전**이다. `confirm` 문자열은
@@ -351,21 +356,16 @@ kubectl delete ns argocd
 
 CRD는 남는다(`crds.keep: true`).
 
-**노드만 줄이기**
+**노드만 줄이기 / 야간 정지(비용 절감)**: EKS 컨트롤 플레인은 끌 수 없다. 노드만 줄이거나
+workbench를 멈춘다.
 
 ```bash
 kubectl scale deployment --all --replicas=0 -n <ns>
-kubectl delete nodepool <name>
+kubectl delete nodepool <name>                        # 또는 --all
+aws ec2 stop-instances --instance-ids <workbench-id>
 ```
 
 관리형 노드그룹은 `managed_node_groups`의 `desired_size`를 줄여 apply한다.
-
-**야간 정지(비용 절감)**: EKS 컨트롤 플레인은 끌 수 없다. 노드만 줄인다.
-
-```bash
-kubectl delete nodepool --all
-aws ec2 stop-instances --instance-ids <workbench-id>
-```
 
 ### 15. 되돌릴 수 없는 것
 
