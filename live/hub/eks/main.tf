@@ -167,7 +167,7 @@ module "workbench" {
   # 🔑 instance_type 을 여기서 지정하지 않는다 — **모듈 기본값이 안전한 값이어야** 고객사가
   #    그대로 써도 부팅이 성공한다. 이 루트가 덮어쓰면 그 계약을 검증하지 못한다.
   #    (v0.4.0 이 t4g.nano → t4g.small 로 올려 v0.3.0 의 dnf OOM 부분 실패를 닫은 것이 그 사례다.)
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/workbench?ref=workbench-v0.7.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/workbench?ref=workbench-v0.8.0&depth=1"
 
   naming = {
     workload    = var.workload
@@ -253,7 +253,7 @@ module "workbench" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.9.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.10.0&depth=1"
 
   # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(모듈 repo 규약).
   naming = {
