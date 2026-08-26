@@ -67,7 +67,7 @@ module "vpc" {
   #    이 코드는 인증 방식을 모른다. SSH URL 로 바꾸면 로컬/CI 갈래가 생긴다.
   # ⛔ ?ref= 는 **정확 태그 핀**이다. git 소싱에 ~> 는 동작하지 않는다 —
   #    업그레이드는 이 줄을 올리는 명시적 커밋이고, 그 커밋이 곧 승격 게이트다.
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/vpc?ref=vpc-v0.3.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/vpc?ref=vpc-v0.4.0&depth=1"
 
   # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(모듈 repo 규약).
   # {demo, dev, an2} → vpc-demo-dev-an2-main · snet-demo-dev-an2-pub-uniq-a
@@ -168,15 +168,15 @@ module "vpc" {
 
   # 공용 개발 계정에서 실수 삭제의 마지막 방어선이다(`CLAUDE.md` 참조).
   # ⚠️ 이걸 켜면 teardown 이 **2단계**가 된다: 이 값을 false 로 apply → destroy 워크플로.
-  #    결함이 아니라 보호의 정의다. 절차는 모듈 repo `docs/04-teardown.md`가 소유한다.
+  #    결함이 아니라 보호의 정의다. 절차는 `docs/spoke-lifecycle.md` 9절이 소유한다.
   # ⛔ false 로 바꾼 커밋을 main 에 남겨두지 않는다 — 파기가 끝나면 즉시 되돌린다.
   deletion_protection = false
 }
 
 # ── TGW 연결 — spoke(dev) 측 ────────────────────────────────────────────────
-# hub 가 소유한 TGW 에 이 VPC 를 붙인다(모듈 repo docs/02-choose-your-path.md 「네트워크
-# 경로」 절). IAM 신뢰(cross-account-trust-role)는 "누가 인증되는가"만 답하고, 이 리소스들이
-# 허브 ArgoCD 가 spoke API 서버에 패킷을 보낼 실제 경로다.
+# hub 가 소유한 TGW 에 이 VPC 를 붙인다(모듈 repo docs/architectures/eks-gitops-hub-spoke/
+# choose-your-path.md 「네트워크 경로」 절). IAM 신뢰(cross-account-trust-role)는 "누가
+# 인증되는가"만 답하고, 이 리소스들이 허브 ArgoCD 가 spoke API 서버에 패킷을 보낼 실제 경로다.
 #
 # hub 의 TGW ID 는 repo 변수로 받지 않는다 — RAM 공유를 **이름으로** 조회한다.
 # 이름은 hub main.tf 의 name 조합과 동일한 공식이라 결정적이다. 값이 없으면
@@ -211,9 +211,10 @@ locals {
 }
 
 # 초대 수락은 Terraform 리소스가 아니라 CI 단계(.github/workflows/deploy-dev-network.yml
-# plan job, tofu init 이전)가 전담한다 — iac-module-library docs/02-choose-your-path.md
-# 「RAM 초대 수락」 절 참조. 이유: aws_ram_resource_share_accepter를 Terraform 리소스로
-# 두면 (1) 이 리소스의 delete가 DisassociateResourceShare를 직접 호출해 spoke teardown
+# plan job, tofu init 이전)가 전담한다 — iac-module-library docs/architectures/
+# eks-gitops-hub-spoke/choose-your-path.md 「RAM 초대 수락」 절 참조. 이유:
+# aws_ram_resource_share_accepter를 Terraform 리소스로 두면 (1) 이 리소스의 delete가
+# DisassociateResourceShare를 직접 호출해 spoke teardown
 # 마다 hub의 aws_ram_principal_association을 hub state 모르게 실물에서 해제시키고,
 # (2) 재배포 때 새로 생기는 초대는 PENDING인데 그 상태를 조회하는 Terraform 데이터소스가
 # 없어(위 data.aws_ram_resource_share는 ACCEPTED 이후에만 찾는다) 스스로는 절대 수락할

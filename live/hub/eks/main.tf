@@ -11,7 +11,7 @@
 #
 # ⚠️ 소싱 핀은 정확 태그다. 업그레이드는 이 줄을 올리는 명시적 커밋이고 그것이 승격 게이트다.
 #    git 소싱에 ~> 는 동작하지 않는다.
-# ⚠️ 0.y.z 는 개발 단계다(모듈 repo `docs/06-conventions.md`가 SSOT) — 마이너 업그레이드도 계약을
+# ⚠️ 0.y.z 는 개발 단계다(모듈 repo `docs/conventions.md`가 SSOT) — 마이너 업그레이드도 계약을
 #    바꿀 수 있으니 태그를 올릴 때 릴리스 메시지를 읽는다.
 
 # ── 계정·partition — 클러스터 ARN 을 유도하기 위한 것뿐이다 ────────────────────
@@ -69,7 +69,7 @@ locals {
   workbench_subnet_id = sort(data.aws_subnets.vm.ids)[0]
 
   # system 노드그룹 taint(workload-class=system:NoSchedule) 대응 toleration/nodeSelector
-  # (모듈 repo docs/07-runbooks.md "Karpenter + Cluster Autoscaler 동시 운영" 절).
+  # (docs/runbooks.md 9절 "Karpenter + Cluster Autoscaler 동시 운영" 절).
   # coredns·metrics-server(Deployment)에만 쓴다.
   # ⛔ vpc-cni·eks-pod-identity-agent는 여기 안 쓴다 — 두 DaemonSet은 차트 기본
   #    tolerations가 이미 operator:Exists라 모든 taint를 통과한다(실측: aws/eks-charts ·
@@ -167,7 +167,7 @@ module "workbench" {
   # 🔑 instance_type 을 여기서 지정하지 않는다 — **모듈 기본값이 안전한 값이어야** 고객사가
   #    그대로 써도 부팅이 성공한다. 이 루트가 덮어쓰면 그 계약을 검증하지 못한다.
   #    (v0.4.0 이 t4g.nano → t4g.small 로 올려 v0.3.0 의 dnf OOM 부분 실패를 닫은 것이 그 사례다.)
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/workbench?ref=workbench-v0.7.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/workbench?ref=workbench-v0.8.0&depth=1"
 
   naming = {
     workload    = var.workload
@@ -253,7 +253,7 @@ module "workbench" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/eks-cluster?ref=eks-cluster-v0.9.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.10.0&depth=1"
 
   # 소비자는 리소스 타입 약어를 타이핑하지 않는다 — 모듈이 조합한다(모듈 repo 규약).
   naming = {
@@ -370,8 +370,8 @@ module "eks" {
       # ⚠️ kubernetes_version 을 올리면 이 값도 함께 갱신한다.
       ami_release_version = "1.35.6-20260810"
 
-      # Karpenter + Cluster Autoscaler 동시 운영을 위한 taint 전략(모듈 repo
-      # docs/07-runbooks.md "Karpenter + Cluster Autoscaler 동시 운영" 절)의 밀어내기 축이다.
+      # Karpenter + Cluster Autoscaler 동시 운영을 위한 taint 전략(docs/runbooks.md 9절
+      # "Karpenter + Cluster Autoscaler 동시 운영" 절)의 밀어내기 축이다.
       # 끌어당기기 축(nodeSelector)은 이 노드그룹에 뜨는 addon·컨트롤러·OSS 쪽이 각자 건다.
       # ⛔ NodePool 쪽에는 대응 taint를 두지 않는다(app 워크로드가 toleration을 몰라도 되게).
       labels = {
@@ -493,7 +493,8 @@ module "eks" {
   enable_external_dns_iam = false
 
   # ── 크로스 계정 확장 — 허브 ArgoCD → 스포크 EKS (eks-cluster-v0.8.0 신설) ──────
-  # docs/02-choose-your-path.md 질문 D · docs/05-modules.md 「크로스 계정 확장」의 구현.
+  # docs/architectures/eks-gitops-hub-spoke/choose-your-path.md 질문 D ·
+  # docs/module-catalog.md 「크로스 계정 확장」의 구현.
   # spoke(dev) 의 cross-account-trust-role 을 먼저 세우려다 "Invalid principal in policy" 로
   # 실패한 전례가 있다 — trust policy 는 대상 Principal 이 존재해야 하고, 그 대상이
   # 바로 이 값(허브의 argocd_hub_pod_identity Role)이었다. 순서를 뒤집어 허브를 먼저 켠다.

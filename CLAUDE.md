@@ -10,7 +10,7 @@ hub-spoke EKS GitOps 패턴의 **레퍼런스 배포 루트**다. `iac-module-li
 | repo | 역할 | SSOT |
 |------|------|------|
 | **이 repo (`eks-reference-infra`)** | hub-spoke 패턴을 **소비해 배포**하는 루트 | 이 배포 코드, GitOps **운영 절차**(구축·철거·런북) |
-| `iac-module-library` | Terraform 모듈·설계 | 모듈 계약(`docs/module-index.md`), 네이밍 약어(`docs/aws-naming-abbreviations.md`), 아키텍처 결정(`docs/decisions.md`), 문서 문체 규칙(`docs/conventions.md`) |
+| `iac-module-library` | Terraform 모듈·설계 | 모듈 계약(`docs/module-catalog.md`), 네이밍 약어(`docs/naming/abbreviations/aws.md`), 아키텍처 결정(`docs/decisions.md`), 문서 문체 규칙(`docs/conventions.md`) |
 | `eks-platform-gitops` | ArgoCD Application·AppProject·cluster-secret (계층 2) | GitOps 매니페스트 |
 
 ⚠️ **설계·컨벤션의 근거는 이 repo에 없다.** "왜 OpenTofu인가", "왜 facade 패턴인가" 같은 질문은
@@ -64,7 +64,7 @@ scripts/               teardown-verify.sh · argocd-seed.sh · validate-doc-conv
 
 ## 3. 네이밍·태깅
 
-`Name` 태그 포맷과 리소스 타입 약어는 `iac-module-library`의 `docs/aws-naming-abbreviations.md`가
+`Name` 태그 포맷과 리소스 타입 약어는 `iac-module-library`의 `docs/naming/abbreviations/aws.md`가
 SSOT다(임의 생성 금지). 이 repo에서 실제로 쓰는 값:
 
 - `workload` = `demo`(고정, `live/hub`·`live/dev` 모두 반드시 동일해야 한다)

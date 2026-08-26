@@ -64,7 +64,8 @@ variable "execution_role_arn" {
 variable "spoke_account_id" {
   description = <<-EOT
     spoke(dev, asset 계정)의 12자리 계정 ID. Transit Gateway RAM 공유(aws_ram_principal_association의
-    principal)에만 쓴다 — 모듈 repo docs/02-choose-your-path.md 「네트워크 경로」 절.
+    principal)에만 쓴다 — 모듈 repo docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
+    「네트워크 경로」 절.
 
     ⛔ 기본값을 두지 않는다 — 계정 ID라 git 에 두지 않는다. 주입 경로: CI 는 repo 변수
        DEV_ACCOUNT_ID → TF_VAR_spoke_account_id, 로컬은 export TF_VAR_spoke_account_id=...
