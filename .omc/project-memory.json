@@ -8,12 +8,6 @@
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
     {
-      "timestamp": 1787532601870,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "ArgoCD Application을 `kubectl patch application <name> -n argocd --type merge -p '{\"operation\":{\"sync\":{...}}}'`로 수동 sync 트리거할 때 `syncOptions`를 명시하지 않으면, `spec.syncPolicy.syncOptions`(예: `ServerSideApply=true`)가 자동으로 상속되지 않고 client-side apply로 떨어진다(2026-08-24 실측). 큰 CRD(kyverno의 `clusterpolicies.kyverno.io`처럼 임베디드 OpenAPI 스키마가 큰 경우)에 client-side apply를 쓰면 `kubectl.kubernetes.io/last-applied-configuration` 애노테이션이 K8s 262144바이트 제한을 넘어 `metadata.annotations: Too long`으로 sync가 실패한다 — Kyverno CRD 자체의 결함이 아니라 순전히 이 애노테이션 누락이 원인이었다. 해결: manual operation patch에 `\"syncOptions\":[\"CreateNamespace=true\",\"ServerSideApply=true\"]`처럼 Application의 `spec.syncPolicy.syncOptions`와 동일한 값을 명시적으로 포함해야 한다. ArgoCD CLI(`argocd app sync`)는 spec에서 자동으로 읽어오지만, kubectl로 `operation` 필드를 직접 patch하는 방식(argocd CLI 없을 때 대체 경로)은 그 상속을 안 해준다 — 매번 `kubectl get application <name> -o jsonpath={.spec.syncPolicy}`로 실제 syncOptions를 먼저 확인하고 그대로 복사해 넣을 것."
-    },
-    {
       "timestamp": 1787532606054,
       "source": "manual",
       "category": "gotcha",
@@ -126,6 +120,12 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-25 (hub 재배포 세션, GitOps seed 직전 발견) — docs/hub-lifecycle.md 6절(GitOps)·scripts/README.md에 실측으로 확인된 문서 공백 2건. 향후 보완 필요. (1) GitHub App 자체를 만드는 절차(App 생성→설치→private key 발급/다운로드)가 이 repo 어디에도 없다. scripts/README.md 절차는 `~/.config/gh-apps/<app>.pem`이 이미 존재한다는 전제로 시작하고, docs/hub-lifecycle.md 0절은 \"private이면 GitHub App이 필요하다\"고만 적고 만드는 법이 없다. 현재는 이전 세션에 이미 발급된 App(gitops-reader, App ID 4512318, Installation ID 151838919)의 pem이 로컬에 있어 안 막히지만, 신규 App이 필요해지는 시점(예: App 재발급·팀원 온보딩)엔 처음부터 막힌다. (2) GITOPS_REPO_URL은 ArgoCD 자신의 repository Secret에만 쓰이고, GITOPS_REPO_DIR(workbench 로컬 clone, 스크립트가 매니페스트를 읽는 원본)을 private repo인 eks-platform-gitops에서 어떻게 workbench로 가져오는지는 scripts/argocd-seed.sh도 scripts/README.md도 다루지 않는다 — workbench에는 gh CLI도 git credential도 없다(실측 확인). 이번 세션은 이미 workbench에 있는 curl/openssl/jq로 GitHub App installation access token을 직접 발급해 `git clone https://x-access-token:<token>@github.com/...`로 clone하는 방식을 사용자 승인 하에 채택해 진행 — 이 방법 자체가 scripts/README.md에 문서화된 적 없는 임시방편이므로, 성공하면 그 절차를 scripts/README.md의 \"private key를 workbench로 옮기는 경로\" 절 뒤에 새 하위 절로 정식 문서화할 것."
+    },
+    {
+      "timestamp": 1787702769170,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-26 — 이전 세션(2026-08-25)에 남긴 \"문서 공백 2건\"(GitHub App pem 발급 절차·private gitops repo를 workbench로 clone하는 절차 미문서화) 완전히 해소. scripts/README.md에 \"GitHub App 만들기\"·\"GITOPS_REPO_DIR: private 저장소를 workbench로 clone하기\" 두 절 신설, docs/hub-lifecycle.md §0에서 링크(commit d6b01c7, push 완료). 절차는 GitHub 공식 문서(App 등록·private key 관리·JWT 생성·installation access token 발급) 기준으로 검증해 작성했고, 지난 세션의 즉흥 우회(curl+openssl+jq로 토큰 직접 발급)를 그대로 정식 반영하되 clone 직후 remote URL에서 토큰을 제거하는 위생 단계를 추가로 넣었다(기존 pem 취급 원칙과 일관성 확보). 다음 세션 착수 후보는 변동 없음: hub 철거 시점을 사용자가 아직 결정하지 않음(hub는 배포된 채 정상 가동 중, dev는 미배포) — 그 결정이 나면 03 hub-lifecycle.md 8~13절(철거) 또는 04 spoke-lifecycle.md(dev 재배포)로 이어간다."
     }
   ],
   "userDirectives": [],
