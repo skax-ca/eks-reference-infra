@@ -19,7 +19,8 @@ locals {
   cidr_uniq = "10.53.0.0/16"
 }
 
-# ── 크로스 계정 네트워크 경로 — Transit Gateway (모듈 repo docs/02-choose-your-path.md
+# ── 크로스 계정 네트워크 경로 — Transit Gateway (모듈 repo
+#    docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
 #    「네트워크 경로」 절) ─────────────────────────────────────────────────────────
 #
 # IAM 신뢰(live/dev/eks 의 cross-account-trust-role)는 "누가 인증되는가"만 답한다.

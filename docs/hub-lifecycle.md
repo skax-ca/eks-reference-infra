@@ -108,7 +108,7 @@ tofu -chdir=live/hub/networking validate
 > Role은 입구 Role만 신뢰한다: 개인 IAM user로는 관리자여도 `AccessDenied`다. **로컬은
 > `init`+`validate`까지**이고, 그 위는 전부 워크플로가 한다.
 
-`main.tf`는 `iac-module-library`의 `docs/module-index.md`의 연결 예시를 따른다. `eks_cluster_name`을
+`main.tf`는 `iac-module-library`의 `docs/module-catalog.md`의 연결 예시를 따른다. `eks_cluster_name`을
 넘겨 EKS 자동 발견용 서브넷 태그를 붙인다(클러스터를 만들기 전에 해야 한다).
 
 ```bash

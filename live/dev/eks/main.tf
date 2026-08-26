@@ -11,7 +11,7 @@
 #
 # ⚠️ 소싱 핀은 정확 태그다. 업그레이드는 이 줄을 올리는 명시적 커밋이고 그것이 승격 게이트다.
 #    git 소싱에 ~> 는 동작하지 않는다.
-# ⚠️ 0.y.z 는 개발 단계다(모듈 repo `docs/06-conventions.md`가 SSOT) — 마이너 업그레이드도 계약을
+# ⚠️ 0.y.z 는 개발 단계다(모듈 repo `docs/conventions.md`가 SSOT) — 마이너 업그레이드도 계약을
 #    바꿀 수 있으니 태그를 올릴 때 릴리스 메시지를 읽는다.
 
 # ── 계정·partition — 클러스터 ARN 을 유도하기 위한 것뿐이다 ────────────────────
@@ -64,7 +64,7 @@ locals {
   workbench_subnet_id = sort(data.aws_subnets.vm.ids)[0]
 
   # system 노드그룹 taint(workload-class=system:NoSchedule) 대응 toleration/nodeSelector
-  # (모듈 repo docs/07-runbooks.md "Karpenter + Cluster Autoscaler 동시 운영" 절).
+  # (docs/runbooks.md 9절 "Karpenter + Cluster Autoscaler 동시 운영" 절).
   # coredns·metrics-server(Deployment)에만 쓴다.
   # ⛔ vpc-cni·eks-pod-identity-agent는 여기 안 쓴다 — 두 DaemonSet은 차트 기본
   #    tolerations가 이미 operator:Exists라 모든 taint를 통과한다(실측: aws/eks-charts ·
@@ -263,7 +263,8 @@ module "workbench" {
   eks_cluster_arn = local.cluster_arn
 }
 
-# ── 크로스 계정 신뢰 Role — 스포크가 소유한다 (모듈 repo docs/02-choose-your-path.md 질문 D) ──
+# ── 크로스 계정 신뢰 Role — 스포크가 소유한다 (모듈 repo
+# docs/architectures/eks-gitops-hub-spoke/choose-your-path.md 질문 D) ──
 #
 # 허브의 self-managed ArgoCD(argocd-application-controller)가 이 Role 을 assume 해 이 클러스터에
 # 도달한다. IAM 정책은 "assume 가능"뿐이고, 실제 K8s 권한은 아래 eks 블록의 access_entries가
@@ -352,7 +353,7 @@ module "eks" {
 
     # 허브 ArgoCD 크로스 계정 접근 — AWS 관리형 access policy 로 부여한다. ArgoCD 가 애드온·CRD
     # 등 클러스터 스코프 리소스 전반을 다뤄야 해 세밀한 RBAC 범위 제어가 애초에 불필요하다
-    # (모듈 repo docs/05-modules.md 「K8s 권한 부여 방식」 절 — access policy 로 요구가 충족되면
+    # (모듈 repo docs/module-catalog.md 「K8s 권한 부여 방식」 절 — access policy 로 요구가 충족되면
     # kubernetes_groups+RBAC 로 내려가지 않는다는 AWS 공식 기준).
     # ⚠️ 이 방식으로 준 권한은 kubectl auth can-i --list 에 보이지 않는다 —
     # aws eks list-associated-access-policies 로만 조회된다.
@@ -437,8 +438,8 @@ module "eks" {
       # ⚠️ kubernetes_version 을 올리면 이 값도 함께 갱신한다.
       ami_release_version = "1.35.6-20260728"
 
-      # Karpenter + Cluster Autoscaler 동시 운영을 위한 taint 전략(모듈 repo
-      # docs/07-runbooks.md "Karpenter + Cluster Autoscaler 동시 운영" 절)의 밀어내기 축이다.
+      # Karpenter + Cluster Autoscaler 동시 운영을 위한 taint 전략(docs/runbooks.md 9절
+      # "Karpenter + Cluster Autoscaler 동시 운영" 절)의 밀어내기 축이다.
       # 끌어당기기 축(nodeSelector)은 이 노드그룹에 뜨는 addon·컨트롤러·OSS 쪽이 각자 건다.
       # ⛔ NodePool 쪽에는 대응 taint를 두지 않는다(app 워크로드가 toleration을 몰라도 되게).
       labels = {

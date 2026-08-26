@@ -168,15 +168,15 @@ module "vpc" {
 
   # 공용 개발 계정에서 실수 삭제의 마지막 방어선이다(`CLAUDE.md` 참조).
   # ⚠️ 이걸 켜면 teardown 이 **2단계**가 된다: 이 값을 false 로 apply → destroy 워크플로.
-  #    결함이 아니라 보호의 정의다. 절차는 모듈 repo `docs/04-teardown.md`가 소유한다.
+  #    결함이 아니라 보호의 정의다. 절차는 `docs/spoke-lifecycle.md` 9절이 소유한다.
   # ⛔ false 로 바꾼 커밋을 main 에 남겨두지 않는다 — 파기가 끝나면 즉시 되돌린다.
   deletion_protection = false
 }
 
 # ── TGW 연결 — spoke(dev) 측 ────────────────────────────────────────────────
-# hub 가 소유한 TGW 에 이 VPC 를 붙인다(모듈 repo docs/02-choose-your-path.md 「네트워크
-# 경로」 절). IAM 신뢰(cross-account-trust-role)는 "누가 인증되는가"만 답하고, 이 리소스들이
-# 허브 ArgoCD 가 spoke API 서버에 패킷을 보낼 실제 경로다.
+# hub 가 소유한 TGW 에 이 VPC 를 붙인다(모듈 repo docs/architectures/eks-gitops-hub-spoke/
+# choose-your-path.md 「네트워크 경로」 절). IAM 신뢰(cross-account-trust-role)는 "누가
+# 인증되는가"만 답하고, 이 리소스들이 허브 ArgoCD 가 spoke API 서버에 패킷을 보낼 실제 경로다.
 #
 # hub 의 TGW ID 는 repo 변수로 받지 않는다 — RAM 공유를 **이름으로** 조회한다.
 # 이름은 hub main.tf 의 name 조합과 동일한 공식이라 결정적이다. 값이 없으면
@@ -211,9 +211,10 @@ locals {
 }
 
 # 초대 수락은 Terraform 리소스가 아니라 CI 단계(.github/workflows/deploy-dev-network.yml
-# plan job, tofu init 이전)가 전담한다 — iac-module-library docs/02-choose-your-path.md
-# 「RAM 초대 수락」 절 참조. 이유: aws_ram_resource_share_accepter를 Terraform 리소스로
-# 두면 (1) 이 리소스의 delete가 DisassociateResourceShare를 직접 호출해 spoke teardown
+# plan job, tofu init 이전)가 전담한다 — iac-module-library docs/architectures/
+# eks-gitops-hub-spoke/choose-your-path.md 「RAM 초대 수락」 절 참조. 이유:
+# aws_ram_resource_share_accepter를 Terraform 리소스로 두면 (1) 이 리소스의 delete가
+# DisassociateResourceShare를 직접 호출해 spoke teardown
 # 마다 hub의 aws_ram_principal_association을 hub state 모르게 실물에서 해제시키고,
 # (2) 재배포 때 새로 생기는 초대는 PENDING인데 그 상태를 조회하는 Terraform 데이터소스가
 # 없어(위 data.aws_ram_resource_share는 ACCEPTED 이후에만 찾는다) 스스로는 절대 수락할

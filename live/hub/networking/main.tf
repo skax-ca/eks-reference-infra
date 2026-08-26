@@ -170,12 +170,13 @@ module "vpc" {
 
   # 공용 개발 계정에서 실수 삭제의 마지막 방어선이다(`CLAUDE.md` 참조).
   # ⚠️ 이걸 켜면 teardown 이 **2단계**가 된다: 이 값을 false 로 apply → destroy 워크플로.
-  #    결함이 아니라 보호의 정의다. 절차는 모듈 repo `docs/04-teardown.md`가 소유한다.
+  #    결함이 아니라 보호의 정의다. 절차는 `docs/hub-lifecycle.md` 10절이 소유한다.
   # ⛔ false 로 바꾼 커밋을 main 에 남겨두지 않는다 — 파기가 끝나면 즉시 되돌린다.
   deletion_protection = false
 }
 
-# ── 크로스 계정 네트워크 경로 — Transit Gateway (모듈 repo docs/02-choose-your-path.md
+# ── 크로스 계정 네트워크 경로 — Transit Gateway (모듈 repo
+#    docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
 #    「네트워크 경로」 절) ─────────────────────────────────────────────────────────
 #
 # IAM 신뢰(live/dev/eks 의 cross-account-trust-role)는 "누가 인증되는가"만 답한다.
@@ -255,7 +256,8 @@ resource "aws_ec2_transit_gateway_route_table_association" "hub" {
 # 복수형 데이터소스는 "없으면 빈 리스트"다(단수형과 달리 에러가 아니다) — spoke 가 하나도
 # 없어도, 여러 개여도 이 apply 는 그대로 성공한다. repo 변수로 spoke 의 attachment ID 를
 # 수동 전달받던 방식을 걷어낸다 — 다음 spoke 를 추가할 때 이 파일을
-# 고치지 않아도 되는 것이 목적이다(모듈 repo docs/02-choose-your-path.md 「네트워크 경로」
+# 고치지 않아도 되는 것이 목적이다(모듈 repo
+# docs/architectures/eks-gitops-hub-spoke/choose-your-path.md 「네트워크 경로」
 # 「값 발견」 절).
 data "aws_ec2_transit_gateway_vpc_attachments" "spokes" {
   filter {
