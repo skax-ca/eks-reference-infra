@@ -8,12 +8,6 @@
   "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
   "customNotes": [
     {
-      "timestamp": 1787532606054,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "ArgoCD의 `automated` sync 정책은 특정 target revision에 대한 sync가 한 번 실패하면(재시도 소진) 자동 재시도를 서킷브레이커로 중단한다(2026-08-21/24 실측) — 로그에 `\"Skipping auto-sync: failed previous sync attempt to [<revision>] and will not retry for [<revision>]\"`로 나타난다. 이 상태에서는 아무리 기다려도 저절로 안 풀린다 — revision이 바뀌거나 사람이 수동 sync를 걸어야 한다(`kubectl patch application <name> -n argocd --type merge -p '{\"operation\":{\"sync\":{\"syncStrategy\":{\"hook\":{}},\"syncOptions\":[...]}}}'`, syncOptions는 spec과 동일하게 명시 — 관련 gotcha 별도 기록). `operationState.phase`가 `Failed`이고 `finishedAt`이 채워져 있으면 이미 재시도가 끝난 것이니 새로 트리거해야 한다."
-    },
-    {
       "timestamp": 1787532619230,
       "source": "manual",
       "category": "open-items",
@@ -126,6 +120,12 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-26 — 이전 세션(2026-08-25)에 남긴 \"문서 공백 2건\"(GitHub App pem 발급 절차·private gitops repo를 workbench로 clone하는 절차 미문서화) 완전히 해소. scripts/README.md에 \"GitHub App 만들기\"·\"GITOPS_REPO_DIR: private 저장소를 workbench로 clone하기\" 두 절 신설, docs/hub-lifecycle.md §0에서 링크(commit d6b01c7, push 완료). 절차는 GitHub 공식 문서(App 등록·private key 관리·JWT 생성·installation access token 발급) 기준으로 검증해 작성했고, 지난 세션의 즉흥 우회(curl+openssl+jq로 토큰 직접 발급)를 그대로 정식 반영하되 clone 직후 remote URL에서 토큰을 제거하는 위생 단계를 추가로 넣었다(기존 pem 취급 원칙과 일관성 확보). 다음 세션 착수 후보는 변동 없음: hub 철거 시점을 사용자가 아직 결정하지 않음(hub는 배포된 채 정상 가동 중, dev는 미배포) — 그 결정이 나면 03 hub-lifecycle.md 8~13절(철거) 또는 04 spoke-lifecycle.md(dev 재배포)로 이어간다."
+    },
+    {
+      "timestamp": 1787789557304,
+      "source": "manual",
+      "category": "open-items",
+      "content": "2026-08-27 (사용자 보고 기반, 세션 크래시 복구 조사) — 2026-08-26 09:44~11:00 KST경 별도 세션(이 repo notepad에 기록되지 않음, 세션/노트북이 중간에 꺼져 session-end 미실행)에서 hub 철거→재구축 사이클을 완주했음을 GitHub Actions 이력(run 32918185159~32920110864, 전부 success)과 실물 조회(SSM으로 workbench 접속해 kubectl 직접 확인)로 사후 검증. 결과: hub TGW→networking→EKS 전부 재적용 성공(EKS 클러스터 생성 2026-08-26 10:46:30 KST), GitOps 시딩까지 완료되어 ArgoCD Application 10/10 Synced/Healthy, 노드 2/2 Ready. dev(spoke)는 그 세션에서 시도되지 않음(00:44 push plan에서 dev/eks가 \"no matching EC2 VPC found\"로 실패했으나 이는 dev networking 미배포 상태에서 나는 예상된 순서 문제일 뿐 실제 버그 아님, dev는 여전히 미배포). 결론: 재작업 불필요, hub는 현재 완전히 정상 가동 중. 다음 세션 착수 후보는 변동 없음(hub 철거 시점 미확정, 또는 dev spoke 재배포)."
     }
   ],
   "userDirectives": [],
