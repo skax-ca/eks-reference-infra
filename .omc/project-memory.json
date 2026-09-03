@@ -1,11 +1,11 @@
 {
-  "techStack": "OpenTofu(terraform 명령 아님) + GitHub Actions OIDC + S3 backend. 모듈은 iac-module-library를 git tag로 소싱(D20). GitOps는 iac-platform-gitops(self-managed ArgoCD, helm) 소관.",
-  "build": "로컬 게이트(git hook, core.hooksPath=.githooks): pre-commit(backend.hcl 유출 검사+fmt+tflint+trivy), pre-push(validate, live/ 변경 시). 문서 파일 staged 시 별도 갈래로 validate-doc-conventions.py 실행(§8 규칙: 절 번호 인용 금지·비표준 이모지 금지·400줄 제한).",
-  "conventions": "설계 SSOT는 이 repo가 아니라 iac-module-library docs/design/50(D-CONSUME, D20~D30) — 재논의 전 필독. workload=demo(2026-08-13 ref→demo 전환 완료). 버킷명·계정ID·Role ARN은 git에 두지 않는다(D25) — repo 변수/gitignore된 backend.hcl로만.",
-  "structure": "hub(team 계정 533616270150, live/hub/{networking,eks}, ArgoCD control-plane 영구 거처, hub-spoke TGW 양방향 라우팅 완료) / spoke=dev(asset 계정 614054776208, live/dev/{networking,eks}, 부트스트랩·apply 완료, TGW attachment+SG 인바운드까지 연결 완료). GitOps 매니페스트는 이 repo가 아니라 iac-platform-gitops 소관.",
   "version": "1.0.0",
-  "lastScanned": 1787190815240,
-  "projectRoot": "/Users/a07326/born2k/ai/iac-reference-infra",
+  "lastScanned": 9999999999999,
+  "projectRoot": "/Users/a07326/born2k/ai/eks-reference-infra",
+  "techStack": "OpenTofu(terraform 명령 아님) + GitHub Actions OIDC + S3 backend. 모듈은 iac-module-library를 git tag로 소싱(D20). GitOps는 eks-platform-gitops(self-managed ArgoCD, helm) 소관.",
+  "build": "로컬 게이트(git hook, core.hooksPath=.githooks): pre-commit(backend.hcl 유출 검사+fmt+tflint+trivy), pre-push(validate, live/ 변경 시). 문서 파일 staged 시 별도 갈래로 validate-doc-conventions.py 실행(문서 작성 규칙: 절 번호 인용 금지·비표준 이모지 금지·400줄 제한·em-dash 금지).",
+  "conventions": "설계 SSOT는 이 repo가 아니라 iac-module-library docs/module-catalog.md·docs/naming/abbreviations/aws.md·docs/decisions.md — 재논의 전 필독. workload=demo(고정, live/hub·live/dev 동일해야 함). 버킷명·계정ID·Role ARN은 git에 두지 않는다 — repo 변수/gitignore된 backend.hcl로만.",
+  "structure": "hub(team 계정 533616270150, live/hub/{networking,tgw,eks}, ArgoCD control-plane 영구 거처, hub-spoke TGW 양방향 라우팅 완료) / spoke=dev(asset 계정 614054776208, live/dev/{networking,eks}, 부트스트랩·apply 완료, TGW attachment+SG 인바운드까지 연결 완료). GitOps 매니페스트는 이 repo가 아니라 eks-platform-gitops 소관.",
   "customNotes": [
     {
       "timestamp": 1787532619230,
@@ -126,8 +126,73 @@
       "source": "manual",
       "category": "open-items",
       "content": "2026-08-27 (사용자 보고 기반, 세션 크래시 복구 조사) — 2026-08-26 09:44~11:00 KST경 별도 세션(이 repo notepad에 기록되지 않음, 세션/노트북이 중간에 꺼져 session-end 미실행)에서 hub 철거→재구축 사이클을 완주했음을 GitHub Actions 이력(run 32918185159~32920110864, 전부 success)과 실물 조회(SSM으로 workbench 접속해 kubectl 직접 확인)로 사후 검증. 결과: hub TGW→networking→EKS 전부 재적용 성공(EKS 클러스터 생성 2026-08-26 10:46:30 KST), GitOps 시딩까지 완료되어 ArgoCD Application 10/10 Synced/Healthy, 노드 2/2 Ready. dev(spoke)는 그 세션에서 시도되지 않음(00:44 push plan에서 dev/eks가 \"no matching EC2 VPC found\"로 실패했으나 이는 dev networking 미배포 상태에서 나는 예상된 순서 문제일 뿐 실제 버그 아님, dev는 여전히 미배포). 결론: 재작업 불필요, hub는 현재 완전히 정상 가동 중. 다음 세션 착수 후보는 변동 없음(hub 철거 시점 미확정, 또는 dev spoke 재배포)."
+    },
+    {
+      "timestamp": 1788400000000,
+      "source": "manual",
+      "category": "mcp-tooling-fix",
+      "content": "2026-09-03 — iac-module-library(커밋 07c2288, 2026-09-03)가 재규명한 문제를 이 저장소에도 동일 적용. 2026-09-01 이 저장소에 이미 반영된 permissions.deny(mcp__plugin_oh-my-claudecode_t__notepad_*/project_memory_* 차단, .claude/settings.json)는 Claude가 그 MCP 도구를 직접 호출하는 경로만 막을 뿐, techStack/build/conventions/structure가 빈 자동스캔 스키마로 손상되는 진짜 원인은 막지 못한다는 것이 이번 세션(2026-09-03 세션시작 직후)에 실측으로 재확인됐다 — 이 세션에서 그 MCP 도구를 단 한 번도 호출하지 않았는데도 세션 시작 직후 project-memory.json의 4개 필드가 이미 손상돼 있었다(git diff로 실측).\n\n**근본원인(OMC 플러그인 소스 직접 확인)**: `~/.claude/plugins/cache/omc/oh-my-claudecode/`의 SessionStart 훅이 `dist/hooks/project-memory/index.js`의 `registerProjectMemoryContext()`를 매 세션 시작마다 실행 — MCP 도구가 아니라 Claude Code 자체가 구동하는 훅(node 프로세스)이라 permissions.deny의 적용 대상이 아니다. `storage.js`의 `shouldRescan(memory)`가 `(Date.now() - memory.lastScanned) > CACHE_EXPIRY_MS`(24시간, `constants.js`)를 검사해 true면 `detectProjectEnvironment()`로 프로젝트를 자동 재스캔한 뒤 `applyRescanMerge(detected, existing)`로 techStack/build/conventions/structure를 detected 값으로 통째로 교체한다(customNotes/userDirectives/hotPaths 3개 배열만 보존). 이 detector는 package.json·Cargo.toml·go.mod 등만 인식하고 Terraform/OpenTofu(.tf)는 인식 대상에 없어, 이 저장소는 항상 빈 스키마(`languages: []` 등)로 덮어써진다. Claude Code 공식 문서(hooks.md) 확인 결과 훅 단위 선택적 비활성화 기능은 없다(`disableAllHooks: true`만 존재, 이 프로젝트의 다른 OMC 기능까지 전부 죽임 — 과함).\n\n**적용한 조치**: iac-module-library와 동일하게 `lastScanned`를 먼 미래 sentinel(`9999999999999`)로 고정 — `shouldRescan()`의 age 계산이 항상 큰 음수가 되어 자동 재스캔이 구조적으로 재발 불가능해진다. 이번에 손상됐던 4개 필드는 git 이력(HEAD, 커밋 586be14)의 서술형 문자열로 복구했고, 그 안의 죽은 참조(iac-platform-gitops→eks-platform-gitops 리네임 반영, 모듈 repo 옛 문서 경로→docs/module-catalog.md 등 현재 경로)도 함께 정정했다.\n\n**⚠️ 한계(다음 세션이 알아야 함)**: 이 pin은 SessionStart의 rescan-overwrite 경로만 막는다 — 데이터 값 조작이지 제품이 지원하는 기능이 아니라, OMC가 향후 lastScanned를 검증하거나 다른 필드로 트리거를 바꾸면 무효화될 수 있다. 세션 시작 시 lastScanned가 여전히 9999999999999인지, techStack 등 4개 필드가 서술형 문자열(빈 객체 아님)인지 확인하는 걸 습관으로 유지할 것.\n\n출처: iac-module-library 커밋 07c2288·project-memory.json mcp-tooling-fix(2026-09-03) 항목, 이 저장소 .claude/settings.json(2026-09-01 permissions.deny 적용분, 3b60545로 pull됨)."
     }
   ],
-  "userDirectives": [],
-  "hotPaths": []
+  "directoryMap": {
+    "bootstrap": {
+      "path": "bootstrap",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1788396672339,
+      "keyFiles": [
+        "README.md",
+        "bootstrap.sh",
+        "config.sh",
+        "verify.sh"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 3,
+      "lastAccessed": 1788396672340,
+      "keyFiles": [
+        "hub-lifecycle.md",
+        "runbooks.md",
+        "spoke-lifecycle.md"
+      ]
+    },
+    "live": {
+      "path": "live",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1788396672340,
+      "keyFiles": []
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 4,
+      "lastAccessed": 1788396672340,
+      "keyFiles": [
+        "README.md",
+        "argocd-seed.sh",
+        "teardown-verify.sh",
+        "validate-doc-conventions.py"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": ".claude/settings.json",
+      "accessCount": 1,
+      "lastAccessed": 1788398018544,
+      "type": "file"
+    }
+  ],
+  "userDirectives": [
+    {
+      "timestamp": 1788400000853,
+      "directive": "이 파일의 lastScanned는 9999999999999(먼 미래 sentinel)로 고정돼 있다 — 임의로 현재 시각에 가까운 값으로 되돌리지 않는다. 되돌리면 OMC SessionStart 훅이 24시간 경과 후 자동 재스캔을 실행해 techStack/build/conventions/structure를 빈 스키마로 다시 덮어쓴다(permissions.deny는 이 훅 경로를 막지 못함, mcp-tooling-fix 2026-09-03 항목 참조). 세션 시작 시 이 값이 sentinel 그대로인지, 4개 필드가 여전히 서술형 문자열인지 확인할 것.",
+      "context": "2026-09-03, iac-module-library 커밋 07c2288과 동일한 문제·동일한 조치를 이 저장소에도 적용.",
+      "source": "explicit",
+      "priority": "high"
+    }
+  ]
 }
