@@ -25,7 +25,7 @@ variable "workload" {
 
 variable "env" {
   description = <<-EOT
-    환경 코드. live/dev 와 같은 계정을 쓰지만(2026-08-19 실측) 이 루트는 env="hub"로 논리적
+    환경 코드. live/dev 와 같은 계정을 쓰지만 이 루트는 env="hub"로 논리적
     환경을 가른다 — 계정 분리가 아니라 state key·CIDR·네이밍으로 dev/hub 를 나눈다.
   EOT
   type        = string

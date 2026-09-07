@@ -6,8 +6,8 @@
 #
 # ⚠️ minimal(examples/vpc) 이 아니라 enterprise 를 택한 결과로 **첫 apply 의 판정 범위가 넓어진다**
 #    — secondary CIDR 2개와 isolated 라우팅이 실제로 만들어지기 때문이다.
-#    무엇이 판정되고 무엇이 안 되는지는 `docs/deployment-facts.md`가 표로 관리한다.
-#    표에 없는 것을 "검증했다"고 쓰지 않는다(`CLAUDE.md` 참조).
+#    apply 가 성공했다는 것과 "그 CIDR·라우팅이 실제로 의도대로 동작한다"는 것은 다르다 —
+#    plan/apply 로그만 보고 후자까지 검증했다고 쓰지 않는다.
 
 locals {
   # ── CIDR 3계층 (모듈 repo 규약) ─────────────────────────────────────────────
@@ -261,8 +261,8 @@ resource "aws_route" "to_hub" {
   # 🔑 CIDR 텍스트를 하드코딩하지 않는다 — 허브가 RAM 으로 공유한 관리형 접두사 목록(위
   #    local.hub_uniq_prefix_list_id)을 대상으로 참조한다. AWS 가 그 ID 뒤의 실제 CIDR 을
   #    apply 시점에 풀어 쓴다. aws_route 는 destination_cidr_block 과 destination_prefix_list_id
-  #    를 동시에 받지 않는다 — 이 전환은 기존 라우트를 교체(destroy 후 create)한다(레거시
-  #    리소스의 공통 특성, docs/deployment-facts.md 「5.8」 참조) — 재적용 중 짧게 끊긴다.
+  #    를 동시에 받지 않는다 — 이 전환은 기존 라우트를 교체(destroy 후 create)한다
+  #    (레거시 aws_route·aws_security_group_rule 의 공통 특성) — 재적용 중 짧게 끊긴다.
   destination_prefix_list_id = local.hub_uniq_prefix_list_id
   transit_gateway_id         = aws_ec2_transit_gateway_vpc_attachment.spoke.transit_gateway_id
 

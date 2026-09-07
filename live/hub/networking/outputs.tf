@@ -61,7 +61,7 @@ output "flow_log_group_name" {
   description = <<-EOT
     VPC Flow Logs 가 기록되는 CloudWatch 로그 그룹 이름.
     ⚠️ 이 값이 나온다고 로그가 **배달된다**는 뜻은 아니다 — 로그 그룹에 실제 이벤트가 쌓이는지는
-    별도로 확인해야 한다(`docs/deployment-facts.md` 참조).
+    별도로 확인해야 한다(예: `aws logs describe-log-streams`로 최근 이벤트 시각 확인).
   EOT
   value       = module.vpc.flow_log_group_name
 }
