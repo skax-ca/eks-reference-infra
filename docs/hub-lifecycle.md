@@ -82,7 +82,8 @@ inline 정책(Resource=실행 Role). IAM은 신뢰 정책의 principal이 실제
 ### 4. TGW와 네트워크 (L1)
 
 TGW(`live/hub/tgw`)는 네트워킹과 **분리된 배포 루트**이고, **반드시 먼저 apply한다**(같은
-apply 안에 있으면 TGW ID가 plan 시점에 unknown이라 spoke 자동 발견 `for_each`가 `Invalid for_each argument`로 실패한다, 2026-08-24 실측. `needs:`로 순서 강제는 불가하다).
+apply 안에 있으면 TGW ID가 plan 시점에 unknown이라 spoke 자동 발견 `for_each`가 `Invalid
+for_each argument`로 실패한다. `needs:`로 순서 강제는 불가하다).
 
 아래 네트워크와 같은 방식으로 초기화한다(`key = "hub/tgw.tfstate"`). CIDR(`locals.cidr_uniq`)은 네트워크와 반드시 같아야 한다(state 미공유, 사람이 유지).
 
@@ -308,8 +309,7 @@ gh workflow run deploy-hub-tgw.yml --ref main \
 
 `confirm`에 루트 이름을 손으로 적어야 한다. `plan`만 `-destroy`로 갈리고 apply는 생성과 같은
 job이다. **TGW는 반드시 마지막이다**: hub 자신의 attachment가 `live/hub/networking`
-소속이라, 그게 먼저 사라져야(attachment `deleted`) TGW destroy가 막히지 않는다(2026-08-25
-실측, networking→TGW 순서로 attachment 관련 에러 없이 완료 확인).
+소속이라, 그게 먼저 사라져야(attachment `deleted`) TGW destroy가 막히지 않는다.
 
 > 🔴 **"읽고 누른다"의 "누른다"는 이미 지나간 뒤다.** `plan` job이 끝나자마자 `apply` job이
 > 자동으로 이어진다: 진짜 승인 지점은 **dispatch 자체를 누르기 전**이다. `confirm` 문자열은

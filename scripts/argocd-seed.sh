@@ -50,7 +50,7 @@ GitOps 저장소를 pull 하는 self-managed ArgoCD 를 부트스트랩한다.
 
 선택 환경변수
   ARGOCD_NAMESPACE      기본 argocd
-  ARGOCD_CHART_VERSION  기본 10.3.0        (23 §5 — 정확 핀. 올릴 땐 argocd CLI 도 같이)
+  ARGOCD_CHART_VERSION  기본 10.3.0        (정확 핀. 올릴 땐 argocd CLI 도 같이)
   ARGOCD_VALUES         기본 bootstrap/argocd-values.yaml   (GITOPS_REPO_DIR 기준 상대경로)
   ARGOCD_RELEASE        기본 argocd
 
@@ -252,7 +252,7 @@ if (( ! DRY_RUN )) && want 5; then
         kubectl -n $ARGOCD_NAMESPACE get application root-app \\
           -o jsonpath='{.status.sync.revision}{"\n"}'
         ⚠️ 값이 'main' 이면 아직 **설정값**이다. 실제 커밋 SHA 여야 pull 성공이다.
-           (PoC 에서 이것을 성급히 성공으로 읽은 전례가 있다 — 30 §4)
+           (이 값만 보고 성급히 성공으로 판단하지 않는다)
 
      2) Synced / Healthy 인가
         kubectl -n $ARGOCD_NAMESPACE get application root-app \\
@@ -269,17 +269,17 @@ if (( ! DRY_RUN )) && want 5; then
         kubectl -n $ARGOCD_NAMESPACE get secret argocd-initial-admin-secret \\
           -o jsonpath='{.data.password}' | base64 -d
 
-     ⛔ 마지막으로 **비밀번호를 바꾸고 초기 Secret 을 지운다**(23 §2.3 — 선택이 아니라 완료 조건):
+     ⛔ 마지막으로 **비밀번호를 바꾸고 초기 Secret 을 지운다**(선택이 아니라 완료 조건):
 
         export ARGOCD_OPTS='--port-forward --port-forward-namespace $ARGOCD_NAMESPACE --insecure'
         argocd login --username admin                        # 프롬프트 — 에코 없음
         argocd account update-password 2>/tmp/argocd-pw.err   # 현재 → 신규 → 확인
         kubectl -n $ARGOCD_NAMESPACE delete secret argocd-initial-admin-secret
 
-        🔴 ARGOCD_OPTS='--core' 로는 update-password 가 실패한다(실측 2026-08-11):
+        🔴 ARGOCD_OPTS='--core' 로는 update-password 가 실패한다:
              "failed to get issue time: unable to extract token claims"
            --core 는 argocd-server 를 **우회**해 kube-apiserver 로 직접 가므로 세션 토큰이 없다.
-           신원이 필요한 작업(비밀번호·계정·토큰)은 --core 로 하지 않는다. 근거 = 23 §2.3-1.
+           신원이 필요한 작업(비밀번호·계정·토큰)은 --core 로 하지 않는다.
         ⚠️ --insecure 는 **클라이언트** 검증 생략이다(서버 TLS 를 끄는 server.insecure 와 다르다).
            port-forward 주소가 localhost:<random> 이라 인증서 CN 이 맞지 않기 때문이다.
         ⚠️ --port-forward 는 포워더를 CLI 프로세스 안에서 돌려 teardown 마다 broken pipe 가

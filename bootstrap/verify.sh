@@ -45,7 +45,7 @@ verify_bucket() {  # verify_bucket <prefix> <label>
   report "  [$label] 버저닝"         "$(check_versioning "$bucket")"
   report "  [$label] SSE(AES256)"    "$(check_encryption "$bucket")"
   report "  [$label] 퍼블릭 차단"    "$(check_public_access_block "$bucket")"
-  report "  [$label] lifecycle(D29)" "$(check_lifecycle "$bucket")"
+  report "  [$label] lifecycle" "$(check_lifecycle "$bucket")"
 }
 
 echo "=== verify (read-only · target=$BOOTSTRAP_TARGET profile=$AWS_PROFILE) ==="

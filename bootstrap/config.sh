@@ -40,7 +40,7 @@ readonly REGION="ap-northeast-2"
 #      · 안전장치가 유지된다 — assert_account 가 실제 계정과 대조한다
 #      · ARN 조립도 유지된다 — oidc_arn()·role_arn() 이 이 값을 소비한다
 #      · 부수 효과로 실행자가 **어느 계정에 도는지 매번 명시**하게 된다.
-#        공용 계정(F13)에서는 그 자체가 방어다 — 조용히 다른 계정을 치지 않는다.
+#        공용 계정에서는 그 자체가 방어다 — 조용히 다른 계정을 치지 않는다.
 #
 #    ⛔ "해시로 저장해 비교하면 되지 않나"는 **이미 기각된 안**이다.
 #       계정 ID 공간이 10^12 뿐이라 노트북으로도 전수 해싱이 가능하다 —
@@ -68,7 +68,7 @@ readonly REGION="ap-northeast-2"
 readonly EXPECTED_ACCOUNT
 
 # ── 네이밍 토큰 (모듈 repo architecture/02) ─────────────────────────────────
-readonly WORKLOAD="demo"      # D24
+readonly WORKLOAD="demo"
 readonly REGION_CODE="an2"
 
 # ── hub (단일, 고정 — team 계정의 영구 거처) ────────────────────────────────

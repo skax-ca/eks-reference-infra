@@ -60,7 +60,7 @@ scripts/               teardown-verify.sh · argocd-seed.sh · validate-doc-conv
 | backend | S3 + `use_lockfile = true`. 버킷명은 git에 없다(GitHub 저장소 변수 `HUB_TF_STATE_BUCKET`/`DEV_TF_STATE_BUCKET` + 로컬 `backend.hcl`, 둘 다 git 밖) |
 | state key | `<env>/<component>.tfstate` (예: `hub/tgw.tfstate`, `dev/networking.tfstate`) |
 | 자격증명 | GitHub OIDC → 입구 Role(`*_AWS_ENTRY_ROLE_ARN`) → 실행 Role(`*_AWS_EXEC_ROLE_ARN`), 2단 체인 |
-| plan → apply | plan을 workflow run 안에 저장해 사람이 요약을 읽고 **dispatch를 누르는 것 자체가 승인**이다(`pull_request` 트리거는 2026-08-03 의도적으로 제거) |
+| plan → apply | plan을 workflow run 안에 저장해 사람이 요약을 읽고 **dispatch를 누르는 것 자체가 승인**이다(`pull_request` 트리거는 의도적으로 두지 않는다) |
 | 로컬에서 되는 것 | `init` + `validate`까지. **apply·destroy는 로컬에서 안 된다**(실행 Role이 입구 Role만 신뢰해 개인 IAM user는 관리자여도 `AccessDenied`) |
 
 ⚠️ **재시도할 때 `workflow run`을 새로 누르지 않는다.** 실패한 job이 apply라면 `gh run rerun

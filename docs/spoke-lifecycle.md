@@ -67,7 +67,7 @@ hub와 같은 방식으로 `backend.hcl`을 만들고(`key = "dev/networking.tfs
 gh workflow run deploy-dev-network.yml --ref main -f action=apply
 ```
 
-✅ **apply 안에서 자동으로 수락한다. 사람 개입이 필요 없다(2026-08-21 재설계 이후).**
+✅ **apply 안에서 자동으로 수락한다. 사람 개입이 필요 없다.**
 RAM 초대 수락은 Terraform 리소스가 아니라 `deploy-dev-network.yml` plan job의 CI 단계가
 전담한다(`iac-module-library`의 `docs/architectures/eks-gitops-hub-spoke/choose-your-path.md`
 「RAM 초대 수락」 절: 설계 배경·왜 Terraform 리소스로는 안 되는지·`removed` 블록으로 무엇을
@@ -75,8 +75,8 @@ RAM 초대 수락은 Terraform 리소스가 아니라 `deploy-dev-network.yml` p
 apply든, teardown 이후 재배포든 동일하게 이 CI 단계가 처리한다. 사람이 CLI를 직접
 돌리거나 import 블록을 추가할 필요가 이제 없다.
 
-⛔ **이전엔 여기 "hub 쪽 RAM principal association이 사라져 있을 수 있다"는 경고가
-있었다. 지금은 구조적으로 재발하지 않는다.** `aws_ram_resource_share_accepter`가 더는
+⛔ **"hub 쪽 RAM principal association이 사라져 있을 수 있다"는 문제는 구조적으로
+재발하지 않는다.** `aws_ram_resource_share_accepter`가 더는
 Terraform이 생성·삭제하는 리소스가 아니므로(`removed` 블록), spoke teardown이 그 리소스를
 destroy하며 `DisassociateResourceShare`를 호출하던 경로 자체가 없다. hub의 association은
 teardown 이후에도 계속 ACTIVE로 남는다.
@@ -88,7 +88,7 @@ teardown 이후에도 계속 ACTIVE로 남는다.
 > networking 재적용**. TGW 전용으로 따로 기억할 단계는 이 마지막 재적용 하나뿐이다.
 
 🔴 **완전 신규(또는 완전 재배포) VPC의 첫 apply에서 `aws_route.to_hub`가 "Invalid for_each
-argument"로 plan 자체를 거부할 수 있다**(2026-08-21 실측). `route_table_ids_by_group["node-uniq"]`
+argument"로 plan 자체를 거부할 수 있다.** `route_table_ids_by_group["node-uniq"]`
 는 module output(리스트)인데, 그 라우트테이블 자신이 **같은 apply 안에서 처음 생성**되면
 apply 시점까지 값을 모른다. 그런 리스트를 `for_each` 키로 쓰면 OpenTofu가 plan을 거부한다.
 고정 개수(AZ 수)로 만든 정적 인덱스 집합을 `for_each` 키로 쓰고, 실제 라우트테이블 ID는 그
@@ -106,9 +106,9 @@ gh workflow run deploy-dev-eks.yml --ref main -f action=apply
 ```
 
 ⚠️ **hub의 `argocd_hub_pod_identity`가 아직 `enable=false`여도 이 apply는 성공한다.** AWS는
-trust policy의 Principal 존재를 **생성 시점에 검증하지 않는다**(`eks-reference-infra`
-2026-08-19 실측 확인). 순서를 걱정해 hub를 먼저 켤 필요는 없지만, 크로스 계정 인증이 실제로
-되려면 결국 hub 쪽도 켜야 한다(6절에서 등록한 뒤 확인).
+trust policy의 Principal 존재를 **생성 시점에 검증하지 않는다.** 순서를 걱정해 hub를 먼저
+켤 필요는 없지만, 크로스 계정 인증이 실제로 되려면 결국 hub 쪽도 켜야 한다(6절에서 등록한
+뒤 확인).
 
 ### 6. GitOps 등록: hub에 `cluster-secret.yaml` 신규 등록
 
@@ -248,8 +248,7 @@ WORKLOAD=<code> ENVIRONMENT=dev AWS_PROFILE=asset ./scripts/teardown-verify.sh
 
 ### 13. spoke 단독 teardown 시 hub TGW 잔존 라우트
 
-**hub가 destroy된 경우**는 다르다(이 사실은 원래 `deployment-facts.md`가 다뤘으나
-2026-08-24 문서 정리로 그 파일이 삭제됐다): hub networking을 destroy하면 프리픽스
+**hub가 destroy된 경우**는 다르다: hub networking을 destroy하면 프리픽스
 리스트·TGW·RAM 공유가 전부 사라져, spoke networking을 먼저 재생성해도
 `data.aws_ram_resource_share` 조회가 즉시 에러로 실패한다(순서를 잊어도 안전하게
 드러난다). 통상 순서(`hub networking → hub eks → spoke networking → spoke eks → hub

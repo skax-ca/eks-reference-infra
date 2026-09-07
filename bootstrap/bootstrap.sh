@@ -5,7 +5,7 @@
 #       그것이 이 스크립트의 수용 기준이고, `apply` 의 수렴 성질을 흉내내는 방식이다.
 #
 # ⛔ AWSAFTExecution 을 건드리지 않는다. update-assume-role-policy 가
-#    이 파일에 등장하면 안 된다 — 공용 계정(F13)에서 남의 Role 을 덮어쓰는 일이다.
+#    이 파일에 등장하면 안 된다 — 공용 계정에서 남의 Role 을 덮어쓰는 일이다.
 #
 # ── hub-spoke 토폴로지 확정 ──────────────────────────────────────────────────
 # hub 는 team 계정에 단일 고정. spoke 는 계정도 env 도 다를 수 있는 **여러** 인스턴스이고,
@@ -75,7 +75,7 @@ converge_bucket() {
   bucket="$(find_bucket_by_prefix "$prefix")"
   if [[ -z "$bucket" ]]; then
     # ⚠️ 버킷명은 git 에 없다. 여기서 생성하고 **출력으로만** 알린다.
-    #    AWS 는 예측 불가능한 버킷명을 권장한다(F12).
+    #    AWS 는 예측 불가능한 버킷명을 권장한다(전역 유니크 제약과 열거 방지 둘 다 해결).
     bucket="${prefix}$(openssl rand -hex 6)"
     aws_ s3api create-bucket --bucket "$bucket" \
       --create-bucket-configuration "LocationConstraint=${REGION}" >/dev/null
@@ -185,7 +185,7 @@ esac
 case "$(check_role_trust "$HUB_EXEC_ROLE" "$(hub_exec_trust_policy)")" in
   absent)
     create_role_with_retry "$HUB_EXEC_ROLE" "$(hub_exec_trust_policy)" \
-      "GitHub Actions execution role (hub, D27-1 pattern)." "$HUB_ENV"
+      "GitHub Actions execution role (hub, 입구 Role만 신뢰하는 최소권한 패턴)." "$HUB_ENV"
     changed "[hub] 실행 Role 생성: $HUB_EXEC_ROLE"
     ;;
   drift)
@@ -228,7 +228,7 @@ esac
 case "$(check_role_trust "$SPOKE_EXEC_ROLE" "$(spoke_exec_trust_policy)")" in
   absent)
     create_role_with_retry "$SPOKE_EXEC_ROLE" "$(spoke_exec_trust_policy)" \
-      "GitHub Actions execution role (spoke:$SPOKE_ENV, D27-1 pattern)." "$SPOKE_ENV"
+      "GitHub Actions execution role (spoke:$SPOKE_ENV, 입구 Role만 신뢰하는 최소권한 패턴)." "$SPOKE_ENV"
     changed "[spoke:$SPOKE_ENV] 실행 Role 생성: $SPOKE_EXEC_ROLE"
     ;;
   drift)
@@ -264,7 +264,7 @@ if [[ "$BOOTSTRAP_TARGET" == hub ]]; then
 cat <<OUT
 
 ── 다음 단계에 필요한 값 (hub) ──────────────────────────────────────────────
-⚠️ 아래 값은 git 에 커밋하지 않는다(D25 — 계정 식별 정보 일반으로 확장).
+⚠️ 아래 값은 git 에 커밋하지 않는다(계정 식별 정보라 노출 시 IAM principal 열거가 가능해진다).
    GitHub repo 변수/시크릿과 gitignore 된 backend.hcl 에만 둔다.
 
   [hub]  GitHub repo 변수  HUB_TF_STATE_BUCKET     = $HUB_BUCKET
@@ -286,7 +286,7 @@ else
 cat <<OUT
 
 ── 다음 단계에 필요한 값 (spoke:$SPOKE_ENV) ─────────────────────────────────
-⚠️ 아래 값은 git 에 커밋하지 않는다(D25 — 계정 식별 정보 일반으로 확장).
+⚠️ 아래 값은 git 에 커밋하지 않는다(계정 식별 정보라 노출 시 IAM principal 열거가 가능해진다).
    GitHub repo 변수/시크릿과 gitignore 된 backend.hcl 에만 둔다.
 OUT
 if [[ "$SPOKE_ENV" == dev ]]; then
