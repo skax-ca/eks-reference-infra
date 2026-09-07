@@ -132,6 +132,14 @@ root-app이 이 커밋을 pull하면 baseline ApplicationSet이 이 클러스터
 자동 추가한다. **재배포 시 재등록**은 14절이다. 처음 등록과 절차는 같지만 `server`·`caData`가
 반드시 바뀐다는 것과 기존 `addon-*` 라벨을 그대로 옮겨야 한다는 함정이 있다.
 
+⚠️ **`projects/platform.yaml`의 AppProject `destinations`는 편집하지 않는다.** 위 표만
+채우면 되고, fan-out과 별개로 존재하는 세 번째 가드레일(AppProject `destinations`,
+어느 클러스터로 배포해도 되는지 정하는 목록)은 이미 region 단위 glob으로 spoke EKS API
+endpoint 전체를 허용해뒀다. endpoint 정확한 값을 그 목록에 박아두면 14절(재배포)마다 그
+파일도 같이 고쳐야 하는 함정이 생기기 때문이다. 실제 접근 게이트는 그 목록이 아니라 이
+저장소에 `cluster-secret.yaml`을 커밋할 git 권한과 `cross-account-trust-role`의 trust
+policy다.
+
 ### 7. 완료 판정
 
 hub 7절과 같은 6항목을 이 spoke 클러스터 기준으로 확인한다. 3번(root Application이 커밋
