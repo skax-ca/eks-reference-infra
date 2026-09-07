@@ -8,12 +8,6 @@
   "structure": "hub(team 계정 533616270150, live/hub/{networking,tgw,eks}, ArgoCD control-plane 영구 거처, hub-spoke TGW 양방향 라우팅 완료) / spoke=dev(asset 계정 614054776208, live/dev/{networking,eks}, 부트스트랩·apply 완료, TGW attachment+SG 인바운드까지 연결 완료). GitOps 매니페스트는 이 repo가 아니라 eks-platform-gitops 소관.",
   "customNotes": [
     {
-      "timestamp": 1787539333096,
-      "source": "manual",
-      "category": "gotcha",
-      "content": "2026-08-24 — ArgoCD ApplicationSet 기반 spoke teardown에서 cluster-secret 매칭 라벨 제거 후, karpenter 컨트롤러 Application(`eks-demo-dev-an2-main-01-karpenter`)이 karpenter-nodepool Application(NodePool·EC2NodeClass CR)보다 먼저 prune되면서 EC2NodeClass `default`의 `karpenter.k8s.aws/termination` finalizer가 영구 스턱되는 버그를 실측 확인. 원인: 이 finalizer는 Karpenter 컨트롤러 자신이 실행 중이어야 처리(제거)되는데, ApplicationSet이 두 Application을 병렬/무순서로 동시에 삭제 처리해 컨트롤러 파드가 먼저 사라지면 그 뒤에 남은 finalizer를 처리할 주체가 영영 없어진다(NodePool CR 자체는 finalizer 없이 정상 삭제됐고, EC2NodeClass만 `deletionTimestamp` 찍힌 채 finalizers=[karpenter.k8s.aws/termination]로 방치됨 — `kubectl get ec2nodeclasses`가 계속 남아있는데 argocd-application-controller 로그는 \"1 objects remaining for deletion\"을 무한 반복). 복구: AWS 실물(Launch Template) 오르판이 없음을 `aws ec2 describe-launch-templates` 태그 필터로 먼저 확인(이 dev에서 Karpenter 노드가 한 번도 뜬 적 없어 애초에 정리할 실물이 없었음 확인) 후 `kubectl patch ec2nodeclass default --type merge --patch-file=<{\"metadata\":{\"finalizers\":[]}}>`로 강제 제거 — 즉시 GC됨. 일반화: Karpenter를 포함하는 ApplicationSet fan-out teardown에서는 CR(NodePool/EC2NodeClass)이 컨트롤러보다 반드시 먼저(또는 최소 동시에 안전하게) 정리되도록 순서를 보장해야 한다 — 현재 `04-spoke-lifecycle.md` 10절은 이 순서 위험을 언급하지 않는다(다음 문서 갱신 시 반영 필요, 현재는 이 repo가 문서 SSOT 이관 대기 중이라 project memory에만 기록). 이 발견 이후 11~12절(destroy 워크플로 2개 + teardown-verify.sh)까지 전부 정상 완주, flow-log 로그 그룹 1건(알려진 패턴) 수동 삭제 후 exit 0 잔존물 없음 확인 — spoke(dev) teardown 완전히 종료."
-    },
-    {
       "timestamp": 1787542400038,
       "source": "manual",
       "category": "open-items",
@@ -126,6 +120,12 @@
       "source": "manual",
       "category": "mcp-tooling-fix",
       "content": "2026-09-07 — 2026-09-01 permissions.deny 차단(notepad_*/project_memory_*)을 재검토 후 철회, .claude/settings.json을 permissions.deny: []로 변경. 근거: OMC 5.3.0(5.2.0도 동일) 소스 직접 확인 결과 techStack 등 4개 필드 손상(SessionStart 훅의 24시간 TTL 재스캔)과 customNotes 손상(PostToolUse 훅의 Bash 출력 힌트 감지 + 20개 FIFO)은 둘 다 MCP 도구 호출과 무관하게 항상 실행되는 훅이 원인이며, notepad_write_*/project_memory_read/write 자체 코드에는 재스캔·캡 로직이 전혀 없음(파일 락 + 원자적 쓰기만 함)을 확인했다. MCP 도구를 막아도 원인은 해소되지 않았고, 대신 Edit로 직접 써야 하는 더 위험한 수동 방식(2026-08-14 200KB 비대화 사고의 재발 위험)만 남았었다.\n\n새 정책: customNotes 20개 FIFO 캡은 막을 방법이 없는 설계로 받아들인다 — project-memory.json이 git 커밋 대상이라 잘려나가는 항목도 git log -p로 복구 가능(docs의 \"변경 이력은 git이 소유한다\" 원칙과 동일). 단 SessionStart 재스캔(빈 스키마로 실제 덮어씀, git으로 복구 안 되는 진짜 파괴)은 성격이 다르므로 lastScanned sentinel(9999999999999) 고정은 계속 유지한다.\n\n콘텐츠 경계 신설: .omc/(notepad.md·project-memory.json)는 나중에 팀원 공유 시 gitignore로 완전히 뺄 계획이라, \"Claude 세션 북마크\"로만 쓰고 이 저장소의 지식 SSOT로 삼지 않는다. 팀원이 OMC 없이도 알아야 할 절차·결정·gotcha는 반드시 docs/*.md 또는 CLAUDE.md에도 반영한다. 기존 notepad.md MANUAL·이 customNotes에 이미 들어간 항목 중 팀 지식에 해당하는 것을 docs/*.md로 승격하는 감사가 후속 과제로 남음(.omc/를 gitignore하기 전에 완료 필요, 이번 세션엔 미착수).\n\n상세 절차는 .claude/skills/notepad-sync/SKILL.md 참조."
+    },
+    {
+      "timestamp": 1788744875971,
+      "source": "manual",
+      "category": "docs-audit",
+      "content": "[fork 감사, 미완 - 부모 세션이 최종 판단·실행 예정] .omc/ 전체(notepad.md 1292줄+customNotes 20개)를 docs/*.md·CLAUDE.md·scripts/README.md·bootstrap/README.md와 대조 완료. 결론: notepad.md의 351~1292줄(구 ref 워크로드 시절, 단일 dev/eks 루트, vpc-v1.x 태그 시대 기록)은 리네임·hub-spoke 재설계·모듈 0.y.z 재핀으로 거의 전부 obsolete — 승격 후보 없음(모듈 설계 세부는 SSOT 경계상 애초에 이 repo 문서 대상도 아님). 실제 승격 후보는 2건, 이미 문서화된 것 3건."
     }
   ],
   "directoryMap": {
@@ -192,6 +192,12 @@
       "type": "file"
     },
     {
+      "path": "docs/hub-lifecycle.md",
+      "accessCount": 3,
+      "lastAccessed": 1788745262416,
+      "type": "file"
+    },
+    {
       "path": ".claude/skills/argocd-tunnel-connect/scripts/connect.sh",
       "accessCount": 2,
       "lastAccessed": 1788739063523,
@@ -213,6 +219,12 @@
       "path": ".claude/skills/notepad-sync/SKILL.md",
       "accessCount": 2,
       "lastAccessed": 1788741937800,
+      "type": "file"
+    },
+    {
+      "path": "docs/spoke-lifecycle.md",
+      "accessCount": 2,
+      "lastAccessed": 1788745225842,
       "type": "file"
     }
   ],

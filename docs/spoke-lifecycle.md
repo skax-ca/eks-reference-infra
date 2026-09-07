@@ -201,6 +201,23 @@ kubectl get nodepools 2>&1   # Karpenter를 쓰면 NodePool CR도 없어야 함(
 #    (server/config까지 포함해 전체 삭제 — 이 시점엔 정리할 것이 이미 없어 안전하다)
 ```
 
+🔴 **④에서 NodePool은 사라졌는데 EC2NodeClass가 `deletionTimestamp`를 낀 채 남아 있으면
+Karpenter의 `karpenter.k8s.aws/termination` finalizer가 스턱된 것이다.** ApplicationSet이
+karpenter 컨트롤러 Application과 karpenter-nodepool Application(NodePool·EC2NodeClass 소유)을
+병렬로 prune하면, finalizer를 처리해야 할 컨트롤러 파드가 먼저 사라져 아무도 처리하지 못한다
+(`kubectl get ec2nodeclasses`는 계속 남고, `argocd-application-controller` 로그는 "1 objects
+remaining for deletion"을 반복한다). 복구하기 전에 AWS 실물(Launch Template) 오르판이 없는지
+먼저 확인한다:
+
+```bash
+aws ec2 describe-launch-templates --filters "Name=tag:Name,Values=*<workload>-<env>*"
+kubectl patch ec2nodeclass <name> --type merge -p '{"metadata":{"finalizers":[]}}'
+```
+
+오르판이 없으면(이 spoke에서 Karpenter 노드가 한 번도 뜬 적 없는 경우 등) 위 `patch`로
+finalizer를 강제로 비워 즉시 GC시킨다. 오르판이 있으면 먼저 그 EC2 인스턴스를 정리한 뒤
+patch한다.
+
 **순서가 중요하다.** ①~⑤를 건너뛰고 Secret을 한 번에 지우면 hub의 Application 추적
 기록은 사라지지만 실제 addon과 워크로드 잔존물은 spoke에 orphan으로 남는다. spoke
 EKS 클러스터 자체를 destroy(11절)하면 결국 함께 사라지므로 destroy 자체를 막지는
