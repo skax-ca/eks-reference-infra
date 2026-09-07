@@ -8,18 +8,6 @@
   "structure": "hub(team 계정 533616270150, live/hub/{networking,tgw,eks}, ArgoCD control-plane 영구 거처, hub-spoke TGW 양방향 라우팅 완료) / spoke=dev(asset 계정 614054776208, live/dev/{networking,eks}, 부트스트랩·apply 완료, TGW attachment+SG 인바운드까지 연결 완료). GitOps 매니페스트는 이 repo가 아니라 eks-platform-gitops 소관.",
   "customNotes": [
     {
-      "timestamp": 1787532619230,
-      "source": "manual",
-      "category": "open-items",
-      "content": "2026-08-24 — spoke(dev) teardown 재검증(실제 destroy 재수행) 및 재배포 완주, 그 과정에서 진짜 네트워크 버그(hub→spoke TGW 라우트 누락, gotcha 별도 기록) 발견·근본 수정까지 완료. teardown 재검증(10~13절)은 문서와 완전히 일치, 새 어긋남 없음. 재배포 중 hub networking 재적용이 API 타임아웃으로 부분 실패 → 재시도 apply가 실제 누락을 놓침 → dev Application 8개 전부 SYNC=Unknown까지 악화 → Reachability Analyzer+flow log로 원인 특정(`aws_route.vpc_to_spoke`의 for_each key가 attachment ID라 spoke 재배포마다 불필요하게 replace됨) → `live/hub/networking/main.tf`·`.github/workflows/deploy-hub-network.yml` 수정(commit 223c54b, key를 spoke_account_id로 안정화 + vm-uniq RT 누락 수정 + apply 후 수렴 검증 CI 스텝 신설) → hub networking 재적용 성공(재-plan \"No changes\" 확인) → 연결 CONNECT_OK 실측 → dev Application 8/8 Synced/Healthy 최종 확인. 7절 완료 판정 6항목 전부 통과(bootstrap drift 없음·노드 2/2 Ready·root-app sync revision 일치·Application 8/8·네트워크 실측·CI green). 다음 세션 착수 후보: 없음 — hub·dev(spoke) 둘 다 정상 가동 중, 이번에 고친 for_each key 설계는 앞으로 spoke를 몇 번 재배포해도 재발하지 않아야 한다(검증됨)."
-    },
-    {
-      "timestamp": 1787534491574,
-      "source": "manual",
-      "category": "open-items",
-      "content": "2026-08-24 — 이 repo의 목적 변경 결정: \"EKS GitOps 패턴의 레퍼런스\"로 전환, 이 repo가 GitOps 절차·runbook(hub/spoke lifecycle 등)의 새 SSOT가 된다(모듈 repo는 Terraform 모듈 설계 자체만 유지). 단, iac-module-library가 지금 자기 docs 개편을 진행 중이므로, 그 개편 결과를 먼저 보고 나서 이 repo의 CLAUDE.md·docs 구조에 반영하기로 사용자가 확정(동시 진행 아님, 순서 있음). 착수 조건: iac-module-library 문서 개편 완료 확인 후. 착수 내용: (1) CLAUDE.md 「0. 설계는 이 repo에 없다」 절 자체를 GitOps 절차 SSOT 이관에 맞게 재작성, (2) 03-hub-lifecycle.md·04-spoke-lifecycle.md 등 절차 문서를 모듈 repo에서 이 repo로 이관(복사 아닌 이관 — 원본은 모듈 repo에서 제거해 갈라짐 방지), (3) \"무엇이 어느 repo에 있나\" 표 갱신. 이번 세션엔 착수하지 않음 — spoke teardown은 이 결정과 별개로 기존 문서 기준 그대로 진행."
-    },
-    {
       "timestamp": 1787539333096,
       "source": "manual",
       "category": "gotcha",
@@ -132,6 +120,12 @@
       "source": "manual",
       "category": "mcp-tooling-fix",
       "content": "2026-09-03 — iac-module-library(커밋 07c2288, 2026-09-03)가 재규명한 문제를 이 저장소에도 동일 적용. 2026-09-01 이 저장소에 이미 반영된 permissions.deny(mcp__plugin_oh-my-claudecode_t__notepad_*/project_memory_* 차단, .claude/settings.json)는 Claude가 그 MCP 도구를 직접 호출하는 경로만 막을 뿐, techStack/build/conventions/structure가 빈 자동스캔 스키마로 손상되는 진짜 원인은 막지 못한다는 것이 이번 세션(2026-09-03 세션시작 직후)에 실측으로 재확인됐다 — 이 세션에서 그 MCP 도구를 단 한 번도 호출하지 않았는데도 세션 시작 직후 project-memory.json의 4개 필드가 이미 손상돼 있었다(git diff로 실측).\n\n**근본원인(OMC 플러그인 소스 직접 확인)**: `~/.claude/plugins/cache/omc/oh-my-claudecode/`의 SessionStart 훅이 `dist/hooks/project-memory/index.js`의 `registerProjectMemoryContext()`를 매 세션 시작마다 실행 — MCP 도구가 아니라 Claude Code 자체가 구동하는 훅(node 프로세스)이라 permissions.deny의 적용 대상이 아니다. `storage.js`의 `shouldRescan(memory)`가 `(Date.now() - memory.lastScanned) > CACHE_EXPIRY_MS`(24시간, `constants.js`)를 검사해 true면 `detectProjectEnvironment()`로 프로젝트를 자동 재스캔한 뒤 `applyRescanMerge(detected, existing)`로 techStack/build/conventions/structure를 detected 값으로 통째로 교체한다(customNotes/userDirectives/hotPaths 3개 배열만 보존). 이 detector는 package.json·Cargo.toml·go.mod 등만 인식하고 Terraform/OpenTofu(.tf)는 인식 대상에 없어, 이 저장소는 항상 빈 스키마(`languages: []` 등)로 덮어써진다. Claude Code 공식 문서(hooks.md) 확인 결과 훅 단위 선택적 비활성화 기능은 없다(`disableAllHooks: true`만 존재, 이 프로젝트의 다른 OMC 기능까지 전부 죽임 — 과함).\n\n**적용한 조치**: iac-module-library와 동일하게 `lastScanned`를 먼 미래 sentinel(`9999999999999`)로 고정 — `shouldRescan()`의 age 계산이 항상 큰 음수가 되어 자동 재스캔이 구조적으로 재발 불가능해진다. 이번에 손상됐던 4개 필드는 git 이력(HEAD, 커밋 586be14)의 서술형 문자열로 복구했고, 그 안의 죽은 참조(iac-platform-gitops→eks-platform-gitops 리네임 반영, 모듈 repo 옛 문서 경로→docs/module-catalog.md 등 현재 경로)도 함께 정정했다.\n\n**⚠️ 한계(다음 세션이 알아야 함)**: 이 pin은 SessionStart의 rescan-overwrite 경로만 막는다 — 데이터 값 조작이지 제품이 지원하는 기능이 아니라, OMC가 향후 lastScanned를 검증하거나 다른 필드로 트리거를 바꾸면 무효화될 수 있다. 세션 시작 시 lastScanned가 여전히 9999999999999인지, techStack 등 4개 필드가 서술형 문자열(빈 객체 아님)인지 확인하는 걸 습관으로 유지할 것.\n\n출처: iac-module-library 커밋 07c2288·project-memory.json mcp-tooling-fix(2026-09-03) 항목, 이 저장소 .claude/settings.json(2026-09-01 permissions.deny 적용분, 3b60545로 pull됨)."
+    },
+    {
+      "timestamp": 1788741974663,
+      "source": "manual",
+      "category": "mcp-tooling-fix",
+      "content": "2026-09-07 — 2026-09-01 permissions.deny 차단(notepad_*/project_memory_*)을 재검토 후 철회, .claude/settings.json을 permissions.deny: []로 변경. 근거: OMC 5.3.0(5.2.0도 동일) 소스 직접 확인 결과 techStack 등 4개 필드 손상(SessionStart 훅의 24시간 TTL 재스캔)과 customNotes 손상(PostToolUse 훅의 Bash 출력 힌트 감지 + 20개 FIFO)은 둘 다 MCP 도구 호출과 무관하게 항상 실행되는 훅이 원인이며, notepad_write_*/project_memory_read/write 자체 코드에는 재스캔·캡 로직이 전혀 없음(파일 락 + 원자적 쓰기만 함)을 확인했다. MCP 도구를 막아도 원인은 해소되지 않았고, 대신 Edit로 직접 써야 하는 더 위험한 수동 방식(2026-08-14 200KB 비대화 사고의 재발 위험)만 남았었다.\n\n새 정책: customNotes 20개 FIFO 캡은 막을 방법이 없는 설계로 받아들인다 — project-memory.json이 git 커밋 대상이라 잘려나가는 항목도 git log -p로 복구 가능(docs의 \"변경 이력은 git이 소유한다\" 원칙과 동일). 단 SessionStart 재스캔(빈 스키마로 실제 덮어씀, git으로 복구 안 되는 진짜 파괴)은 성격이 다르므로 lastScanned sentinel(9999999999999) 고정은 계속 유지한다.\n\n콘텐츠 경계 신설: .omc/(notepad.md·project-memory.json)는 나중에 팀원 공유 시 gitignore로 완전히 뺄 계획이라, \"Claude 세션 북마크\"로만 쓰고 이 저장소의 지식 SSOT로 삼지 않는다. 팀원이 OMC 없이도 알아야 할 절차·결정·gotcha는 반드시 docs/*.md 또는 CLAUDE.md에도 반영한다. 기존 notepad.md MANUAL·이 customNotes에 이미 들어간 항목 중 팀 지식에 해당하는 것을 docs/*.md로 승격하는 감사가 후속 과제로 남음(.omc/를 gitignore하기 전에 완료 필요, 이번 세션엔 미착수).\n\n상세 절차는 .claude/skills/notepad-sync/SKILL.md 참조."
     }
   ],
   "directoryMap": {
@@ -180,9 +174,45 @@
   },
   "hotPaths": [
     {
+      "path": "CLAUDE.md",
+      "accessCount": 4,
+      "lastAccessed": 1788743338747,
+      "type": "file"
+    },
+    {
+      "path": ".claude/skills/argocd-tunnel-connect/SKILL.md",
+      "accessCount": 3,
+      "lastAccessed": 1788739081825,
+      "type": "file"
+    },
+    {
       "path": ".claude/settings.json",
-      "accessCount": 1,
-      "lastAccessed": 1788398018544,
+      "accessCount": 3,
+      "lastAccessed": 1788741874149,
+      "type": "file"
+    },
+    {
+      "path": ".claude/skills/argocd-tunnel-connect/scripts/connect.sh",
+      "accessCount": 2,
+      "lastAccessed": 1788739063523,
+      "type": "file"
+    },
+    {
+      "path": ".claude/skills/argocd-tunnel-disconnect/scripts/disconnect.sh",
+      "accessCount": 2,
+      "lastAccessed": 1788739068185,
+      "type": "file"
+    },
+    {
+      "path": ".claude/skills/argocd-tunnel-disconnect/SKILL.md",
+      "accessCount": 2,
+      "lastAccessed": 1788739087018,
+      "type": "file"
+    },
+    {
+      "path": ".claude/skills/notepad-sync/SKILL.md",
+      "accessCount": 2,
+      "lastAccessed": 1788741937800,
       "type": "file"
     }
   ],

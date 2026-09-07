@@ -29,6 +29,17 @@ hub-spoke EKS GitOps 패턴의 **레퍼런스 배포 루트**다. `iac-module-li
 작업을 시작하기 전에 해당 절차 문서부터 읽는다. 이 CLAUDE.md는 그 문서들이 전제하는
 "이 repo가 어떻게 조립되어 있는가"만 담는다.
 
+⚠️ **`.omc/`(notepad.md·project-memory.json)는 이 SSOT 경계에 들어오지 않는다.** 지금은
+크로스머신 핸드오프용으로 git에 커밋되지만(2026-09-07 기준), 팀원 공유 시점에는 `.omc/`
+전체를 gitignore로 제외할 계획이다(2026-09-07 결정). 즉 `.omc/`는 Claude의 세션 간
+자기 기억(하네스 북마크)일 뿐, 이 저장소의 지식 SSOT가 아니다. 팀원이 OMC 없이도 알아야 할
+절차·결정·gotcha(예: Terraform `for_each`에 unknown 값이 섞이면 안 되는 이유, GitHub App
+private key 취급 절차)는 반드시 위 세 문서(`docs/hub-lifecycle.md`·`spoke-lifecycle.md`·
+`runbooks.md`)나 이 파일에도 반영한다(`.omc/notepad.md`의 MANUAL 섹션이나
+`project-memory.json`의 `customNotes`에만 적어두고 끝내지 않는다). `.omc/`를 gitignore하기
+전에, 이미 그 안에 들어간 항목 중 팀 지식에 해당하는 것을 위 문서로 승격하는 감사가 필요하다
+(미착수, project-memory의 `mcp-tooling-fix` 카테고리 2026-09-07 항목 참조).
+
 ## 1. 저장소 구조
 
 ```
