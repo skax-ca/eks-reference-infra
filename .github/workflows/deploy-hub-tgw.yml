@@ -152,7 +152,7 @@ jobs:
             echo "변경 있음: **${{ steps.plan.outputs.changes }}**"
             echo
             echo "#### ⚠️ destroy / replace 대상"
-            echo "> 공용 개발 계정이다. 이 목록은 승인 전에 **사람이 읽는다**(D27-2)."
+            echo "> 공용 개발 계정이다. 이 목록은 승인 전에 **사람이 읽는다**."
             echo
             echo '```'
             grep -E 'will be destroyed|must be replaced|will be replaced' plan.txt || echo '(없음)'

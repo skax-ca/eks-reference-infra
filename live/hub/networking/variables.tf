@@ -26,8 +26,7 @@ variable "workload" {
 variable "env" {
   description = <<-EOT
     환경 코드. 이 루트는 env="hub"로 논리적 환경을 가른다.
-    ⚠️ hub는 team 계정, live/dev(spoke 첫 인스턴스)는 asset 계정 — **계정도 분리돼 있다**
-    (2026-08-19 재부트스트랩으로 분리 완료. 그 전엔 두 env가 team 계정을 공유했었다).
+    ⚠️ hub는 team 계정, live/dev(spoke 첫 인스턴스)는 asset 계정 — **계정도 분리돼 있다.**
   EOT
   type        = string
   default     = "hub"

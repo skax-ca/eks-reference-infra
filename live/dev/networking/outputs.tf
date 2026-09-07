@@ -58,7 +58,7 @@ output "flow_log_group_name" {
   description = <<-EOT
     VPC Flow Logs 가 기록되는 CloudWatch 로그 그룹 이름.
     ⚠️ 이 값이 나온다고 로그가 **배달된다**는 뜻은 아니다 — 로그 그룹에 실제 이벤트가 쌓이는지는
-    별도로 확인해야 한다(`docs/deployment-facts.md` 참조).
+    별도로 확인해야 한다(예: `aws logs describe-log-streams`로 최근 이벤트 시각 확인).
   EOT
   value       = module.vpc.flow_log_group_name
 }
@@ -67,9 +67,8 @@ output "tgw_attachment_id" {
   description = <<-EOT
     이 VPC 의 TGW attachment ID. ⚠️ hub 는 이 출력을 repo 변수로 받지 않는다 — 자기 TGW 에
     붙은 attachment 전부를 data.aws_ec2_transit_gateway_vpc_attachments 로 자동 발견한다
-    (2026-08-20 재설계, 모듈 repo docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
-    「값 발견」 절). 이 출력은
-    계약이 실제로 동작함을 보이는 용도로만 남긴다.
+    (모듈 repo docs/architectures/eks-gitops-hub-spoke/choose-your-path.md 「값 발견」 절).
+    이 출력은 계약이 실제로 동작함을 보이는 용도로만 남긴다.
   EOT
   value       = aws_ec2_transit_gateway_vpc_attachment.spoke.id
 }

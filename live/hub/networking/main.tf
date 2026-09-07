@@ -6,8 +6,8 @@
 #
 # ⚠️ minimal(examples/vpc) 이 아니라 enterprise 를 택한 결과로 **첫 apply 의 판정 범위가 넓어진다**
 #    — secondary CIDR 2개와 isolated 라우팅이 실제로 만들어지기 때문이다.
-#    무엇이 판정되고 무엇이 안 되는지는 `docs/deployment-facts.md`가 표로 관리한다.
-#    표에 없는 것을 "검증했다"고 쓰지 않는다(`CLAUDE.md` 참조).
+#    apply 가 성공했다는 것과 "그 CIDR·라우팅이 실제로 의도대로 동작한다"는 것은 다르다 —
+#    plan/apply 로그만 보고 후자까지 검증했다고 쓰지 않는다.
 
 locals {
   # ── CIDR 3계층 (모듈 repo 규약) ─────────────────────────────────────────────
@@ -319,10 +319,10 @@ locals {
 # ⚠️ route_table_ids_by_group[...] 는 AZ 별 RT 리스트라 (RT × spoke) 곱집합을 만든다.
 #
 # ⚠️ **key 는 attachment ID 도, 라우트테이블 ID 도 아니라 그룹명+인덱스+spoke_account_id 로
-# 고정한다** — 이전엔 attachment ID 를 key 에 섞어 destroy→재배포마다 불필요한 교체를
-# 겪은 전례가 있어 spoke_account_id 로 옮겼는데(그 수정은 유지), 라우트테이블 ID 자체를
-# key 조합(`toset(concat(...))`)에 쓰는 것도 같은 문제의 다른 얼굴이다: hub VPC 를
-# 처음부터 새로 만드는 apply 에서는 그 ID 들이 plan 시점에 전부 unknown 이고,
+# 고정한다.** attachment ID 를 key 에 섞으면 destroy→재배포마다 불필요한 교체가 생기고,
+# 라우트테이블 ID 자체를 key 조합(`toset(concat(...))`)에 쓰는 것도 같은 문제의 다른
+# 얼굴이다: hub VPC 를 처음부터 새로 만드는 apply 에서는 그 ID 들이 plan 시점에 전부
+# unknown 이고,
 # `toset()`은 unknown 원소가 하나라도 있으면 중복 제거를 못 해 결과 집합 전체를
 # "known after apply" 로 만들어버린다 — 그게 setproduct·for_each key 까지 전염돼
 # `Invalid for_each argument` 로 이어진다(hub 완전 재배포 1회차에서 실물 재현).
