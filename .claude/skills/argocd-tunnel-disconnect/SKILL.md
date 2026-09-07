@@ -14,7 +14,9 @@ watchdog)을 양쪽 다 종료하고 상태 파일을 지운다.
 bash .claude/skills/argocd-tunnel-disconnect/scripts/disconnect.sh
 ```
 
-인자 없음 — `.omc/state/argocd-tunnel/`의 상태 파일에서 무엇을 종료해야 하는지 전부 읽는다.
+인자 없음 — 짝 스킬 `argocd-tunnel-connect` 디렉토리 밑 `.state/`의 상태 파일에서 무엇을
+종료해야 하는지 전부 읽는다(`.omc/state/`를 안 쓰는 이유는 `argocd-tunnel-connect`의
+`connect.sh` 주석 참고).
 
 ## 출력
 

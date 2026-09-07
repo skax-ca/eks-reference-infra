@@ -42,7 +42,7 @@ bash .claude/skills/argocd-tunnel-connect/scripts/connect.sh [LOCAL_PORT]
 ## 멱등성 판단 방식
 
 스크립트가 매번 다음을 확인한다:
-1. `.omc/state/argocd-tunnel/local-watchdog.pid`에 기록된 프로세스가 살아있는가
+1. `.state/local-watchdog.pid`(이 스킬 디렉토리 밑, git에 커밋되지 않는다)에 기록된 프로세스가 살아있는가
 2. `https://localhost:<PORT>/`가 실제로 HTTP 200을 주는가(터널 전 구간이 살아있어야 통과)
 
 둘 다 참이면 **재연결하지 않는다.** 하나라도 거짓이면(프로세스가 죽었거나, 로컬 SSM 세션은
@@ -60,7 +60,8 @@ bash .claude/skills/argocd-tunnel-connect/scripts/connect.sh [LOCAL_PORT]
 
 ## 상태 파일
 
-`.omc/state/argocd-tunnel/`(이 프로젝트 OMC 상태 루트, git에 커밋되지 않는다):
+이 스킬 디렉토리 밑 `.state/`(git에 커밋되지 않는다 — `.omc/state/`는 OMC 세션·워크트리
+생명주기에 묶여 있어 부적절하다, `connect.sh` 주석 참고):
 `local-watchdog.pid` · `instance-id.txt` · `local-port.txt` · `local-watchdog.log`.
 `argocd-tunnel-disconnect` 스킬이 이 파일들로 무엇을 정리해야 하는지 찾는다 — 직접 지우지 않는다.
 
