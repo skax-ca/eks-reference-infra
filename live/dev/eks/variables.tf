@@ -69,7 +69,7 @@ variable "hub_account_id" {
 
     ⚠️ hub의 enable_argocd_hub_pod_identity 가 아직 false 라 이 ARN 의 실물 Role은 없다.
        AWS는 크로스 계정 trust policy 의 Principal 존재를 생성 시점에 검증하지 않으므로
-       문제가 되지 않는다 — hub 쪽이 나중에(notepad 우선순위 후속 항목) 켜진다.
+       문제가 되지 않는다 — hub 쪽이 나중에(별도 후속 작업으로) 켜진다.
   EOT
   type        = string
 }
