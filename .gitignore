@@ -46,25 +46,8 @@ terraform.rc
 __pycache__/
 *.pyc
 
-# OMC 런타임 상태 (커밋 제외)
-#
-# 규칙 순서에 의미가 있다. 함부로 재배열하지 말 것.
-#  1) 모든 depth의 .omc/ 를 제외
-#  2) 루트 .omc/ '디렉토리'만 되살린다 — git은 디렉토리가 제외되면 내부로
-#     내려가지 않아 하위 `!` 재포함이 무효가 되기 때문(3~5행이 동작하려면 필수)
-#  3) 루트 .omc/ 의 '내용물'을 제외
-#  4~5) 그중 커밋할 것만 재포함
+# 에이전트 로컬 세션 상태 — 팀원과 공유하지 않는다. 지식 SSOT는 docs/*.md·CLAUDE.md.
 **/.omc/
-!/.omc/
-/.omc/*
-# 크로스머신(집↔회사 Mac) 핸드오프용 — 유일한 세션 인계 SSOT
-!/.omc/notepad.md
-# 구조화된 영구 사실(open-items 등) — notepad.md와 함께 크로스머신 SSOT
-!/.omc/project-memory.json
-# 프로젝트 스코프 스킬 (OMC 규약상 커밋 대상)
-!/.omc/skills/
 
-# 스킬 자체 런타임 상태(PID·로그 등, 커밋 제외). .omc/state/는 OMC 세션·워크트리
-# 생명주기에 묶여 부적절해 쓰지 않는다 — argocd-tunnel-connect 등 스킬이 자기 디렉토리
-# 밑에 .state/를 둔다.
+# 스킬 자체 런타임 상태(PID·로그 등, 커밋 제외)
 .claude/skills/*/.state/

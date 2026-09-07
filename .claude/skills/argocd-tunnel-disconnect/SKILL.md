@@ -15,7 +15,7 @@ bash .claude/skills/argocd-tunnel-disconnect/scripts/disconnect.sh
 ```
 
 인자 없음 — 짝 스킬 `argocd-tunnel-connect` 디렉토리 밑 `.state/`의 상태 파일에서 무엇을
-종료해야 하는지 전부 읽는다(`.omc/state/`를 안 쓰는 이유는 `argocd-tunnel-connect`의
+종료해야 하는지 전부 읽는다(전용 상태 폴더를 쓰는 이유는 `argocd-tunnel-connect`의
 `connect.sh` 주석 참고).
 
 ## 출력

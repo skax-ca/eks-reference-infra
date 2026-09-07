@@ -60,8 +60,8 @@ bash .claude/skills/argocd-tunnel-connect/scripts/connect.sh [LOCAL_PORT]
 
 ## 상태 파일
 
-이 스킬 디렉토리 밑 `.state/`(git에 커밋되지 않는다 — `.omc/state/`는 OMC 세션·워크트리
-생명주기에 묶여 있어 부적절하다, `connect.sh` 주석 참고):
+이 스킬 디렉토리 밑 `.state/`(git에 커밋되지 않는다 — 에이전트 세션·워크트리 생명주기와
+묶인 공유 상태 디렉토리 대신 스킬 자체 디렉토리를 쓴다, `connect.sh` 주석 참고):
 `local-watchdog.pid` · `instance-id.txt` · `local-port.txt` · `local-watchdog.log`.
 `argocd-tunnel-disconnect` 스킬이 이 파일들로 무엇을 정리해야 하는지 찾는다 — 직접 지우지 않는다.
 

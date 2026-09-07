@@ -14,7 +14,7 @@
 #     기존 22개 파일도 이번에 함께 정리했다).
 #
 #  적용 범위: §8이 스스로 선언한 범위와 같다 — docs/*.md · 저장소 전역 README.md·AGENTS.md ·
-#  루트 CLAUDE.md. .omc/는 제외(에이전트 전용 운영 기록).
+#  루트 CLAUDE.md.
 #
 #  실행 (repo 루트에서): python3 scripts/validate-doc-conventions.py [파일...]
 #  인자를 안 주면 적용 범위 전체를 스캔한다.
@@ -42,7 +42,7 @@ def default_targets() -> list[str]:
     targets |= set(glob.glob("**/README.md", recursive=True))
     targets |= set(glob.glob("**/AGENTS.md", recursive=True))
     targets.add("CLAUDE.md")
-    return sorted(t for t in targets if not t.startswith(".omc/") and "/.omc/" not in t)
+    return sorted(targets)
 
 
 def strip_fenced_code(lines: list[str]) -> list[bool]:

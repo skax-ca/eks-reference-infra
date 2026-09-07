@@ -29,16 +29,10 @@ hub-spoke EKS GitOps 패턴의 **레퍼런스 배포 루트**다. `iac-module-li
 작업을 시작하기 전에 해당 절차 문서부터 읽는다. 이 CLAUDE.md는 그 문서들이 전제하는
 "이 repo가 어떻게 조립되어 있는가"만 담는다.
 
-⚠️ **`.omc/`(notepad.md·project-memory.json)는 이 SSOT 경계에 들어오지 않는다.** 지금은
-크로스머신 핸드오프용으로 git에 커밋되지만(2026-09-07 기준), 팀원 공유 시점에는 `.omc/`
-전체를 gitignore로 제외할 계획이다(2026-09-07 결정). 즉 `.omc/`는 Claude의 세션 간
-자기 기억(하네스 북마크)일 뿐, 이 저장소의 지식 SSOT가 아니다. 팀원이 OMC 없이도 알아야 할
-절차·결정·gotcha(예: Terraform `for_each`에 unknown 값이 섞이면 안 되는 이유, GitHub App
-private key 취급 절차)는 반드시 위 세 문서(`docs/hub-lifecycle.md`·`spoke-lifecycle.md`·
-`runbooks.md`)나 이 파일에도 반영한다(`.omc/notepad.md`의 MANUAL 섹션이나
-`project-memory.json`의 `customNotes`에만 적어두고 끝내지 않는다). `.omc/`를 gitignore하기
-전에, 이미 그 안에 들어간 항목 중 팀 지식에 해당하는 것을 위 문서로 승격하는 감사가 필요하다
-(미착수, project-memory의 `mcp-tooling-fix` 카테고리 2026-09-07 항목 참조).
+⚠️ **에이전트가 로컬에 남기는 세션 메모는 이 저장소의 지식이 아니다.** 절차·결정·gotcha
+(예: Terraform `for_each`에 unknown 값이 섞이면 안 되는 이유, GitHub App private key 취급
+절차)는 반드시 위 세 문서(`docs/hub-lifecycle.md`·`spoke-lifecycle.md`·`runbooks.md`)나
+이 파일에 반영한다(버전관리되지 않는 로컬 메모에만 적어두고 끝내지 않는다).
 
 ## 1. 저장소 구조
 
@@ -99,7 +93,7 @@ clone마다 1회 활성화: `git config core.hooksPath .githooks`. 우회(`--no-
 | 변경 대상 | 경로 |
 |-----------|------|
 | **`.tf` · `.github/workflows/`** | **브랜치 → PR** |
-| **문서 전용(`docs/*.md`·`CLAUDE.md`·`.omc/notepad.md`)** | **`main` 직접 커밋** |
+| **문서 전용(`docs/*.md`·`CLAUDE.md`)** | **`main` 직접 커밋** |
 
 기준은 module repo와 같다: *"CI가 머지 전에 막아야 하는가"* 하나뿐이다. 각 워크플로는
 `push: branches: [main]`에도 plan까지 돌므로 "PR이어야 CI가 돈다"는 성립하지 않는다. 차이는

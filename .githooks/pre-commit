@@ -8,8 +8,8 @@ changed=$(git diff --cached --name-only --diff-filter=ACMR)
 
 # 문서 작성 규칙(모듈 repo docs/conventions.md §8에서 이식, CLAUDE.md §0) — §N 인용·
 # 비표준 이모지·400줄 초과를 기계로 잡는다. 적용 범위는 스크립트가 스스로 선언한 것과 같다:
-# docs/*.md · 저장소 전역 README.md·AGENTS.md · 루트 CLAUDE.md, .omc/는 제외. staged된 파일만 검사한다.
-docs_staged=$(printf '%s\n' "$changed" | grep -E '^docs/.*\.md$|(^|/)README\.md$|(^|/)AGENTS\.md$|^CLAUDE\.md$' | grep -v '^\.omc/' || true)
+# docs/*.md · 저장소 전역 README.md·AGENTS.md · 루트 CLAUDE.md. staged된 파일만 검사한다.
+docs_staged=$(printf '%s\n' "$changed" | grep -E '^docs/.*\.md$|(^|/)README\.md$|(^|/)AGENTS\.md$|^CLAUDE\.md$' || true)
 if [ -n "$docs_staged" ]; then
   echo "[pre-commit] 문서 변경 감지 — 작성 규칙(§8) 검사"
   # shellcheck disable=SC2086

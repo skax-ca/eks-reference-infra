@@ -11,10 +11,9 @@ AWS_PROFILE_NAME="team"
 REGION="ap-northeast-2"
 LOCAL_PORT="${1:-8080}"
 
-# 이 스킬 디렉토리(argocd-tunnel-connect) 밑에 전용 상태 폴더를 둔다 — .omc/state/는
-# OMC 자체의 세션·워크트리 생명주기에 묶여 있어(worktree 삭제 시 .omc/ 상태가 함께
-# 지워질 수 있음) PID 추적 파일을 두기에 부적절하다(이 저장소는 향후 .omc 참조를 전부
-# 끊어낼 계획이기도 하다). scripts/ 의 부모(스킬 루트) 밑에 .state/를 둔다.
+# 이 스킬 디렉토리(argocd-tunnel-connect) 밑에 전용 상태 폴더를 둔다 — 에이전트 세션·
+# 워크트리 생명주기에 묶인 공유 상태 디렉토리는 워크트리 삭제 시 함께 지워질 수 있어
+# PID 추적 파일을 두기에 부적절하다. scripts/ 의 부모(스킬 루트) 밑에 .state/를 둔다.
 # aks-reference-infra의 argocd-tunnel-connect가 이미 이 방식으로 포팅돼 있다.
 STATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.state"
 mkdir -p "$STATE_DIR"
