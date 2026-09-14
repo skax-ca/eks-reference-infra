@@ -265,9 +265,10 @@ workbench에서 실행한다.
 kubectl -n argocd scale statefulset argocd-application-controller --replicas=0
 kubectl -n argocd scale deployment  argocd-applicationset-controller --replicas=0
 
-# ② LoadBalancer 타입 Service와 Ingress
+# ② LoadBalancer 타입 Service·Ingress·Gateway
 kubectl delete ingress --all -A
 kubectl delete svc -A --field-selector spec.type=LoadBalancer
+kubectl delete gateway --all -A
 
 # ③ PVC
 kubectl delete pvc --all -A
@@ -278,7 +279,7 @@ kubectl delete ec2nodeclass --all
 ```
 
 **순서가 중요하다.** ①을 건너뛰면 ArgoCD가 ②③④를 되살린다. ④를 건너뛰고 클러스터를 지우면
-Karpenter 컨트롤러가 먼저 죽어 노드가 고아가 된다.
+Karpenter 컨트롤러가 먼저 죽어 노드가 고아가 된다. `gateway.k8s.aws/alb`도 `Gateway`만으로 ALB를 만든다.
 
 확인: **지운 직후가 아니라 30초쯤 뒤에 본다.**
 
