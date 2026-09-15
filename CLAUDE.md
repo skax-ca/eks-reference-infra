@@ -91,7 +91,7 @@ SSOT다(임의 생성 금지). 이 repo에서 실제로 쓰는 값:
 ## 4. 로컬 게이트 (git hook)
 
 ```
-pre-commit: 문서 변경 시 scripts/validate-doc-conventions.py → tofu fmt -check → tflint → trivy config
+pre-commit: 문서 변경 시 scripts/validate-doc-conventions.py → 코드 변경 시 scripts/validate-comment-conventions.py(주석 좌표·em-dash) → tofu fmt -check → tflint → trivy config
 pre-push:   live/**/*.tf 변경 시 각 루트 tofu validate (모듈 계약 테스트는 module repo가 담당, 여기 없음)
 ```
 
