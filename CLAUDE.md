@@ -10,7 +10,7 @@ hub-spoke EKS GitOps 패턴의 **레퍼런스 배포 루트**다. `iac-module-li
 | repo | 역할 | SSOT |
 |------|------|------|
 | **이 repo (`eks-reference-infra`)** | hub-spoke 패턴을 **소비해 배포**하는 루트 | 이 배포 코드(이 repo 고유의 판단은 해당 `.tf`/`.sh` 파일의 인라인 주석이 SSOT), GitOps **운영 절차**(구축·철거·런북) |
-| `iac-module-library` | Terraform 모듈·설계 | 모듈 계약(`docs/module-catalog.md`), 네이밍 약어(`docs/naming/abbreviations/aws.md`), 저장소 전역 결정(`docs/decisions.md`), **hub-spoke 패턴의 설계 갈림길과 기각(`docs/architectures/gitops-hub-spoke/aws/`)**, 문서·주석 규칙(`docs/conventions.md`) |
+| `iac-module-library` | Terraform 모듈·설계 | 모듈 계약(`docs/module-catalog.md`), 네이밍 약어(`docs/naming/abbreviations/aws.md`), 저장소 전역 결정(`docs/decisions.md`), **hub-spoke 패턴의 설계 갈림길과 기각(`docs/architectures/gitops-hub-spoke/aws/`)**, 주석 규칙(`docs/conventions.md` 「주석」), 문서 규칙(`docs/writing-style.md`) |
 | `eks-platform-gitops` | ArgoCD Application·AppProject·cluster-secret (계층 2) | GitOps 매니페스트 |
 
 ⚠️ **설계·컨벤션의 근거는 이 repo에 없다.** "왜 OpenTofu인가", "왜 facade 패턴인가" 같은 질문은
@@ -114,7 +114,7 @@ clone마다 1회 활성화: `git config core.hooksPath .githooks`. 우회(`--no-
 `docs/*.md`·`README.md`·`AGENTS.md`·이 파일은 `python3 scripts/validate-doc-conventions.py`로
 검증한다(pre-commit이 staged 파일에 자동 실행). 기계로 잡는 4가지: 문서 간 절 번호 인용 금지,
 이모지는 `✅⏳❌⚠️⛔🔴🔑` 7종만, 문서당 400줄 제한, em-dash(유니코드 U+2014) 금지. 나머지
-문체 규칙 전문의 SSOT는 0절의 `iac-module-library` `docs/conventions.md`다.
+문체 규칙 전문의 SSOT는 0절의 `iac-module-library` `docs/writing-style.md`다.
 
 ## 7. 새 리소스·모듈 인자를 쓰기 전에
 
