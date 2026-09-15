@@ -17,25 +17,8 @@
       ],
       "env": {
         "FASTMCP_LOG_LEVEL": "ERROR",
-        "AWS_DOCUMENTATION_PARTITION": "aws",
-        "SSL_CERT_FILE": "${HOME}/.claude/certs/ca-bundle.pem",
-        "REQUESTS_CA_BUNDLE": "${HOME}/.claude/certs/ca-bundle.pem",
-        "AWS_CA_BUNDLE": "${HOME}/.claude/certs/ca-bundle.pem"
+        "AWS_DOCUMENTATION_PARTITION": "aws"
       }
-    },
-    "aws-mcp": {
-      "type": "stdio",
-      "command": "uvx",
-      "timeout": 100000,
-      "args": [
-        "mcp-proxy-for-aws@1.6.4",
-        "https://aws-mcp.us-east-1.api.aws/mcp",
-        "--metadata",
-        "AWS_REGION=ap-northeast-2",
-        "--profile",
-        "team",
-        "--read-only"
-      ]
     },
     "aws-well-architected": {
       "type": "stdio",
