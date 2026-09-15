@@ -1,6 +1,5 @@
-# live/hub/networking이 이 TGW를 data source로 조회한다(remote state 참조가 아니라 태그 기반
-# 조회 — 모듈 repo 규약). 이 출력들은 다른 root가 소비하기 위한 것이 아니라, 이 root
-# 단독으로도 계약이 성립함을 보이는 용도다.
+# 다른 root는 이 출력을 소비하지 않는다. live/hub/networking은 remote state가 아니라 태그 기반
+# data source로 이 TGW를 조회한다. 출력은 이 root 단독으로 계약이 성립함을 보이는 용도다.
 
 output "transit_gateway_id" {
   description = "생성된 Transit Gateway ID."
@@ -14,8 +13,8 @@ output "transit_gateway_route_table_id" {
 
 output "tgw_resource_share_arn" {
   description = <<-EOT
-    TGW 를 spoke 에 공유하는 RAM resource share ARN. spoke 는 이 출력을 받지 않는다 —
-    같은 이름(name)으로 자기 계정에서 직접 조회한다(data.aws_ram_resource_share,
+    TGW를 spoke에 공유하는 RAM resource share ARN. spoke는 이 출력을 받지 않고 같은
+    이름(name)으로 자기 계정에서 직접 조회한다(data.aws_ram_resource_share,
     resource_owner="OTHER-ACCOUNTS").
   EOT
   value       = aws_ram_resource_share.tgw.arn

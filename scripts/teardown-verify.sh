@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
+# teardown-verify.sh: 철수 후 잔존물 검사(read-only). 절차는 docs/hub-lifecycle.md·
+# docs/spoke-lifecycle.md 「4단계: 잔존물 검증」.
 #
-# teardown-verify.sh — 철수 후 잔존물 검사 (read-only)
-#
-# 설계 SSOT: docs/hub-lifecycle.md · docs/spoke-lifecycle.md 「4단계 — 잔존물 검증」(이 repo)
-#
-# 삭제는 사람이 한다(tofu destroy). 이 스크립트는 지우지 않는다 — 남은 것을 찾을 뿐이다.
-#   bootstrap.sh 는 만드는 스크립트라 멱등성이 안전망이지만, teardown 은 그렇지 않다.
-#   두 번 돌려도 안전한 게 아니라 한 번만 잘못 돌려도 끝이다. 공용 계정에서는 특히.
-#
-# 대상 계정이 공용일 수 있으므로 모든 조회를 workload/env 태그로 좁힌다.
-#   이름을 눈으로 보고 판단하지 않는다 — 비슷한 이름이 남의 것일 수 있다.
+# 삭제는 사람이 한다(tofu destroy). 이 스크립트는 지우지 않고 남은 것을 찾을 뿐이다. bootstrap.sh는
+# 만드는 스크립트라 멱등성이 안전망이지만 teardown은 한 번만 잘못 돌려도 끝이다.
+# ⚠️ 대상 계정이 공용일 수 있으므로 모든 조회를 workload/env 태그로 좁힌다. 이름을 눈으로 보고
+#    판단하지 않는다. 비슷한 이름이 남의 것일 수 있다.
 #
 # 종료 코드: 0 = 잔존물 없음 / 1 = 잔존물 있음 / 2 = 실행 불가
-#
-# bash 3.2 호환으로 쓴다(macOS 기본 bash). 연상배열·mapfile 을 쓰지 않는다.
+# ⚠️ bash 3.2 호환으로 쓴다(macOS 기본 bash). 연상배열·mapfile을 쓰지 않는다.
 
 set -Eeuo pipefail
 
@@ -62,10 +57,10 @@ FOUND=0
 report() {
   if [ -n "$3" ]; then
     FOUND=1
-    printf '  [%s] 남아 있음 — %s\n' "$1" "$2"
+    printf '  [%s] 남아 있음: %s\n' "$1" "$2"
     printf '%s\n' "$3" | sed 's/^/        /'
   else
-    printf '  [%s] 없음 — %s\n' "$1" "$2"
+    printf '  [%s] 없음: %s\n' "$1" "$2"
   fi
 }
 
@@ -79,7 +74,7 @@ report 2 "EC2 인스턴스 (Karpenter 고아 노드 포함)" "$("${AWS[@]}" ec2 
   --filters "Name=instance-state-name,Values=running,stopped" "Name=tag:Name,Values=$PATTERN" \
   --query 'Reservations[].Instances[].[InstanceId,InstanceType]' --output text 2>/dev/null || true)"
 
-report 3 "EBS 볼륨 (available — 붙어 있지 않아도 과금)" "$("${AWS[@]}" ec2 describe-volumes \
+report 3 "EBS 볼륨 (available, 붙어 있지 않아도 과금)" "$("${AWS[@]}" ec2 describe-volumes \
   --filters "Name=status,Values=available" "Name=tag:Name,Values=$PATTERN" \
   --query 'Volumes[].[VolumeId,Size]' --output text 2>/dev/null || true)"
 
@@ -97,7 +92,7 @@ report 6 "EKS 클러스터 (노드 0대여도 컨트롤 플레인 과금)" "$("$
 echo
 echo "== 과금은 없으나 다음 삭제를 막는 것 =="
 
-report 7 "ENI (available — VPC 삭제를 막는다)" "$("${AWS[@]}" ec2 describe-network-interfaces \
+report 7 "ENI (available, VPC 삭제를 막는다)" "$("${AWS[@]}" ec2 describe-network-interfaces \
   --filters "Name=status,Values=available" "Name=tag:Name,Values=$PATTERN" \
   --query 'NetworkInterfaces[].[NetworkInterfaceId,Description]' --output text 2>/dev/null || true)"
 

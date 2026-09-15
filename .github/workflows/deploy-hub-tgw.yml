@@ -1,14 +1,12 @@
-# live/hub/tgw — plan → (사람이 실행) → plan → apply
+# live/hub/tgw: plan(main push) → 사람이 요약을 읽고 dispatch → plan → apply
 #
-# `deploy-hub-network.yml`을 그대로 복제했다 — 이 워크플로의 모든 설계 원칙(한 워크플로
-# 두 job · plan job에 environment 없음 · apply는 tofu apply tfplan · destroy 확인 게이트 등)
-# 은 그 파일의 상단 주석이 근거를 자세히 설명한다. 여기 반복하지 않는다.
+# 설계 원칙(한 워크플로 두 job, plan job에 environment 없음, apply는 tofu apply tfplan, destroy
+# 확인 게이트)은 deploy-hub-network.yml 헤더가 근거를 설명한다. 여기 반복하지 않는다.
 #
-# ⚠️ **이 워크플로는 `deploy-hub-network.yml`보다 먼저 dispatch돼야 한다.** GitHub Actions는
-#    별도 워크플로 파일 사이에 `needs:`로 순서를 강제할 수 없다 — hub를 처음부터 세울 때
-#    (부트스트랩 이후) 이 워크플로의 apply가 끝난 뒤에 사람이 `deploy-hub-network.yml`을
-#    dispatch한다. 순서를 어기면 그 워크플로의 spoke 자동 발견 로직이
-#    `Invalid for_each argument`로 실패한다(TGW가 아직 없어서).
+# ⚠️ 이 워크플로는 deploy-hub-network.yml보다 먼저 dispatch돼야 한다. GitHub Actions는 별도
+#    워크플로 파일 사이에 needs:로 순서를 강제할 수 없다. hub를 처음부터 세울 때 이 워크플로의
+#    apply가 끝난 뒤에 사람이 deploy-hub-network.yml을 dispatch한다. 순서를 어기면 그 워크플로의
+#    spoke 자동 발견 for_each가 Invalid for_each argument로 실패한다(TGW가 아직 없어서).
 
 name: deploy · live/hub/tgw
 
@@ -55,7 +53,7 @@ jobs:
             echo "::error::destroy 하려면 confirm 에 정확히 'destroy live/hub/tgw' 를 입력한다."
             exit 1
           fi
-          echo "::warning::destroy 계획을 세운다 — live/hub/tgw"
+          echo "::warning::destroy 계획을 세운다: live/hub/tgw"
 
       - uses: actions/checkout@v7.0.1
 
@@ -105,7 +103,7 @@ jobs:
         run: |
           for i in 1 2 3; do
             tofu init -backend-config=backend.hcl && exit 0
-            [ "$i" -lt 3 ] && { echo "::warning::tofu init 실패(${i}/3) — 10초 후 재시도"; sleep 10; }
+            [ "$i" -lt 3 ] && { echo "::warning::tofu init 실패(${i}/3). 10초 후 재시도"; sleep 10; }
           done
           echo "::error::tofu init 3회 재시도 후에도 실패"
           exit 1
@@ -142,11 +140,11 @@ jobs:
           tofu show -no-color tfplan > plan.txt
           {
             if [ "${{ steps.plan.outputs.destroy }}" = "true" ]; then
-              echo "### 🔴 \`tofu plan -destroy\` — live/hub/tgw"
+              echo "### 🔴 \`tofu plan -destroy\`: live/hub/tgw"
               echo
               echo "> **파기 계획이다.** 이 run 의 apply 를 승인하면 아래 목록이 전부 사라진다."
             else
-              echo "### \`tofu plan\` — live/hub/tgw"
+              echo "### \`tofu plan\`: live/hub/tgw"
             fi
             echo
             echo "변경 있음: **${{ steps.plan.outputs.changes }}**"
@@ -237,7 +235,7 @@ jobs:
         run: |
           for i in 1 2 3; do
             tofu init -backend-config=backend.hcl && exit 0
-            [ "$i" -lt 3 ] && { echo "::warning::tofu init 실패(${i}/3) — 10초 후 재시도"; sleep 10; }
+            [ "$i" -lt 3 ] && { echo "::warning::tofu init 실패(${i}/3). 10초 후 재시도"; sleep 10; }
           done
           echo "::error::tofu init 3회 재시도 후에도 실패"
           exit 1
@@ -266,7 +264,7 @@ jobs:
           code=$?
           set -e
           if [ "$code" = 2 ]; then
-            echo "::error::apply 직후인데 재-plan 이 여전히 변경사항을 보고한다 — 일부 리소스가 반영되지 않았을 가능성이 높다. AWS 콘솔/CLI로 실물을 직접 대조할 것."
+            echo "::error::apply 직후인데 재-plan 이 여전히 변경사항을 보고한다. 일부 리소스가 반영되지 않았을 가능성이 높다. AWS 콘솔/CLI로 실물을 직접 대조할 것."
             exit 1
           elif [ "$code" != 0 ]; then
             exit "$code"
@@ -277,7 +275,7 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}
         run: |
           {
-            echo "### \`tofu apply\` — live/hub/tgw"
+            echo "### \`tofu apply\`: live/hub/tgw"
             echo
             echo "적용한 계획: run \`${{ github.run_id }}\` 의 artifact \`tfplan-${{ github.run_id }}\`"
             echo "커밋: \`${{ github.sha }}\`"
