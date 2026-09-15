@@ -1,30 +1,29 @@
-# 이 루트의 변수는 두 종류다(networking 과 같은 분류다):
-#   ① 코드에 기본값이 있는 것  — 노출돼도 무해하고 고객사가 바꿀 토큰(workload·env·region)
-#   ② 기본값이 **없는** 것      — 계정/운영자 식별 정보라 git 에 두지 않는다.
-#                                CI 는 repo 변수, 로컬은 TF_VAR_* 로 주입한다
+# 변수는 두 종류다. 기본값이 있는 것은 노출돼도 무해하고 고객사가 바꿀 토큰이다(workload·env·
+# region). 기본값이 없는 것은 계정 식별 정보라 git에 두지 않고 CI는 repo 변수, 로컬은 TF_VAR_*
+# 환경변수로 주입한다.
 #
-# ⚠️ tflint terraform_unused_declarations 는 미사용 변수를 exit 2 로 잡는다.
-#    변수를 추가할 때는 소비하는 코드를 같은 커밋에 넣는다.
+# ⚠️ tflint terraform_unused_declarations는 미사용 변수를 exit 2로 잡는다. 변수를 추가·삭제할
+#    때는 소비하는 코드를 같은 커밋에 넣는다.
 
 variable "aws_region" {
-  description = "리소스를 만들 리전. region_code 와 짝이 맞아야 한다(an2 ↔ ap-northeast-2)."
+  description = "리소스를 만들 리전. region_code와 짝이 맞아야 한다(an2 ↔ ap-northeast-2)."
   type        = string
   default     = "ap-northeast-2"
 }
 
 variable "workload" {
   description = <<-EOT
-    워크로드 코드. Name 태그의 2번째 토큰이자 거버넌스 태그 Workload 의 값이다.
-    ⚠️ 공용 개발 계정에서 **우리 자산을 식별하는 유일한 기준**이다(CLAUDE.md 참조).
-    ⚠️ VPC 를 조회하는 data source 필터의 일부이기도 하다 — networking 루트의 workload 와
-       반드시 같아야 클러스터가 우리 VPC 를 찾는다(아래 main.tf).
+    워크로드 코드. Name 태그의 2번째 토큰이자 거버넌스 태그 Workload의 값이다.
+    ⚠️ 공용 개발 계정에서 우리 자산을 식별하는 유일한 기준이다.
+    ⚠️ VPC를 조회하는 data source 필터의 일부이기도 하다. networking 루트의 workload와
+       반드시 같아야 클러스터가 우리 VPC를 찾는다.
   EOT
   type        = string
   default     = "demo"
 }
 
 variable "env" {
-  description = "환경 코드. 이 배포 루트는 dev 하나만 채운다 — 계정이 하나라 stg/prd 는 표현할 수 없다."
+  description = "환경 코드. 이 배포 루트는 spoke 첫 인스턴스인 dev 하나만 채운다."
   type        = string
   default     = "dev"
 }
@@ -36,22 +35,22 @@ variable "region_code" {
 }
 
 variable "repository" {
-  description = "거버넌스 태그 Repository 값. 리소스에서 이 repo 로 역추적하는 경로다."
+  description = "거버넌스 태그 Repository 값. 리소스에서 이 repo로 역추적하는 경로다."
   type        = string
   default     = "skax-ca/eks-reference-infra"
 }
 
 variable "execution_role_arn" {
   description = <<-EOT
-    provider 가 체인 assume 할 **실행 Role** ARN — 2단 체인의 2단째다.
+    provider가 체인 assume할 실행 Role ARN(2단 체인의 2단째).
 
-    ⛔ 기본값을 두지 않는다. ARN 에 계정 ID 가 들어 있어 "계정 식별 정보를 git 에 두지
+    ⛔ 기본값을 두지 않는다. ARN에 계정 ID가 들어 있어 "계정 식별 정보를 git에 두지
        않는다"는 요건에 걸린다. 주입 경로는 둘 다 git 밖이다:
-         CI   : repo 변수 AWS_EXEC_ROLE_ARN → env: TF_VAR_execution_role_arn
+         CI   : repo 변수 DEV_AWS_EXEC_ROLE_ARN → env: TF_VAR_execution_role_arn
          로컬 : export TF_VAR_execution_role_arn=...
 
-    ⚠️ 이 Role 의 신뢰 정책은 **입구 Role 하나만** 허용한다. 개인 IAM user 로는 assume 되지
-       않아 **로컬 plan/apply 는 성립하지 않는다.** 로컬은 init -backend=false + validate 까지다.
+    ⚠️ 이 Role의 신뢰 정책은 입구 Role 하나만 허용한다. 개인 IAM user로는 assume되지 않아
+       로컬 plan/apply는 성립하지 않는다. 로컬은 init -backend=false + validate까지다.
   EOT
   type        = string
 }
@@ -60,25 +59,14 @@ variable "hub_account_id" {
   description = <<-EOT
     hub(team 계정)의 12자리 계정 ID. 스포크가 소유하는 cross-account-trust-role 모듈의
     trusted_principal_arns를 결정적으로 합성하는 데만 쓴다
-    (arn:aws:iam::<hub_account_id>:role/iamr-demo-hub-an2-argocd-hub — eks-cluster 모듈
-    iam.tf의 name_mid 네이밍과 정확히 같아야 한다).
+    (arn:aws:iam::<hub_account_id>:role/iamr-demo-hub-an2-argocd-hub, eks-cluster 모듈의
+    argocd_hub_pod_identity 네이밍과 같아야 한다).
 
-    ⛔ 기본값을 두지 않는다 — 계정 ID라 git 에 두지 않는다(CLAUDE.md 「1」의 연장).
-       주입 경로: CI 는 repo 변수 HUB_ACCOUNT_ID → TF_VAR_hub_account_id, 로컬은
-       export TF_VAR_hub_account_id=...
+    ⛔ 기본값을 두지 않는다(계정 ID는 git에 두지 않는다). 주입 경로: CI는 repo 변수
+       HUB_ACCOUNT_ID → TF_VAR_hub_account_id, 로컬은 export TF_VAR_hub_account_id=...
 
-    ⚠️ hub의 enable_argocd_hub_pod_identity 가 아직 false 라 이 ARN 의 실물 Role은 없다.
-       AWS는 크로스 계정 trust policy 의 Principal 존재를 생성 시점에 검증하지 않으므로
-       문제가 되지 않는다 — hub 쪽이 나중에(별도 후속 작업으로) 켜진다.
+    ⚠️ 배포 순서는 hub가 먼저다. trust policy는 Principal 대상이 실제로 존재해야 AWS가
+       정책 생성을 허용한다(없으면 "Invalid principal in policy").
   EOT
   type        = string
 }
-
-# ⛔ **`public_access_cidrs` 는 삭제됐다**(private-only 전환).
-#    public 엔드포인트가 꺼지면 EKS 가 이 값을 무시한다 — 남겨 두면 *"좁혀 두었다"* 는 착시만
-#    만드는 죽은 설정이다. 되살리는 것은 설계 목적(모듈 repo의 워크벤치 설계 문서)을 되돌리는
-#    결정이므로 그때 명시적으로 판단한다.
-#    ⚠️ tflint `terraform_unused_declarations` 가 미사용 변수를 exit 2 로 잡으므로 소비 지점
-#       (main.tf)을 지우는 커밋과 **같은 커밋**에서 지워야 한다.
-#    ⚠️ CI repo 변수 `EKS_PUBLIC_ACCESS_CIDRS` 와 워크플로의 `TF_VAR_public_access_cidrs` 도
-#       함께 걷어낸다 — 코드가 안 읽으면 죽은 설정이다.

@@ -1,6 +1,6 @@
-# 이 루트의 변수는 live/hub/networking과 같은 두 종류다 — 그 디렉토리 variables.tf 상단 주석
-# 참조. tflint terraform_unused_declarations 가 미사용 변수를 exit 2 로 잡으므로, 변수를
-# 추가할 때는 소비하는 코드를 같은 커밋에 넣는다.
+# 변수는 두 종류다: 네이밍·태깅 입력(기본값 있음)과 git에 두지 않는 계정 식별 값(기본값 없음).
+# ⚠️ tflint terraform_unused_declarations가 미사용 변수를 exit 2로 잡는다. 변수를 추가할 때는
+#    소비하는 코드를 같은 커밋에 넣는다.
 
 variable "aws_region" {
   description = "리소스를 만들 리전. region_code 와 짝이 맞아야 한다(an2 ↔ ap-northeast-2)."
@@ -37,9 +37,9 @@ variable "repository" {
 
 variable "execution_role_arn" {
   description = <<-EOT
-    provider 가 체인 assume 할 실행 Role ARN — 2단 체인의 2단째다.
+    provider가 체인 assume할 실행 Role ARN(2단 체인의 2단째).
 
-    ⛔ 기본값을 두지 않는다. ARN 에 계정 ID 가 들어 있어 "계정 식별 정보를 git 에 두지
+    ⛔ 기본값을 두지 않는다. ARN에 계정 ID가 들어 있어 "계정 식별 정보를 git에 두지
        않는다"는 요건에 걸린다. 주입 경로는 둘 다 git 밖이다:
          CI   : repo 변수 HUB_AWS_EXEC_ROLE_ARN → env: TF_VAR_execution_role_arn
          로컬 : export TF_VAR_execution_role_arn=...
@@ -52,7 +52,7 @@ variable "spoke_account_id" {
     spoke(dev, asset 계정)의 12자리 계정 ID. Transit Gateway RAM 공유(aws_ram_principal_association의
     principal)에만 쓴다.
 
-    ⛔ 기본값을 두지 않는다 — 계정 ID라 git 에 두지 않는다. 주입 경로: CI 는 repo 변수
+    ⛔ 기본값을 두지 않는다(계정 ID는 git에 두지 않는다). 주입 경로: CI는 repo 변수
        DEV_ACCOUNT_ID → TF_VAR_spoke_account_id, 로컬은 export TF_VAR_spoke_account_id=...
   EOT
   type        = string
