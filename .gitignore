@@ -6,11 +6,11 @@
 crash.log
 crash.*.log
 
-# ⛔ backend 부분 설정 파일 — 절대 커밋하지 않는다 (design/50 D25)
+# ⛔ backend 부분 설정 파일. 절대 커밋하지 않는다.
 #
 # 이 repo의 backend.tf 는 `terraform { backend "s3" {} }` 뿐이고, 버킷명은 여기에만 있다.
 # 커밋되면 D25의 근거(계정 식별 정보를 git에 남기지 않는다)가 그 자리에서 무너진다.
-# CI는 이 파일을 쓰지 않는다 — GitHub repo 변수로 -backend-config 를 조립한다.
+# CI는 이 파일을 쓰지 않는다. GitHub repo 변수로 -backend-config 를 조립한다.
 backend.hcl
 backend.*.hcl
 
@@ -19,8 +19,8 @@ backend.*.hcl
 *.tfvars.json
 !*.tfvars.example
 
-# plan artifact — CI가 업로드하는 것과 별개로 로컬 산출물은 커밋하지 않는다.
-# plan 파일에는 리소스 속성이 평문으로 들어간다 (design/50 §3).
+# plan artifact. CI가 업로드하는 것과 별개로 로컬 산출물은 커밋하지 않는다.
+# plan 파일에는 리소스 속성이 평문으로 들어간다.
 tfplan
 *.tfplan
 plan.json
@@ -45,9 +45,6 @@ terraform.rc
 # Python 캐시 (scripts/*.py 실행 시 생성)
 __pycache__/
 *.pyc
-
-# 에이전트 로컬 세션 상태 — 팀원과 공유하지 않는다. 지식 SSOT는 docs/*.md·CLAUDE.md.
-**/.omc/
 
 # 스킬 자체 런타임 상태(PID·로그 등, 커밋 제외)
 .claude/skills/*/.state/
