@@ -69,9 +69,9 @@ gh workflow run deploy-dev-network.yml --ref main -f action=apply
 
 ✅ **apply 안에서 자동으로 수락한다. 사람 개입이 필요 없다.**
 RAM 초대 수락은 Terraform 리소스가 아니라 `deploy-dev-network.yml` plan job의 CI 단계가
-전담한다(`iac-module-library`의 `docs/architectures/eks-gitops-hub-spoke/choose-your-path.md`
-「RAM 초대 수락」 절: 설계 배경·왜 Terraform 리소스로는 안 되는지·`removed` 블록으로 무엇을
-바꿨는지 전부 그 절에 있다). 완전 신규 spoke의 첫
+전담한다(설계 배경은 `iac-module-library`의 `docs/architectures/gitops-hub-spoke/aws/network.md`
+「RAM 초대 수락은 CI 단계다」, 왜 Terraform 리소스로는 안 되는지는 `live/dev/networking/main.tf`의
+`removed` 블록 주석에 있다). 완전 신규 spoke의 첫
 apply든, teardown 이후 재배포든 동일하게 이 CI 단계가 처리한다. 사람이 CLI를 직접
 돌리거나 import 블록을 추가할 필요가 이제 없다.
 

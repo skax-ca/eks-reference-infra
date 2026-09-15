@@ -11,7 +11,7 @@ AWS_PROFILE_NAME="team"
 REGION="ap-northeast-2"
 LOCAL_PORT="${1:-8080}"
 
-# 이 스킬 디렉토리(argocd-tunnel-connect) 밑에 전용 상태 폴더를 둔다 — 에이전트 세션·
+# 이 스킬 디렉토리(argocd-tunnel-connect) 밑에 전용 상태 폴더를 둔다. 에이전트 세션·
 # 워크트리 생명주기에 묶인 공유 상태 디렉토리는 워크트리 삭제 시 함께 지워질 수 있어
 # PID 추적 파일을 두기에 부적절하다. scripts/ 의 부모(스킬 루트) 밑에 .state/를 둔다.
 # aks-reference-infra의 argocd-tunnel-connect가 이미 이 방식으로 포팅돼 있다.
@@ -41,7 +41,7 @@ if [[ -f "$PID_FILE" ]]; then
     open_browser "$OLD_PORT"
     exit 0
   fi
-  # 죽었거나 응답이 없다 — 잔여 프로세스 정리 후 재연결로 진행한다
+  # 죽었거나 응답이 없다. 잔여 프로세스 정리 후 재연결로 진행한다
   kill -- "-$OLD_PID" 2>/dev/null || kill "$OLD_PID" 2>/dev/null || true
   rm -f "$PID_FILE"
 fi
@@ -61,7 +61,7 @@ if [[ -n "$STALE_PIDS" ]]; then
   sleep 1
 fi
 
-# ── 1) hub workbench 동적 탐색 (인스턴스 ID 하드코딩 금지 — 재부트스트랩 시 바뀐다) ──
+# 1) hub workbench 동적 탐색(인스턴스 ID 하드코딩 금지. 재부트스트랩 시 바뀐다)
 INSTANCE_ID=$(aws ec2 describe-instances --profile "$AWS_PROFILE_NAME" --region "$REGION" \
   --filters "Name=tag:Name,Values=ec2-demo-hub-an2-workbench-*" "Name=instance-state-name,Values=running" \
   --query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null)
@@ -78,9 +78,9 @@ if [[ "$PING" != "Online" ]]; then
   exit 1
 fi
 
-# ── 2) 원격 watchdog — kubectl port-forward 가 끊기면(예: pod 재시작) 자동 재시작 ──
+# 2) 원격 watchdog. kubectl port-forward가 끊기면(예: pod 재시작) 자동 재시작
 # 셸 안에서 --parameters 를 문자열로 직접 조립하면 REMOTE_CMD 내부의 큰따옴표가 AWS CLI
-# shorthand 파서를 깨뜨린다(실측) — python3 json.dumps 로 안전하게 인코딩한다.
+# shorthand 파서를 깨뜨린다. python3 json.dumps로 안전하게 인코딩한다.
 REMOTE_CMD='pkill -f "kubectl port-forward -n argocd svc/argocd-server" 2>/dev/null; sleep 1; setsid nohup bash -c "while true; do KUBECONFIG=/root/.kube/config kubectl port-forward -n argocd svc/argocd-server 8080:443 --address 127.0.0.1; sleep 2; done" > /root/argocd-portforward.log 2>&1 < /dev/null & disown; sleep 2; ss -ltnp | grep 8080'
 REMOTE_CMD_JSON=$(python3 -c 'import json,sys; print(json.dumps([sys.argv[1]]))' "$REMOTE_CMD")
 
@@ -105,7 +105,7 @@ if [[ "$STATUS" != "Success" ]]; then
   exit 1
 fi
 
-# ── 3) 로컬 watchdog — SSM 세션이 끊기면(네트워크·VPN 변경 등) 자동 재연결 ──
+# 3) 로컬 watchdog. SSM 세션이 끊기면(네트워크·VPN 변경 등) 자동 재연결
 (
   while true; do
     aws ssm start-session --profile "$AWS_PROFILE_NAME" --region "$REGION" \
@@ -128,6 +128,6 @@ if check_healthy "$LOCAL_PORT"; then
   echo "CONNECTED port=$LOCAL_PORT instance=$INSTANCE_ID pid=$LOCAL_PID"
   open_browser "$LOCAL_PORT"
 else
-  echo "WARNING: 터널은 떴지만 https://localhost:$LOCAL_PORT 응답이 아직 없다 — 몇 초 후 다시 확인할 것" >&2
+  echo "WARNING: 터널은 떴지만 https://localhost:$LOCAL_PORT 응답이 아직 없다. 몇 초 후 다시 확인할 것" >&2
   echo "CONNECTED_UNVERIFIED port=$LOCAL_PORT instance=$INSTANCE_ID pid=$LOCAL_PID"
 fi

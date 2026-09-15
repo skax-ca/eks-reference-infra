@@ -26,7 +26,7 @@ brew install --cask session-manager-plugin
 ### 1. 착수 전에 확정할 값
 
 **되돌릴 수 없는 것들이다.** 판단 근거는 `iac-module-library`의
-`docs/architectures/eks-gitops-hub-spoke/choose-your-path.md`가 소유한다.
+`docs/architectures/gitops-hub-spoke/aws/README.md` 「되돌릴 수 없는 선택」이 소유한다.
 
 | 값 | 예 | 왜 되돌릴 수 없나 |
 |----|-----|------------------|

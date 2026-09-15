@@ -1,6 +1,6 @@
 ---
 name: argocd-tunnel-connect
-description: hub ArgoCD 콘솔(https://localhost:8080)에 접속하기 위한 2단 SSM 터널을 연다 — 로컬 SSM 세션 → hub workbench → kubectl port-forward → argocd-server. 사용자가 "argocd 터널 연결", "argocd 콘솔 접속", "argocd UI 보고 싶다"고 할 때 사용한다. 멱등적이다 — 이미 정상 연결돼 있으면 아무것도 하지 않는다.
+description: hub ArgoCD 콘솔(https://localhost:8080)에 접속하기 위한 2단 SSM 터널을 연다(로컬 SSM 세션 → hub workbench → kubectl port-forward → argocd-server). 사용자가 "argocd 터널 연결", "argocd 콘솔 접속", "argocd UI 보고 싶다"고 할 때 사용한다. 멱등적이다. 이미 정상 연결돼 있으면 아무것도 하지 않는다.
 ---
 
 # ArgoCD Tunnel Connect
@@ -16,7 +16,7 @@ hub ArgoCD 콘솔을 로컬 브라우저에서 열 수 있게 하는 2단 터널
              → hub EKS 클러스터의 argocd-server 파드
 ```
 
-이 터널은 **읽기 접근 경로일 뿐**이다 — 여는 행위 자체는 인프라를 바꾸지 않는다. 다만
+이 터널은 **읽기 접근 경로일 뿐**이다. 여는 행위 자체는 인프라를 바꾸지 않는다. 다만
 콘솔에서 하는 조작(초기 비밀번호 교체 등)은 별개로 신중히 다룬다.
 
 ## 실행
@@ -29,13 +29,13 @@ bash .claude/skills/argocd-tunnel-connect/scripts/connect.sh [LOCAL_PORT]
 
 | 출력 | 의미 |
 |---|---|
-| `ALREADY_CONNECTED port=N pid=N` | 이미 같은 포트로 정상 연결돼 있다 — 멱등, 아무것도 안 함 |
+| `ALREADY_CONNECTED port=N pid=N` | 이미 같은 포트로 정상 연결돼 있다(멱등, 아무것도 안 함) |
 | `CONNECTED port=N instance=i-... pid=N` | 새로 연결하고 헬스체크(HTTP 200)까지 확인 |
-| `CONNECTED_UNVERIFIED ...` | 터널은 열었지만 아직 응답 확인 전 — 몇 초 후 다시 curl 해볼 것 |
+| `CONNECTED_UNVERIFIED ...` | 터널은 열었지만 아직 응답 확인 전. 몇 초 후 다시 curl 해볼 것 |
 | `ERROR: ...` (stderr, exit 1) | workbench를 못 찾았거나 SSM 오프라인이거나 원격 명령 실패 |
 
 헬스체크(HTTP 200)를 통과하면 `open`(macOS)으로 기본 브라우저에 `https://localhost:<PORT>`를
-바로 띄운다 — `ALREADY_CONNECTED`·`CONNECTED` 둘 다 해당(`CONNECTED_UNVERIFIED`는 열지 않는다,
+바로 띄운다. `ALREADY_CONNECTED`·`CONNECTED` 둘 다 해당(`CONNECTED_UNVERIFIED`는 열지 않는다,
 아직 응답 확인 전이라 에러 페이지가 뜰 수 있어서다). 자체 서명 인증서 경고는 정상이므로
 사용자에게 "고급 → 이동"으로 진행하라고 안내한다.
 
@@ -56,18 +56,18 @@ bash .claude/skills/argocd-tunnel-connect/scripts/connect.sh [LOCAL_PORT]
 - **로컬**: `aws ssm start-session`도 같은 방식으로 감싼다. VPN·네트워크 전환 등으로
   세션이 끊기면 3초 후 자동 재연결한다.
 
-두 watchdog은 서로 독립이다 — 한쪽만 끊겨도 그쪽만 재시작되고 다른 쪽은 영향받지 않는다.
+두 watchdog은 서로 독립이다. 한쪽만 끊겨도 그쪽만 재시작되고 다른 쪽은 영향받지 않는다.
 
 ## 상태 파일
 
-이 스킬 디렉토리 밑 `.state/`(git에 커밋되지 않는다 — 에이전트 세션·워크트리 생명주기와
+이 스킬 디렉토리 밑 `.state/`(git에 커밋되지 않는다. 에이전트 세션·워크트리 생명주기와
 묶인 공유 상태 디렉토리 대신 스킬 자체 디렉토리를 쓴다, `connect.sh` 주석 참고):
 `local-watchdog.pid` · `instance-id.txt` · `local-port.txt` · `local-watchdog.log`.
-`argocd-tunnel-disconnect` 스킬이 이 파일들로 무엇을 정리해야 하는지 찾는다 — 직접 지우지 않는다.
+`argocd-tunnel-disconnect` 스킬이 이 파일들로 무엇을 정리해야 하는지 찾는다. 직접 지우지 않는다.
 
 ## 전제
 
 - `aws --profile team`이 hub 계정에 인증돼 있어야 한다(`CLAUDE.md` 4-1절).
 - hub workbench(`ec2-demo-hub-an2-workbench-*`)가 실행 중이고 SSM Online 상태여야 한다.
-  인스턴스 ID는 태그로 **매번 동적 탐색**한다 — 재부트스트랩되면 ID가 바뀌기 때문에
+  인스턴스 ID는 태그로 **매번 동적 탐색**한다. 재부트스트랩되면 ID가 바뀌기 때문에
   하드코딩하지 않는다.

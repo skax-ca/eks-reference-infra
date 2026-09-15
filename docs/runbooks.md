@@ -139,8 +139,8 @@ aws eks describe-addon-versions --region <region> \
   --query 'addons[].addonVersions[].addonVersion'
 ```
 
-> addon 버전이 **k8s 축과 리전 축 양쪽으로 파손된다**는 것이 실측으로 확인됐다.
-> 그래서 핀의 소유자가 모듈이 아니라 배포 루트다.
+> addon 버전은 **k8s 축과 리전 축 양쪽으로 파손된다.** 그래서 핀의 소유자가 모듈이 아니라
+> 배포 루트다.
 
 ---
 
@@ -248,9 +248,9 @@ Karpenter 쪽 노드엔 그 taint가 없으니, 여유가 없으면 Karpenter가
 |---|---|---|
 | 시스템 관리형 노드그룹(`managed_node_groups`) | `workload-class=system:NO_SCHEDULE` 부여 | 라벨 `workload-class=system` 부여 |
 | coredns · metrics-server · **ebs-csi controller**(Deployment) · **efs-csi controller**(Deployment) | 없음 | `nodeSelector: workload-class=system` + toleration 명시 필요 |
-| vpc-cni · eks-pod-identity-agent (DaemonSet) | 없음 | 명시 불필요: 차트 기본값이 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다(실측: `aws/eks-charts`·`aws/eks-pod-identity-agent` 저장소의 `values.yaml`) |
+| vpc-cni · eks-pod-identity-agent (DaemonSet) | 없음 | 명시 불필요: 차트 기본값이 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다(`aws/eks-charts`·`aws/eks-pod-identity-agent` 저장소의 `values.yaml`) |
 | ebs-csi node (DaemonSet) | 없음 | `node.tolerateAllTaints = true` 명시 필요: 기본 toleration은 `effect: NoExecute`만 커버해 우리가 부여하는 `NoSchedule`을 통과하지 못한다 |
-| **efs-csi node**(DaemonSet) | 없음 | 명시 불필요: ebs-csi node와 달리 차트 기본값이 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다(실측: `kubernetes-sigs/aws-efs-csi-driver` `charts/aws-efs-csi-driver/values.yaml`), vpc-cni·eks-pod-identity-agent와 같은 부류 |
+| **efs-csi node**(DaemonSet) | 없음 | 명시 불필요: ebs-csi node와 달리 차트 기본값이 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다(`kubernetes-sigs/aws-efs-csi-driver` `charts/aws-efs-csi-driver/values.yaml`), vpc-cni·eks-pod-identity-agent와 같은 부류 |
 | kube-proxy | 없음 | 손댈 필요 없음: 기본 매니페스트가 이미 `tolerations: [{operator: Exists}]`라 모든 taint를 통과한다 |
 | Cluster Autoscaler·Karpenter 컨트롤러 자체(helm) | 없음 | `nodeSelector: workload-class=system` + toleration |
 | redis·postgresql·mongodb(helm) | 없음 | `nodeSelector: workload-class=system` + toleration |
@@ -272,13 +272,12 @@ taint를 추가하면 모든 app Deployment가 toleration을 알아야 하는 �
 나뉜다: `configuration_values` 스키마도 `node.*`·`controller.*`로 완전히 분리돼 있다.**
 `node`만 고치고 `controller`를 빠뜨리면, taint 적용 순간 아무 제약도 없던 `controller` pod가
 system 노드에서 밀려나 "app 워크로드"와 같은 기본값 버킷(Karpenter 영역)으로 떨어진다.
-Karpenter가 이 pod들을 위해 **불필요한 새 노드를 만든다**(실측: `eks-reference-infra` dev
-클러스터에서 재현). `controller`는 coredns·metrics-server와 같은 취급이 맞다: 컨트롤플레인
+Karpenter가 이 pod들을 위해 **불필요한 새 노드를 만든다.** `controller`는 coredns·metrics-server와 같은 취급이 맞다: 컨트롤플레인
 컴포넌트는 DaemonSet이 아닌 이상 반드시 `nodeSelector`까지 명시해야 한다.
 
 🔑 **`aws-efs-csi-driver`도 구조가 완전히 같다**: `node`(DaemonSet)·`controller`(Deployment,
 2 replica)로 분리돼 있고, 스키마도 `node.*`·`controller.*`로 나뉜다(`charts/aws-efs-csi-driver/
-values.yaml` 실측). 다른 점은 `node`의 기본 toleration이 이미 `[{operator: Exists}]`라 손댈
+values.yaml`). 다른 점은 `node`의 기본 toleration이 이미 `[{operator: Exists}]`라 손댈
 필요가 없다는 것뿐: `controller`는 EBS와 동일하게 `nodeSelector`+`tolerations` 없이는 taint
 적용 순간 Karpenter 영역으로 떨어진다.
 

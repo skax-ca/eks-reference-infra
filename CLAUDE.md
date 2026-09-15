@@ -9,12 +9,22 @@ hub-spoke EKS GitOps 패턴의 **레퍼런스 배포 루트**다. `iac-module-li
 
 | repo | 역할 | SSOT |
 |------|------|------|
-| **이 repo (`eks-reference-infra`)** | hub-spoke 패턴을 **소비해 배포**하는 루트 | 이 배포 코드, GitOps **운영 절차**(구축·철거·런북) |
-| `iac-module-library` | Terraform 모듈·설계 | 모듈 계약(`docs/module-catalog.md`), 네이밍 약어(`docs/naming/abbreviations/aws.md`), 아키텍처 결정(`docs/decisions.md`), 문서 문체 규칙(`docs/conventions.md`) |
+| **이 repo (`eks-reference-infra`)** | hub-spoke 패턴을 **소비해 배포**하는 루트 | 이 배포 코드(이 repo 고유의 판단은 해당 `.tf`/`.sh` 파일의 인라인 주석이 SSOT), GitOps **운영 절차**(구축·철거·런북) |
+| `iac-module-library` | Terraform 모듈·설계 | 모듈 계약(`docs/module-catalog.md`), 네이밍 약어(`docs/naming/abbreviations/aws.md`), 저장소 전역 결정(`docs/decisions.md`), **hub-spoke 패턴의 설계 갈림길과 기각(`docs/architectures/gitops-hub-spoke/aws/`)**, 문서·주석 규칙(`docs/conventions.md`) |
 | `eks-platform-gitops` | ArgoCD Application·AppProject·cluster-secret (계층 2) | GitOps 매니페스트 |
 
 ⚠️ **설계·컨벤션의 근거는 이 repo에 없다.** "왜 OpenTofu인가", "왜 facade 패턴인가" 같은 질문은
-`iac-module-library`의 `CLAUDE.md`·`docs/decisions.md`가 갖는다. 여기서 다시 쓰지 않는다.
+`iac-module-library`의 `CLAUDE.md`·`docs/decisions.md`가, "왜 TGW인가(peering이 아니라)",
+"왜 self-managed ArgoCD인가" 같은 패턴 갈림길은 같은 repo의
+`docs/architectures/gitops-hub-spoke/aws/`가 갖는다. 여기서 다시 쓰지 않는다. 이 repo 고유의
+판단(TGW를 별도 root로 분리한 이유, `for_each` key를 계정 ID로 고정한 이유 등)은 별도 설계
+문서가 아니라 그 판단이 적용된 `.tf`/`.sh` 파일의 인라인 주석이 SSOT다.
+
+⛔ **주석·문서에 좌표를 쓰지 않는다.** 날짜, 계획 파일 경로나 문서 절 번호, 세션 차수, PR
+번호, "실측했다" 같은 사건 서술은 `git blame`과 커밋 메시지가 갖는다. 주석은 "왜 이 값인가"와
+"바꾸면 무엇이 깨지는가"에만 답한다(`iac-module-library` `docs/conventions.md` 「주석」). 이
+규칙이 없을 때 git 밖 계획 파일과 사라진 문서 경로를 인용한 주석이 쌓여 아무도 열 수 없었다.
+
 문서 문체 규칙(em-dash 금지·이모지 7종·400줄 제한)은 아래 6절이 가리키는 스크립트로
 **이식**되어 있다(이식한 이유는 그 스크립트가 이 repo 안에서 pre-commit 훅으로 즉시
 실행돼야 하기 때문이다). 규칙 텍스트 자체의 SSOT는 여전히 module repo다.
