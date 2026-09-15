@@ -67,6 +67,16 @@ readonly SPOKE_ENTRY_ROLE="iamr-${WORKLOAD}-${SPOKE_ENV}-${REGION_CODE}-gha-entr
 readonly SPOKE_EXEC_ROLE="iamr-${WORKLOAD}-${SPOKE_ENV}-${REGION_CODE}-gha-exec-01"
 readonly SPOKE_ENTRY_POLICY="${SPOKE_ENTRY_ROLE}-policy"
 
+# Role description. 정책 문서처럼 생성(create-role)과 비교(check_role_description) 양쪽이 같은
+# 문자열을 쓴다. create-role은 description을 생성 시점에만 받으므로, 여기 값을 바꾸면 이미 있는
+# Role은 bootstrap.sh의 update-role 수렴 단계가 따라잡는다.
+# ⚠️ IAM --description은 tab/LF/CR + U+0020~U+007E + U+00A1~U+00FF만 받는다. 한글을 넣으면
+#    ValidationError다. 주석은 한글이어도 description은 영문으로 쓴다.
+readonly HUB_ENTRY_DESC="GitHub Actions OIDC entry role (hub). Sole permission is assuming the hub exec role."
+readonly HUB_EXEC_DESC="GitHub Actions execution role (hub). Trusts only the entry role, never the OIDC provider directly."
+readonly SPOKE_ENTRY_DESC="GitHub Actions OIDC entry role (spoke:${SPOKE_ENV}). Sole permission is assuming the exec role."
+readonly SPOKE_EXEC_DESC="GitHub Actions execution role (spoke:${SPOKE_ENV}). Trusts only the entry role, never the OIDC provider directly."
+
 # OIDC provider는 URL당 계정에 1개만 허용된다. hub(team)·spoke(각자 별도 계정)는 서로 다른
 # 계정이라 각 계정 안에서 각자 만든다.
 readonly OIDC_NAME="iamoidc-${WORKLOAD}-${REGION_CODE}-gha"
@@ -319,6 +329,14 @@ check_role_trust() {
   actual="$(aws_ iam get-role --role-name "$role" \
     --query 'Role.AssumeRolePolicyDocument' --output json 2>/dev/null)" || { echo absent; return; }
   json_eq "$actual" "$expected" && echo ok || echo drift
+}
+
+# description이 없는 Role은 --output text가 "None"을 내므로 기대값과 달라 drift로 잡힌다.
+check_role_description() {
+  local role="$1" expected="$2" actual
+  actual="$(aws_ iam get-role --role-name "$role" \
+    --query 'Role.Description' --output text 2>/dev/null)" || { echo absent; return; }
+  [[ "$actual" == "$expected" ]] && echo ok || echo drift
 }
 
 check_hub_entry_inline_policy() {

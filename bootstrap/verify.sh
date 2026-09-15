@@ -53,15 +53,19 @@ if [[ "$BOOTSTRAP_TARGET" == hub ]]; then
 
   report "[hub] 입구 Role 신뢰 정책 ($HUB_ENTRY_ROLE)" "$(check_role_trust "$HUB_ENTRY_ROLE" "$(hub_entry_trust_policy)")"
   report "[hub] 입구 Role inline 정책"                  "$(check_hub_entry_inline_policy)"
+  report "[hub] 입구 Role description"                  "$(check_role_description "$HUB_ENTRY_ROLE" "$HUB_ENTRY_DESC")"
   report "[hub] 실행 Role 신뢰 정책 ($HUB_EXEC_ROLE)"   "$(check_role_trust "$HUB_EXEC_ROLE" "$(hub_exec_trust_policy)")"
   report "[hub] 실행 Role AdministratorAccess"          "$(check_exec_admin_attached "$HUB_EXEC_ROLE")"
+  report "[hub] 실행 Role description"                  "$(check_role_description "$HUB_EXEC_ROLE" "$HUB_EXEC_DESC")"
 else
   verify_bucket "$SPOKE_BUCKET_PREFIX" "spoke:$SPOKE_ENV"
 
   report "[spoke:$SPOKE_ENV] 입구 Role 신뢰 정책 ($SPOKE_ENTRY_ROLE)" "$(check_role_trust "$SPOKE_ENTRY_ROLE" "$(spoke_entry_trust_policy)")"
   report "[spoke:$SPOKE_ENV] 입구 Role inline 정책"                    "$(check_spoke_entry_inline_policy)"
+  report "[spoke:$SPOKE_ENV] 입구 Role description"                    "$(check_role_description "$SPOKE_ENTRY_ROLE" "$SPOKE_ENTRY_DESC")"
   report "[spoke:$SPOKE_ENV] 실행 Role 신뢰 정책 ($SPOKE_EXEC_ROLE)"  "$(check_role_trust "$SPOKE_EXEC_ROLE" "$(spoke_exec_trust_policy)")"
   report "[spoke:$SPOKE_ENV] 실행 Role AdministratorAccess"           "$(check_exec_admin_attached "$SPOKE_EXEC_ROLE")"
+  report "[spoke:$SPOKE_ENV] 실행 Role description"                    "$(check_role_description "$SPOKE_EXEC_ROLE" "$SPOKE_EXEC_DESC")"
 fi
 
 echo
