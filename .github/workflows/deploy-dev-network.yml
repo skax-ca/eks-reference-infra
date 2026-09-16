@@ -102,7 +102,7 @@ jobs:
       # (resource_owner=OTHER-ACCOUNTS)는 초대가 이미 ACCEPTED여야만 찾는다. 완전 신규/재배포 spoke는
       # 초대가 PENDING으로 시작하는데 Terraform에는 PENDING 초대를 조회하는 데이터소스가 없어 뒤의
       # tofu plan이 "no matching RAM Resource Share found"로 실패한다. Terraform 리소스로 두지 않는
-      # 이유는 live/dev/networking/main.tf의 removed 블록 주석이 갖는다.
+      # 이유는 live/dev/networking/main.tf의 aws_ec2_transit_gateway_vpc_attachment 위 ⛔ 주석이 갖는다.
       # ⚠️ 입구 Role은 sts:AssumeRole 권한뿐이라 이 RAM API를 직접 못 부른다. 여기서만 실행 Role을
       #    CLI로 체인 assume한다(provider·backend가 내부적으로 하는 2단 체인을 셸에서 재현하는 것).
       - name: RAM 초대 자동 수락

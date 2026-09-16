@@ -31,8 +31,6 @@ esac
 
 CHANGES=0
 
-# ⚠️ IAM --description은 tab/LF/CR + U+0020~U+007E + U+00A1~U+00FF만 받는다. 한글을 넣으면
-#    ValidationError다. 주석은 한글이어도 description은 영문으로 쓴다.
 # env는 태그 인자다. hub/spoke 자원을 같은 함수로 만들되 Environment 태그는 각자 값을 받는다.
 tag_args_iam() {
   local name="$1" env="$2"
@@ -61,6 +59,17 @@ create_role_with_retry() {
     printf '            … principal 전파 대기 (%d/10)\n' "$attempt"
     sleep 5
   done
+}
+
+# create-role의 --description은 생성 시점에만 적용된다. 이미 있는 Role은 여기서 따라잡지 않으면
+# config.sh의 문자열을 바꿔도 영원히 옛 값으로 남고, 두 번째 실행이 changed=0이라는 수용 기준이
+# 그 drift를 가려준다. 신뢰 정책과 같은 방식(비교 후 다를 때만 update)으로 수렴시킨다.
+converge_role_description() {
+  local role="$1" desc="$2" label="$3"
+  if [[ "$(check_role_description "$role" "$desc")" != ok ]]; then
+    aws_ iam update-role --role-name "$role" --description "$desc"
+    changed "$label description 갱신"
+  else ok "$label description"; fi
 }
 
 # state 버킷 하나를 기대 상태로 수렴시킨다(hub·spoke 공용, prefix·env 태그만 다르게 받는다).
@@ -161,8 +170,7 @@ if [[ "$BOOTSTRAP_TARGET" == hub ]]; then
 # 3. hub 입구/실행 Role
 case "$(check_role_trust "$HUB_ENTRY_ROLE" "$(hub_entry_trust_policy)")" in
   absent)
-    create_role_with_retry "$HUB_ENTRY_ROLE" "$(hub_entry_trust_policy)" \
-      "GitHub Actions OIDC entry role (hub). Sole permission is assuming the hub exec role." "$HUB_ENV"
+    create_role_with_retry "$HUB_ENTRY_ROLE" "$(hub_entry_trust_policy)" "$HUB_ENTRY_DESC" "$HUB_ENV"
     changed "[hub] 입구 Role 생성: $HUB_ENTRY_ROLE"
     ;;
   drift)
@@ -172,11 +180,11 @@ case "$(check_role_trust "$HUB_ENTRY_ROLE" "$(hub_entry_trust_policy)")" in
     ;;
   ok) ok "[hub] 입구 Role 신뢰 정책" ;;
 esac
+converge_role_description "$HUB_ENTRY_ROLE" "$HUB_ENTRY_DESC" "[hub] 입구 Role"
 
 case "$(check_role_trust "$HUB_EXEC_ROLE" "$(hub_exec_trust_policy)")" in
   absent)
-    create_role_with_retry "$HUB_EXEC_ROLE" "$(hub_exec_trust_policy)" \
-      "GitHub Actions execution role (hub, 입구 Role만 신뢰하는 최소권한 패턴)." "$HUB_ENV"
+    create_role_with_retry "$HUB_EXEC_ROLE" "$(hub_exec_trust_policy)" "$HUB_EXEC_DESC" "$HUB_ENV"
     changed "[hub] 실행 Role 생성: $HUB_EXEC_ROLE"
     ;;
   drift)
@@ -186,6 +194,7 @@ case "$(check_role_trust "$HUB_EXEC_ROLE" "$(hub_exec_trust_policy)")" in
     ;;
   ok) ok "[hub] 실행 Role 신뢰 정책" ;;
 esac
+converge_role_description "$HUB_EXEC_ROLE" "$HUB_EXEC_DESC" "[hub] 실행 Role"
 
 if [[ "$(check_exec_admin_attached "$HUB_EXEC_ROLE")" != ok ]]; then
   aws_ iam attach-role-policy --role-name "$HUB_EXEC_ROLE" \
@@ -204,8 +213,7 @@ else
 # 3'. spoke 입구/실행 Role. 인스턴스는 SPOKE_ENV로 고른다.
 case "$(check_role_trust "$SPOKE_ENTRY_ROLE" "$(spoke_entry_trust_policy)")" in
   absent)
-    create_role_with_retry "$SPOKE_ENTRY_ROLE" "$(spoke_entry_trust_policy)" \
-      "GitHub Actions OIDC entry role (spoke:$SPOKE_ENV). Sole permission is assuming the exec role." "$SPOKE_ENV"
+    create_role_with_retry "$SPOKE_ENTRY_ROLE" "$(spoke_entry_trust_policy)" "$SPOKE_ENTRY_DESC" "$SPOKE_ENV"
     changed "[spoke:$SPOKE_ENV] 입구 Role 생성: $SPOKE_ENTRY_ROLE"
     ;;
   drift)
@@ -215,11 +223,11 @@ case "$(check_role_trust "$SPOKE_ENTRY_ROLE" "$(spoke_entry_trust_policy)")" in
     ;;
   ok) ok "[spoke:$SPOKE_ENV] 입구 Role 신뢰 정책" ;;
 esac
+converge_role_description "$SPOKE_ENTRY_ROLE" "$SPOKE_ENTRY_DESC" "[spoke:$SPOKE_ENV] 입구 Role"
 
 case "$(check_role_trust "$SPOKE_EXEC_ROLE" "$(spoke_exec_trust_policy)")" in
   absent)
-    create_role_with_retry "$SPOKE_EXEC_ROLE" "$(spoke_exec_trust_policy)" \
-      "GitHub Actions execution role (spoke:$SPOKE_ENV, 입구 Role만 신뢰하는 최소권한 패턴)." "$SPOKE_ENV"
+    create_role_with_retry "$SPOKE_EXEC_ROLE" "$(spoke_exec_trust_policy)" "$SPOKE_EXEC_DESC" "$SPOKE_ENV"
     changed "[spoke:$SPOKE_ENV] 실행 Role 생성: $SPOKE_EXEC_ROLE"
     ;;
   drift)
@@ -229,6 +237,7 @@ case "$(check_role_trust "$SPOKE_EXEC_ROLE" "$(spoke_exec_trust_policy)")" in
     ;;
   ok) ok "[spoke:$SPOKE_ENV] 실행 Role 신뢰 정책" ;;
 esac
+converge_role_description "$SPOKE_EXEC_ROLE" "$SPOKE_EXEC_DESC" "[spoke:$SPOKE_ENV] 실행 Role"
 
 if [[ "$(check_exec_admin_attached "$SPOKE_EXEC_ROLE")" != ok ]]; then
   aws_ iam attach-role-policy --role-name "$SPOKE_EXEC_ROLE" \
