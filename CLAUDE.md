@@ -24,4 +24,4 @@ AWS hub-spoke EKS 배포 루트. `iac-module-library`의 모듈을 소비해 세
 | CI 신원 | GitHub OIDC → 입구 Role → 실행 Role(`AdministratorAccess`), 2단 체인 |
 | 로컬 apply 가드 | 실행 Role이 입구 Role만 신뢰한다. 개인 IAM user는 관리자여도 `AccessDenied` |
 | 네이밍 | `workload=demo`(hub·dev 동일 필수) · `env=hub|dev` · `region=an2` |
-| 로컬 게이트 | `git config core.hooksPath .githooks` + `tflint --init`(clone마다 1회). aws ruleset 핀 `0.48.0` |
+| 로컬 게이트 | `git config core.hooksPath .githooks` + `tflint --init` + `brew install shellcheck`(clone마다 1회). aws ruleset 핀 `0.48.0`. 셸 게이트 상세는 `scripts/README.md` |

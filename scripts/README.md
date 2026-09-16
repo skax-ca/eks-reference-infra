@@ -175,10 +175,23 @@ VPC 기준으로 한 번 더 확인하는 것이 안전하다.
 
 종료 코드: `0` = 잔존물 없음, `1` = 잔존물 있음, `2` = 실행 불가.
 
-## 열린 항목: `.sh` 파일의 문법을 아무도 검사하지 않는다
+## 셸 게이트: `bash -n` + `shellcheck`
 
-`scripts/validate-comment-conventions.py`가 `bootstrap/*.sh`·`scripts/*.sh`·
-`.claude/skills/**/*.sh`의 주석 규칙을 보지만 셸 문법은 보지 않는다. CI
-(`.github/workflows/deploy-*.yml`)도 각 배포 루트의 Terraform만 다룬다. 지금은 사람이
-`bash -n`을 돌리는 것이 유일한 방어다. 배포 워크플로 중 하나에 `bash -n scripts/*.sh`
-(가능하면 `shellcheck`) 스텝을 추가하는 것을 검토할 만하다.
+`.githooks/pre-commit`이 staged된 `bootstrap/*.sh`·`scripts/*.sh`·`.claude/skills/**/*.sh`에
+`bash -n`(문법)과 `shellcheck -x`(인용·확장·종료코드)를 돌린다. 둘 다 통과해야 커밋이 선다.
+
+```bash
+brew install shellcheck        # clone마다 1회. 없으면 훅이 즉시 실패한다
+```
+
+⛔ CI에 두지 않았다. 배포 워크플로는 루트별 트리거라 `.sh`만 바뀐 커밋은 **어느 워크플로도
+돌리지 않고**, GitOps 저장소에는 워크플로 자체가 없어 `argocd-seed.sh`를 덮지 못한다.
+이 저장소군에서 셸을 실제로 막을 수 있는 자리는 커밋 전 훅 하나다.
+
+`-x`는 `source`된 파일을 따라간다. 각 스크립트의 `# shellcheck source=` 지시자가 저장소 루트
+기준 경로를 주고 훅은 항상 루트에서 돌기 때문에, 그 경로가 그대로 맞는다.
+
+의도된 패턴은 지적이 아니라 **사유를 적은 `disable` 지시자**로 남긴다. `--tags $(tag_args_iam …)`의
+비인용은 태그를 인자 여러 개로 흘리려는 것이고, 인용하면 aws CLI가 거부한다. `config.sh`의
+변수들은 `source`하는 쪽에서 쓰이므로 한 파일만 보는 검사기에는 미사용으로 보인다.
+⚠️ 설명 주석을 `# shellcheck`로 시작하지 않는다 — 검사기가 그 줄을 지시자로 파싱해 실패한다.

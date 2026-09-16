@@ -10,7 +10,9 @@
 # bootstrap.sh와 같은 BOOTSTRAP_TARGET(hub|spoke, 기본 hub)·SPOKE_ENV(기본 dev)로 검사 대상을
 # 고른다. hub·spoke는 서로 다른 계정이라 한 AWS_PROFILE로는 한쪽만 볼 수 있다.
 
-cd "$(dirname "${BASH_SOURCE[0]}")"
+# set -euo 는 config.sh 가 건다. 그 전이라 cd 실패가 여기서는 잡히지 않는다 - 직접 막는다.
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
+# shellcheck source=bootstrap/config.sh
 source ./config.sh
 
 readonly BOOTSTRAP_TARGET="${BOOTSTRAP_TARGET:-hub}"

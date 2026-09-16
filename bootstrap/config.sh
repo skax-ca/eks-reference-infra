@@ -11,10 +11,16 @@
 # stage)를 추가할 때 이 파일을 고치지 않고 SPOKE_ENV=<이름>만 바꿔 같은 스크립트를 재사용한다.
 # hub는 계정마다 정확히 하나뿐이라 고정 상수로 남긴다.
 
+# 이 파일은 source 되는 설정이다. 여기서 정의한 값을 쓰는 쪽은 bootstrap.sh·verify.sh 이고
+# 검사기는 한 파일만 보므로 전부 미사용으로 보인다. export 로 바꿔 회피하지 않는다.
+# shellcheck disable=SC2034
+
 set -euo pipefail
 
 # ⚠️ bash 전용이다. 아래 배열 인덱싱이 0-based를 전제한다(zsh는 1-based). zsh에서
 #    source ./config.sh 하면 find_bucket이 조용히 깨진다.
+# source 된 경우 return 이, 직접 실행이면 exit 이 쓰인다. 둘 중 하나는 늘 도달하지 않는다.
+# shellcheck disable=SC2317
 [[ -n "${BASH_VERSION:-}" ]] || {
   echo "ERROR: bash 로 실행해야 한다 (현재 셸은 bash 가 아니다). 예: bash -c 'source ./config.sh; ...'" >&2
   return 1 2>/dev/null || exit 1
@@ -136,6 +142,9 @@ find_bucket_by_prefix() {
   local prefix="$1" found
   found="$(aws_ s3api list-buckets \
     --query "Buckets[?starts_with(Name, \`${prefix}\`)].Name" --output text)"
+  # --output text 는 값을 탭으로 흘리므로 단어 분리가 목적이다. 인용하면 버킷 여러 개가
+  # 원소 하나로 뭉쳐 아래 개수 판정이 항상 1이 된다.
+  # shellcheck disable=SC2206
   local -a names=($found)
   case "${#names[@]}" in
     0) echo "" ;;
@@ -308,9 +317,12 @@ check_public_access_block() {
 # 이것이 없으면 lock 객체 버전이 무한히 쌓인다.
 check_lifecycle() {
   local b="$1" nd ad
+  # JMESPath 식이라 셸이 확장하면 안 된다. 작은따옴표가 목적이다.
+  # shellcheck disable=SC2016
   nd="$(aws_ s3api get-bucket-lifecycle-configuration --bucket "$b" \
     --query 'Rules[?Status==`Enabled`].NoncurrentVersionExpiration.NoncurrentDays|[0]' \
     --output text 2>/dev/null || echo None)"
+  # shellcheck disable=SC2016  # 위와 같은 이유(JMESPath)
   ad="$(aws_ s3api get-bucket-lifecycle-configuration --bucket "$b" \
     --query 'Rules[?Status==`Enabled`].AbortIncompleteMultipartUpload.DaysAfterInitiation|[0]' \
     --output text 2>/dev/null || echo None)"

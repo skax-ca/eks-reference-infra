@@ -20,7 +20,10 @@
 #   BOOTSTRAP_TARGET=spoke AWS_PROFILE=<other> SPOKE_ENV=stage \
 #     EXPECTED_ACCOUNT=<other 12자리> ./bootstrap.sh                     (향후 다른 spoke 인스턴스 예시)
 
-cd "$(dirname "${BASH_SOURCE[0]}")"
+# set -euo 는 config.sh 가 건다. 그 전이라 cd 실패가 여기서는 잡히지 않는다 - 직접 막는다.
+# 실패한 채 넘어가면 엉뚱한 디렉토리의 config.sh 를 읽는다.
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
+# shellcheck source=bootstrap/config.sh
 source ./config.sh
 
 readonly BOOTSTRAP_TARGET="${BOOTSTRAP_TARGET:-hub}"
@@ -47,6 +50,9 @@ tag_args_iam() {
 create_role_with_retry() {
   local role="$1" trust="$2" desc="$3" env="$4" attempt=0 err
   while :; do
+    # tag_args_iam 은 태그 하나를 인자 하나로 흘린다. 단어 분리가 목적이라 인용하지 않는다 -
+    # 인용하면 태그 전체가 인자 하나로 뭉쳐 aws CLI 가 거부한다.
+    # shellcheck disable=SC2046
     if err="$(aws_ iam create-role --role-name "$role" \
                 --assume-role-policy-document "$trust" --description "$desc" \
                 --tags $(tag_args_iam "$role" "$env") 2>&1 >/dev/null)"; then
@@ -144,6 +150,7 @@ fi
 OIDC_TAG_ENV="$([[ "$BOOTSTRAP_TARGET" == hub ]] && echo "$HUB_ENV" || echo "$SPOKE_ENV")"
 case "$(check_oidc_provider)" in
   absent)
+    # shellcheck disable=SC2046  # 위 create-role 과 같은 이유(태그 단어 분리)
     aws_ iam create-open-id-connect-provider \
       --url "https://${OIDC_URL}" --client-id-list "$OIDC_AUD" \
       --tags $(tag_args_iam "$OIDC_NAME" "$OIDC_TAG_ENV") >/dev/null
@@ -154,6 +161,7 @@ case "$(check_oidc_provider)" in
 esac
 # Name 태그는 client-id와 달리 drift 판정 대상이 아니다(check_oidc_provider는 aud만 본다).
 # 매번 갱신해도 무해하다.
+# shellcheck disable=SC2046  # 위와 같은 이유(태그 단어 분리)
 aws_ iam tag-open-id-connect-provider --open-id-connect-provider-arn "$(oidc_arn)" \
   --tags $(tag_args_iam "$OIDC_NAME" "$OIDC_TAG_ENV")
 ok "OIDC provider 태그(Name=$OIDC_NAME)"
