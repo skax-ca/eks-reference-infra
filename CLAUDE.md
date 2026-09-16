@@ -10,7 +10,8 @@ AWS hub-spoke EKS 배포 루트. `iac-module-library`의 모듈을 소비해 세
 - `docs/spoke-lifecycle.md`: spoke 구축·철거
 - `docs/runbooks.md`: 이미 선 환경 운영
 
-이 repo 고유의 판단(TGW 별도 root, `for_each` key 고정 등)은 해당 `.tf`/`.sh` 인라인 주석이 SSOT다.
+패턴 갈림길은 `iac-module-library/docs/architectures/gitops-hub-spoke/aws/`가 갖는다. 이 repo 고유의
+판단(TGW 별도 root, `for_each` key 고정 등)은 해당 `.tf`/`.sh` 인라인 주석이 SSOT다.
 
 ## 값
 
@@ -18,7 +19,9 @@ AWS hub-spoke EKS 배포 루트. `iac-module-library`의 모듈을 소비해 세
 |------|-----|
 | 배포 루트 | `live/hub/{networking,tgw,eks}` · `live/dev/{networking,eks}`, 5개 전부 **별도 state** |
 | state key | `<env>/<component>.tfstate` |
+| backend | S3 + `use_lockfile = true` |
 | git 밖 값 | repo 변수 `HUB_*`/`DEV_*`(`TF_STATE_BUCKET`·`AWS_ENTRY_ROLE_ARN`·`AWS_EXEC_ROLE_ARN`) + 로컬 `backend.hcl` |
+| CI 신원 | GitHub OIDC → 입구 Role → 실행 Role(`AdministratorAccess`), 2단 체인 |
+| 로컬 apply 가드 | 실행 Role이 입구 Role만 신뢰한다. 개인 IAM user는 관리자여도 `AccessDenied` |
 | 네이밍 | `workload=demo`(hub·dev 동일 필수) · `env=hub|dev` · `region=an2` |
-| 루트 간 결합 | `terraform_remote_state` 금지, Name·태그 기반 `data` 조회만 |
-| 로컬 게이트 | `git config core.hooksPath .githooks` (clone마다 1회) |
+| 로컬 게이트 | `git config core.hooksPath .githooks` + `tflint --init`(clone마다 1회). aws ruleset 핀 `0.48.0` |
