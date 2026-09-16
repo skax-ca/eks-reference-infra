@@ -5,46 +5,30 @@
 hub-spoke EKS GitOps 패턴의 **레퍼런스 배포 루트**다. `iac-module-library`의 모듈을 **소비**해
 실제로 세우고 걷어내는 코드와, 그 절차의 운영 문서를 갖는다. 모듈 자체를 만들지 않는다.
 
-## 0. 이 repo의 위치 (반드시 먼저 읽을 것)
+전역 규칙(엔진·설계 검토·브랜치·PR·버전·문체)은 `iac-module-library/CLAUDE.md`와 그 `docs/`가
+갖는다. 이 파일은 그 위에 **이 배포 루트에서만 성립하는 것**을 얹는다.
 
-| repo | 역할 | SSOT |
-|------|------|------|
-| **이 repo (`eks-reference-infra`)** | hub-spoke 패턴을 **소비해 배포**하는 루트 | 이 배포 코드(이 repo 고유의 판단은 해당 `.tf`/`.sh` 파일의 인라인 주석이 SSOT), GitOps **운영 절차**(구축·철거·런북) |
-| `iac-module-library` | Terraform 모듈·설계 | 모듈 계약(`docs/module-catalog.md`), 네이밍 약어(`docs/naming/abbreviations/aws.md`), 저장소 전역 결정(`docs/decisions.md`), **hub-spoke 패턴의 설계 갈림길과 기각(`docs/architectures/gitops-hub-spoke/aws/`)**, 주석 규칙(`docs/conventions.md` 「주석」), 문서 규칙(`docs/writing-style.md`) |
-| `eks-platform-gitops` | ArgoCD Application·AppProject·cluster-secret (계층 2) | GitOps 매니페스트 |
+## SSOT 지도
 
-⚠️ **설계·컨벤션의 근거는 이 repo에 없다.** "왜 OpenTofu인가", "왜 facade 패턴인가" 같은 질문은
-`iac-module-library`의 `CLAUDE.md`·`docs/decisions.md`가, "왜 TGW인가(peering이 아니라)",
-"왜 self-managed ArgoCD인가" 같은 패턴 갈림길은 같은 repo의
-`docs/architectures/gitops-hub-spoke/aws/`가 갖는다. 여기서 다시 쓰지 않는다. 이 repo 고유의
-판단(TGW를 별도 root로 분리한 이유, `for_each` key를 계정 ID로 고정한 이유 등)은 별도 설계
-문서가 아니라 그 판단이 적용된 `.tf`/`.sh` 파일의 인라인 주석이 SSOT다.
+| 무엇 | 어디 |
+|------|------|
+| 이 repo 고유의 판단(TGW를 별도 root로 분리한 이유, `for_each` key를 계정 ID로 고정한 이유 등) | 그 판단이 적용된 `.tf`/`.sh` 파일의 **인라인 주석**. 별도 설계 문서를 두지 않는다 |
+| hub-spoke 패턴의 설계 갈림길과 기각("왜 TGW인가", "왜 self-managed ArgoCD인가") | `iac-module-library` `docs/architectures/gitops-hub-spoke/aws/` |
+| 모듈 계약 · 네이밍 약어 · 주석 규칙 · 문서 문체 | `iac-module-library` `docs/module-catalog.md` · `docs/naming/abbreviations/aws.md` · `docs/conventions.md` 「주석」 · `docs/writing-style.md` |
+| ArgoCD Application·AppProject·cluster-secret(계층 2) | `eks-platform-gitops` |
 
-⛔ **주석·문서에 좌표를 쓰지 않는다.** 날짜, 계획 파일 경로나 문서 절 번호, 세션 차수, PR
-번호, "실측했다" 같은 사건 서술은 `git blame`과 커밋 메시지가 갖는다. 주석은 "왜 이 값인가"와
-"바꾸면 무엇이 깨지는가"에만 답한다(`iac-module-library` `docs/conventions.md` 「주석」). 이
-규칙이 없을 때 git 밖 계획 파일과 사라진 문서 경로를 인용한 주석이 쌓여 아무도 열 수 없었다.
-
-문서 문체 규칙(em-dash 금지·이모지 7종·400줄 제한)은 아래 6절이 가리키는 스크립트로
-**이식**되어 있다(이식한 이유는 그 스크립트가 이 repo 안에서 pre-commit 훅으로 즉시
-실행돼야 하기 때문이다). 규칙 텍스트 자체의 SSOT는 여전히 module repo다.
-
-**운영 절차 SSOT는 반대로 이 repo다.** hub/spoke를 세우고 걷어내는 순서, 자주 막히는 지점,
-운영 런북은 아래 세 문서가 소유한다:
+**운영 절차 SSOT는 이 repo다.** hub/spoke를 세우고 걷어내는 순서, 자주 막히는 지점, 운영
+런북은 아래 세 문서가 소유한다. 작업을 시작하기 전에 해당 절차 문서부터 읽는다:
 
 - [`docs/hub-lifecycle.md`](docs/hub-lifecycle.md): hub 구축·철거
 - [`docs/spoke-lifecycle.md`](docs/spoke-lifecycle.md): spoke 구축·철거
 - [`docs/runbooks.md`](docs/runbooks.md): 이미 선 환경 운영(접근·업그레이드·GitOps 상태 확인 등)
 
-작업을 시작하기 전에 해당 절차 문서부터 읽는다. 이 CLAUDE.md는 그 문서들이 전제하는
-"이 repo가 어떻게 조립되어 있는가"만 담는다.
+절차·결정·gotcha(예: Terraform `for_each`에 unknown 값이 섞이면 안 되는 이유, GitHub App private
+key 취급 절차)는 위 세 문서나 이 파일에 반영한다. 버전관리되지 않는 로컬 메모에만 적어두고
+끝내지 않는다.
 
-⚠️ **에이전트가 로컬에 남기는 세션 메모는 이 저장소의 지식이 아니다.** 절차·결정·gotcha
-(예: Terraform `for_each`에 unknown 값이 섞이면 안 되는 이유, GitHub App private key 취급
-절차)는 반드시 위 세 문서(`docs/hub-lifecycle.md`·`spoke-lifecycle.md`·`runbooks.md`)나
-이 파일에 반영한다(버전관리되지 않는 로컬 메모에만 적어두고 끝내지 않는다).
-
-## 1. 저장소 구조
+## 저장소 구조
 
 ```
 bootstrap/            state 버킷 · OIDC provider · Role (IaC 밖, 사람이 스크립트로 실행)
@@ -54,19 +38,18 @@ live/hub/eks/          EKS + workbench (hub)
 live/dev/networking/   VPC + TGW attachment (spoke 첫 인스턴스)
 live/dev/eks/          EKS + workbench + cross-account-trust-role (spoke)
 .github/workflows/     배포 루트마다 워크플로 하나(plan은 push, apply/destroy는 workflow_dispatch)
-docs/                  운영 절차 SSOT(0절) + 이 repo 고유 참조 문서
-scripts/               teardown-verify.sh · argocd-seed.sh · validate-doc-conventions.py
+docs/                  운영 절차 SSOT + 이 repo 고유 참조 문서
+scripts/               teardown-verify.sh · argocd-seed.sh · validate-*.py
 ```
 
 같은 repo 안에서 `live/hub/*`와 `live/dev/*`는 **각자 별도 state**를 쓴다(같은 배포 루트
 안의 다른 env). `live/hub/networking`과 `live/hub/tgw`·`live/hub/eks`도 서로 분리된 state다.
 루트 간 결합은 `terraform_remote_state`가 아니라 **Name·태그 기반 `data` 조회**로만 한다.
 
-## 2. 실행 모델
+## 실행 모델
 
 | 항목 | 규칙 |
 |------|------|
-| 엔진 | OpenTofu(`tofu`), Terraform이 아니다 |
 | backend | S3 + `use_lockfile = true`. 버킷명은 git에 없다(GitHub 저장소 변수 `HUB_TF_STATE_BUCKET`/`DEV_TF_STATE_BUCKET` + 로컬 `backend.hcl`, 둘 다 git 밖) |
 | state key | `<env>/<component>.tfstate` (예: `hub/tgw.tfstate`, `dev/networking.tfstate`) |
 | 자격증명 | GitHub OIDC → 입구 Role(`*_AWS_ENTRY_ROLE_ARN`) → 실행 Role(`*_AWS_EXEC_ROLE_ARN`), 2단 체인 |
@@ -77,10 +60,10 @@ scripts/               teardown-verify.sh · argocd-seed.sh · validate-doc-conv
 <run-id> --failed`로 **저장된 plan을 그대로** 재적용한다. 새 dispatch는 plan을 처음부터 다시
 돌려 승인한 것과 다른 계획을 만든다.
 
-## 3. 네이밍·태깅
+## 네이밍·태깅
 
-`Name` 태그 포맷과 리소스 타입 약어는 `iac-module-library`의 `docs/naming/abbreviations/aws.md`가
-SSOT다(임의 생성 금지). 이 repo에서 실제로 쓰는 값:
+약어와 `Name` 포맷은 module repo의 `docs/naming/abbreviations/aws.md`가 SSOT다(임의 생성 금지).
+이 repo에서 실제로 쓰는 값:
 
 - `workload` = `demo`(고정, `live/hub`·`live/dev` 모두 반드시 동일해야 한다)
 - `env` = `hub` 또는 `dev`(spoke 첫 인스턴스), `region` = `ap-northeast-2`(`an2`)
@@ -88,35 +71,25 @@ SSOT다(임의 생성 금지). 이 repo에서 실제로 쓰는 값:
 
 `Name`은 모듈이 `naming` 객체를 받아 합성한다. 배포 루트(이 repo)가 약어를 직접 조합하지 않는다.
 
-## 4. 로컬 게이트 (git hook)
+## 로컬 게이트 (git hook)
 
 ```
-pre-commit: 문서 변경 시 scripts/validate-doc-conventions.py → 코드 변경 시 scripts/validate-comment-conventions.py(주석 좌표·em-dash) → tofu fmt -check → tflint → trivy config
+pre-commit: 문서 변경 시 scripts/validate-doc-conventions.py → 코드 변경 시 scripts/validate-comment-conventions.py → tofu fmt -check → tflint → trivy config
 pre-push:   live/**/*.tf 변경 시 각 루트 tofu validate (모듈 계약 테스트는 module repo가 담당, 여기 없음)
 ```
 
 clone마다 1회 활성화: `git config core.hooksPath .githooks`. 우회(`--no-verify`)는 긴급 시에만,
 사유를 커밋 메시지에 남긴다.
 
-## 5. 브랜치·PR 규칙
+두 검증 스크립트는 module repo의 규칙을 이 repo 안에서 pre-commit으로 즉시 돌리기 위해
+**이식**한 것이다(규칙 텍스트의 SSOT는 여전히 module repo). 기계로 잡는 것:
 
-| 변경 대상 | 경로 |
-|-----------|------|
-| **`.tf` · `.github/workflows/`** | **브랜치 → PR** |
-| **문서 전용(`docs/*.md`·`CLAUDE.md`)** | **`main` 직접 커밋** |
+- 주석: 날짜·계획 파일 경로·문서 절 번호·PR 번호 같은 좌표, em-dash. 주석은 "왜 이 값인가"와
+  "바꾸면 무엇이 깨지는가"에만 답한다
+- 문서(`docs/*.md`·`README.md`·`AGENTS.md`·이 파일): 문서 간 절 번호 인용, 7종 외 이모지
+  (`✅⏳❌⚠️⛔🔴🔑`), 400줄 초과, em-dash
 
-기준은 module repo와 같다: *"CI가 머지 전에 막아야 하는가"* 하나뿐이다. 각 워크플로는
-`push: branches: [main]`에도 plan까지 돌므로 "PR이어야 CI가 돈다"는 성립하지 않는다. 차이는
-**깨진 것이 main에 들어가기 전에 걸리느냐**뿐이고, 문서 전용 변경엔 main을 깨뜨릴 산출물이 없다.
-
-## 6. 문서 작성 규칙
-
-`docs/*.md`·`README.md`·`AGENTS.md`·이 파일은 `python3 scripts/validate-doc-conventions.py`로
-검증한다(pre-commit이 staged 파일에 자동 실행). 기계로 잡는 4가지: 문서 간 절 번호 인용 금지,
-이모지는 `✅⏳❌⚠️⛔🔴🔑` 7종만, 문서당 400줄 제한, em-dash(유니코드 U+2014) 금지. 나머지
-문체 규칙 전문의 SSOT는 0절의 `iac-module-library` `docs/writing-style.md`다.
-
-## 7. 새 리소스·모듈 인자를 쓰기 전에
+## 새 리소스·모듈 인자를 쓰기 전에
 
 이 repo는 모듈 내부를 고치지 않지만, 루트 `main.tf`가 모듈에 넘기는 변수·참조하는 출력은
 추정하지 않는다: `mcp__opentofu__get-module-details`(`namespace`·`name`·`target`)로 실제
