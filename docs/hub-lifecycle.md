@@ -149,8 +149,7 @@ kubectl get nodes            # KUBECONFIG 설정 없이 동작해야 한다
 
 ### 6. GitOps (L3)
 
-hub만 자기 `argocd-seed.sh`를 돈다: spoke는 자체 ArgoCD가 없어 이 절이 없다
-(`spoke-lifecycle.md`는 대신 hub에 등록하는 절차를 갖는다).
+hub만 자기 `argocd-seed.sh`를 돈다. spoke는 자체 ArgoCD가 없어 이 절이 없다(`spoke-lifecycle.md`가 hub에 등록하는 절차를 갖는다).
 
 ```bash
 gh repo create <org>/<project>-platform-gitops --private
@@ -158,9 +157,10 @@ gh repo create <org>/<project>-platform-gitops --private
 
 `eks-platform-gitops`의 레이아웃을 본뜬다. **이 저장소에 `.tf`를 두지 않는다.**
 
+`argocd-seed.sh`는 `<project>-platform-gitops`의 `bootstrap/`이 소유한다(workbench가 그 저장소만 클론한다). `GH_APP_*` 준비는 [`scripts/README.md`](../scripts/README.md).
+
 ```bash
-# workbench에서 실행한다
-./scripts/argocd-seed.sh
+cd "$GITOPS_REPO_DIR/bootstrap" && ./argocd-seed.sh --dry-run && ./argocd-seed.sh   # workbench에서
 ```
 
 스크립트는 매니페스트를 **생성하지 않는다.** GitOps 저장소에 커밋된 파일을 그대로 apply한다:
