@@ -198,16 +198,6 @@ locals {
 #    aws_ram_principal_association을 hub state 모르게 실물에서 해제하고, (2) 재배포 때 새로
 #    생기는 초대는 PENDING인데 그 상태를 조회하는 데이터소스가 없어(위 data.aws_ram_resource_share는
 #    ACCEPTED 이후에만 찾는다) 스스로는 절대 수락할 수 없는 순환에 빠진다.
-#
-# 이 removed 블록은 state에 남아 있는 accepter를 관리 대상에서 뺀다(destroy가 아니다). apply
-# 한 번으로 state에서만 잊혀지고 AWS 실물(수락 상태)은 그대로다. state에 그 리소스가 없는
-# spoke에서는 no-op이다.
-removed {
-  from = aws_ram_resource_share_accepter.tgw
-  lifecycle {
-    destroy = false
-  }
-}
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
   # depends_on이 없다. CI가 tofu init 이전에 수락을 끝내므로 이 시점엔 항상 ACTIVE고, 리소스
