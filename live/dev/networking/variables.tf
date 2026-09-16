@@ -9,6 +9,7 @@ variable "aws_region" {
   description = "리소스를 만들 리전. region_code와 짝이 맞아야 한다(an2 ↔ ap-northeast-2)."
   type        = string
   default     = "ap-northeast-2"
+  nullable    = false
 }
 
 variable "workload" {
@@ -19,24 +20,28 @@ variable "workload" {
   EOT
   type        = string
   default     = "demo"
+  nullable    = false
 }
 
 variable "env" {
   description = "환경 코드. 이 배포 루트는 spoke 첫 인스턴스인 dev 하나만 채운다."
   type        = string
   default     = "dev"
+  nullable    = false
 }
 
 variable "region_code" {
   description = "Name 태그에 쓰는 리전 약어. 모듈이 리소스 타입 약어와 조합한다."
   type        = string
   default     = "an2"
+  nullable    = false
 }
 
 variable "repository" {
   description = "거버넌스 태그 Repository 값. 리소스에서 이 repo로 역추적하는 경로다."
   type        = string
   default     = "skax-ca/eks-reference-infra"
+  nullable    = false
 }
 
 variable "execution_role_arn" {
@@ -53,4 +58,5 @@ variable "execution_role_arn" {
        init -backend=false와 validate까지다.
   EOT
   type        = string
+  nullable    = false
 }
