@@ -47,15 +47,23 @@ locals {
   #    교체된다. 어느 AZ냐가 아니라 결정적이냐가 요건이다.
   workbench_subnet_id = sort(data.aws_subnets.vm.ids)[0]
 
-  # system 노드그룹 taint(workload-class=system:NoSchedule) 대응 toleration/nodeSelector.
-  # coredns·metrics-server(Deployment)에만 쓴다(운영 절차는 docs/runbooks.md).
+  # 끌어당기기 축만 갖는 값. coredns·metrics-server·ebs-csi controller에 쓴다.
+  # ⚠️ 이 셋에 tolerations를 함께 적지 않는다. addon 기본 toleration이 이미
+  #    CriticalAddonsOnly를 통과하는데, configuration_values의 배열은 병합이 아니라 교체라
+  #    적는 순간 그 기본값(coredns의 control-plane, ebs-csi controller의 NoExecute/300s)이
+  #    함께 지워진다. 판정 근거를 다시 찍는 명령은 docs/runbooks.md가 갖는다.
+  system_node_selector = jsonencode({
+    nodeSelector = { "workload-class" = "system" }
+  })
+
+  # 두 축을 다 갖는 값. 기본 toleration이 없는 addon만 쓴다(지금은 cert-manager 하나).
   # ⛔ vpc-cni·eks-pod-identity-agent에는 쓰지 않는다. 두 DaemonSet은 차트 기본 tolerations가
   #    이미 operator:Exists라 모든 taint를 통과하므로 좁은 값을 직접 쓰면 후퇴이고, vpc-cni는
   #    enable_custom_networking=true라 모듈이 configuration_values를 재주입해 반영되지도 않는다.
-  workload_class_toleration = jsonencode({
+  system_node_placement = jsonencode({
     nodeSelector = { "workload-class" = "system" }
     tolerations = [
-      { key = "workload-class", operator = "Equal", value = "system", effect = "NoSchedule" },
+      { key = "CriticalAddonsOnly", operator = "Equal", value = "true", effect = "NoSchedule" },
     ]
   })
 }
@@ -366,17 +374,20 @@ module "eks" {
       # ⚠️ kubernetes_version을 올리면 이 값도 함께 갱신한다.
       ami_release_version = "1.35.6-20260728"
 
-      # Karpenter + Cluster Autoscaler 동시 운영을 위한 taint 전략의 밀어내기 축(운영 절차는
-      # docs/runbooks.md). 끌어당기기 축(nodeSelector)은 이 노드그룹에 뜨는 addon·컨트롤러가
-      # 각자 건다.
+      # 노드 배치 두 축을 여기서 함께 건다: 밀어내기는 taint, 끌어당기기는 labels다. 두 이름이
+      # 갈리는 것이 정상이다 — taint 키는 생태계 관례를 따라 플랫폼 차트의 기본 toleration을
+      # 그대로 받고(Karpenter·coredns·metrics-server·ebs-csi controller가 이 키를 기본으로
+      # 갖는다), 라벨에는 그런 관례가 없어 우리가 만든다. 설정표는 docs/runbooks.md.
+      # ⚠️ 이 taint 키는 우리 전용이 아니다. CriticalAddonsOnly toleration을 기본으로 달고 오는
+      #    차트는 허락 없이도 여기 설 수 있으므로, 새 차트를 들일 때 기본 tolerations를 먼저 읽는다.
       # ⛔ NodePool 쪽에는 대응 taint를 두지 않는다(app 워크로드가 toleration을 몰라도 되게).
       labels = {
         "workload-class" = "system"
       }
       taints = [
         {
-          key    = "workload-class"
-          value  = "system"
+          key    = "CriticalAddonsOnly"
+          value  = "true"
           effect = "NO_SCHEDULE"
         },
       ]
@@ -405,40 +416,39 @@ module "eks" {
     "vpc-cni" = { addon_version = "v1.22.3-eksbuild.1" }
     "coredns" = {
       addon_version = "v1.13.2-eksbuild.11"
-      configuration = local.workload_class_toleration
+      configuration = local.system_node_selector
     }
     "kube-proxy"             = { addon_version = "v1.35.3-eksbuild.17" }
     "eks-pod-identity-agent" = { addon_version = "v1.3.10-eksbuild.3" }
     "aws-ebs-csi-driver" = {
       addon_version = "v1.63.1-eksbuild.1"
-      # node(DaemonSet)·controller(Deployment) 스키마가 완전히 분리돼 있다. 하나만 고치면
-      # 나머지가 무제약 상태로 남아 taint 적용 시 Karpenter로 밀려난다. node는 tolerateAllTaints
-      # 불리언, controller는 그런 불리언이 없어 coredns·metrics-server와 같은 nodeSelector+
-      # toleration으로 고정한다.
+      # node(DaemonSet)·controller(Deployment) 스키마가 완전히 분리돼 있다. controller를 빠뜨리면
+      # 무제약 상태로 남아 Karpenter가 그 파드를 위해 노드를 만든다. node는 tolerateAllTaints
+      # 불리언으로 같은 값을 눈에 보이게 두고, controller는 끌어당기기 축만 받는다.
       configuration = jsonencode({
         node       = { tolerateAllTaints = true }
-        controller = jsondecode(local.workload_class_toleration)
+        controller = jsondecode(local.system_node_selector)
       })
     }
     "metrics-server" = {
       addon_version = "v0.9.0-eksbuild.5"
-      configuration = local.workload_class_toleration
+      configuration = local.system_node_selector
     }
 
     # community tier(opt-in). 컨트롤러+CRD는 IaC addon, Issuer/Certificate CR은 GitOps 소관이다.
-    # ⚠️ coredns·metrics-server·ebs-csi와 달리 최상위 toleration만으로는 부족하다. cert-manager
-    #    차트는 컨트롤러·cainjector·webhook 세 개의 독립된 Deployment로 구성되고(describe-addon-
-    #    configuration 스키마) 각각 자기 nodeSelector·tolerations를 따로 받는다. 최상위만 주면
-    #    cainjector·webhook이 system 노드그룹의 workload-class=system taint를 넘지 못해, Karpenter
-    #    노드가 아직 없는 상태(GitOps 미시딩)에서 addon 전체가 DEGRADED(InsufficientNumberOfReplicas)로
-    #    멈춘다.
+    # ⚠️ toleration을 직접 쓰는 유일한 addon이다. 스키마에 기본 tolerations가 없어 기댈 값이
+    #    없다(coredns·metrics-server·ebs-csi controller와 갈리는 지점).
+    # ⚠️ 최상위만 주면 부족하다. 차트가 컨트롤러·cainjector·webhook 세 개의 독립된 Deployment로
+    #    구성되고 각각 자기 nodeSelector·tolerations를 따로 받는다. 빠뜨리면 그 둘이 taint를 넘지
+    #    못해, Karpenter 노드가 아직 없는 상태(GitOps 미시딩)에서 addon 전체가
+    #    DEGRADED(InsufficientNumberOfReplicas)로 멈춘다.
     "cert-manager" = {
       addon_version = "v1.21.0-eksbuild.3"
       configuration = jsonencode(merge(
-        jsondecode(local.workload_class_toleration),
+        jsondecode(local.system_node_placement),
         {
-          cainjector = jsondecode(local.workload_class_toleration)
-          webhook    = jsondecode(local.workload_class_toleration)
+          cainjector = jsondecode(local.system_node_placement)
+          webhook    = jsondecode(local.system_node_placement)
         }
       ))
     }
