@@ -16,7 +16,6 @@
 | AWS 계정 + 관리자 권한 | `aws sts get-caller-identity` |
 | GitHub org + 저장소 생성 권한 | |
 | 로컬 도구 | `tofu` · `aws` · `gh` · `session-manager-plugin` · `jq` |
-| 모듈 저장소 읽기 토큰 | 워크플로가 `vars.MODULE_READER_CLIENT_ID`·`secrets.MODULE_READER_KEY`(GitHub App)로 `iac-module-library`를 클론한다 |
 
 ```bash
 brew install opentofu awscli gh jq
