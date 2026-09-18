@@ -16,7 +16,7 @@
 | AWS 계정 + 관리자 권한 | `aws sts get-caller-identity` |
 | GitHub org + 저장소 생성 권한 | |
 | 로컬 도구 | `tofu` · `aws` · `gh` · `session-manager-plugin` · `jq` |
-| 이 저장소 접근 | private이면 배포 저장소가 읽을 GitHub App이 필요하다([만드는 법](../scripts/README.md#github-app-만들기)) |
+| 모듈 저장소 읽기 토큰 | 워크플로가 `vars.MODULE_READER_CLIENT_ID`·`secrets.MODULE_READER_KEY`(GitHub App)로 `iac-module-library`를 클론한다 |
 
 ```bash
 brew install opentofu awscli gh jq
@@ -152,15 +152,14 @@ kubectl get nodes            # KUBECONFIG 설정 없이 동작해야 한다
 hub만 자기 `argocd-seed.sh`를 돈다. spoke는 자체 ArgoCD가 없어 이 절이 없다(`spoke-lifecycle.md`가 hub에 등록하는 절차를 갖는다).
 
 ```bash
-gh repo create <org>/<project>-platform-gitops --private
+gh repo create <org>/<project>-platform-gitops --public
 ```
 
-`eks-platform-gitops`의 레이아웃을 본뜬다. **이 저장소에 `.tf`를 두지 않는다.**
-
-`argocd-seed.sh`는 `<project>-platform-gitops`의 `bootstrap/`이 소유한다(workbench가 그 저장소만 클론한다). `GH_APP_*` 준비는 [`scripts/README.md`](../scripts/README.md).
+`eks-platform-gitops`의 레이아웃을 본뜬다. **이 저장소에 `.tf`를 두지 않는다.** public이어야 한다. ArgoCD가 repository Secret 없이 익명으로 읽고 workbench도 자격증명 없이 클론한다. private이면 seed의 preflight가 익명 `ls-remote`에서 멈춘다. `argocd-seed.sh`는 그 저장소의 `bootstrap/`이 소유한다(workbench가 그 저장소만 클론한다).
 
 ```bash
-cd "$GITOPS_REPO_DIR/bootstrap" && ./argocd-seed.sh --dry-run && ./argocd-seed.sh   # workbench에서
+git clone https://github.com/<org>/<project>-platform-gitops.git "$GITOPS_REPO_DIR"          # workbench에서
+cd "$GITOPS_REPO_DIR/bootstrap" && ./argocd-seed.sh --dry-run && ./argocd-seed.sh
 ```
 
 스크립트는 매니페스트를 **생성하지 않는다.** GitOps 저장소에 커밋된 파일을 그대로 apply한다:
