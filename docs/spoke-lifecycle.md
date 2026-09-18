@@ -15,8 +15,8 @@
 
 ### 0. 준비물
 
-hub와 같다: `tofu`·`aws`·`gh`·`session-manager-plugin`·`jq`, 워크플로의 모듈 저장소 읽기
-토큰(`MODULE_READER_*`). hub를 구축할 때 이미 설치했다면 이 절은 건너뛴다.
+hub와 같다: `tofu`·`aws`·`gh`·`session-manager-plugin`·`jq`. hub를 구축할 때 이미 설치했다면
+이 절은 건너뛴다.
 
 ### 1. 착수 전에 확정할 값: hub와 다른 것만
 
