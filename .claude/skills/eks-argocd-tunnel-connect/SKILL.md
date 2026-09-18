@@ -1,5 +1,5 @@
 ---
-name: argocd-tunnel-connect
+name: eks-argocd-tunnel-connect
 description: hub ArgoCD 콘솔(https://localhost:8080)에 접속하기 위한 2단 SSM 터널을 연다(로컬 SSM 세션 → hub workbench → kubectl port-forward → argocd-server). 사용자가 "argocd 터널 연결", "argocd 콘솔 접속", "argocd UI 보고 싶다"고 할 때 사용한다. 멱등적이다. 이미 정상 연결돼 있으면 아무것도 하지 않는다.
 ---
 
@@ -22,7 +22,7 @@ hub ArgoCD 콘솔을 로컬 브라우저에서 열 수 있게 하는 2단 터널
 ## 실행
 
 ```bash
-bash .claude/skills/argocd-tunnel-connect/scripts/connect.sh [LOCAL_PORT]
+bash .claude/skills/eks-argocd-tunnel-connect/scripts/connect.sh [LOCAL_PORT]
 ```
 
 `LOCAL_PORT` 생략 시 `8080`. 출력의 마지막 줄로 결과를 판단한다:
@@ -63,7 +63,7 @@ bash .claude/skills/argocd-tunnel-connect/scripts/connect.sh [LOCAL_PORT]
 이 스킬 디렉토리 밑 `.state/`(git에 커밋되지 않는다. 에이전트 세션·워크트리 생명주기와
 묶인 공유 상태 디렉토리 대신 스킬 자체 디렉토리를 쓴다, `connect.sh` 주석 참고):
 `local-watchdog.pid` · `instance-id.txt` · `local-port.txt` · `local-watchdog.log`.
-`argocd-tunnel-disconnect` 스킬이 이 파일들로 무엇을 정리해야 하는지 찾는다. 직접 지우지 않는다.
+`eks-argocd-tunnel-disconnect` 스킬이 이 파일들로 무엇을 정리해야 하는지 찾는다. 직접 지우지 않는다.
 
 ## 전제
 
