@@ -145,7 +145,7 @@ module "workbench" {
   #    유일한 도달 지점이다. ArgoCD는 클러스터 안에서 자율로 도므로 영향 없다.
   # ⚠️ instance_type을 여기서 지정하지 않는다. 모듈 기본값이 안전한 값이어야 고객사가 그대로
   #    써도 부팅이 성공하는데, 이 루트가 덮어쓰면 그 계약을 검증하지 못한다.
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/workbench?ref=workbench-v0.8.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/workbench?ref=workbench-v0.9.0&depth=1"
 
   naming = {
     workload    = var.workload
