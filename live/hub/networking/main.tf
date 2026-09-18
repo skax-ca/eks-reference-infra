@@ -53,7 +53,7 @@ module "vpc" {
   #    받는다. SSH URL로 바꾸면 키가 없는 CI에서 깨진다.
   # ⛔ ?ref=는 정확 태그 핀이다. git 소싱에 ~>는 동작하지 않는다. 업그레이드는 이 줄을 올리는
   #    명시적 커밋이고 그 커밋이 곧 승격 게이트다.
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/vpc?ref=vpc-v0.4.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/vpc?ref=vpc-v0.5.0&depth=1"
 
   # 리소스 타입 약어는 모듈이 조합한다. {demo, hub, an2} → vpc-demo-hub-an2-main
   naming = {
