@@ -11,8 +11,10 @@
 #    Dependabot PR을 읽지 않고 머지하지 않는다. PR에서 verify.yml 이 돌고, 머지 뒤 그 루트를
 #    건드린 push 가 plan 을 띄우고, apply 는 environment 승인을 기다린다.
 #
-# ⚠️ provider 버전은 이 설정이 다루지 않는다. .terraform.lock.hcl 은 tofu init -upgrade 가
-#    갱신하고, 그 명령은 모듈 태그만 올릴 때 쓰지 않는다(lock 까지 같이 움직인다).
+# provider 도 함께 본다. 모듈 PR 은 main.tf 의 source 한 줄만, provider PR 은 그 루트의
+# .terraform.lock.hcl 만 건드린다(version 과 hashes 를 바꾸고 constraints 는 그대로 둔다).
+# 둘이 다른 PR 로 갈리는 것이 이 설정의 이점이다. tofu init -upgrade 는 모듈 태그만 올리려는
+# 커밋에 lock 갱신을 끼워 넣는데, CI 는 lock 을 존중해 증상이 바로 뜨지 않는다.
 version: 2
 updates:
   - package-ecosystem: "opentofu"
