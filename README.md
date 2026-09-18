@@ -46,7 +46,7 @@ dispatch는 새 plan이라 승인을 다시 받는다. plan artifact는 7일 보
 | hub를 구축·철거한다 | [`docs/hub-lifecycle.md`](docs/hub-lifecycle.md) |
 | spoke를 구축·철거한다 | [`docs/spoke-lifecycle.md`](docs/spoke-lifecycle.md) |
 | 이미 구축된 환경을 운영한다 | [`docs/runbooks.md`](docs/runbooks.md) |
-| state 버킷·OIDC·IAM Role을 만든다(IaC 밖) | [`bootstrap/README.md`](bootstrap/README.md) |
+| state 버킷·CI 신원(OIDC·IAM Role 2단)을 만든다(IaC 밖) | [`bootstrap/README.md`](bootstrap/README.md) |
 | 셸·문서 게이트를 손본다 | [`scripts/README.md`](scripts/README.md) |
 | 왜 이 패턴인가 | `iac-module-library`의 [`docs/architectures/gitops-hub-spoke/aws/`](https://github.com/skax-ca/iac-module-library/tree/main/docs/architectures/gitops-hub-spoke/aws) |
 
@@ -63,3 +63,9 @@ GITHUB_TOKEN=$(gh auth token) tflint --init
 
 `.tf`·워크플로·셸 변경은 브랜치 → PR이다. `verify.yml`이 훅과 같은 게이트를 PR에서 다시 돌아
 훅이 꺼진 클론과 fork PR을 막는다. 문서만 바뀌는 커밋은 `main` 직접이다.
+
+---
+
+## 라이선스
+
+[MIT](LICENSE).
