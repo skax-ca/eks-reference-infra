@@ -36,7 +36,6 @@ brew install --cask session-manager-plugin
 | EKS 엔드포인트 public 여부 | `false` | 정책상 되돌리기 어렵다 |
 | hub를 어디 둘지(같은 계정/분리 계정) | 분리 계정 | 「질문 D」 계열 재구축 |
 
-
 ### 2. 배포 저장소 만들기
 
 ```bash
@@ -89,6 +88,9 @@ for_each argument`로 실패한다. `needs:`로 순서 강제는 불가하다).
 ```bash
 gh workflow run deploy-hub-tgw.yml --ref main -f action=apply
 ```
+
+run은 plan까지 돌고 apply job은 environment 승인을 기다린다. Summary 탭의 plan 요약을 읽고 **Review deployments**로 승인하면 같은 run이 저장된 plan을 적용한다(`gh run watch <run-id>`).
+main push가 만든 run도 같은 경로라, 이미 승인 대기 중인 run이 있으면 dispatch 없이 그것을 승인한다. 이 문서의 모든 apply 명령이 같다.
 
 ```bash
 cat > live/hub/networking/backend.hcl <<'EOF'
@@ -310,10 +312,10 @@ gh workflow run deploy-hub-tgw.yml --ref main \
 job이다. **TGW는 반드시 마지막이다**: hub 자신의 attachment가 `live/hub/networking`
 소속이라, 그게 먼저 사라져야(attachment `deleted`) TGW destroy가 막히지 않는다.
 
-> 🔴 **"읽고 누른다"의 "누른다"는 이미 지나간 뒤다.** `plan` job이 끝나자마자 `apply` job이
-> 자동으로 이어진다: 진짜 승인 지점은 **dispatch 자체를 누르기 전**이다. `confirm` 문자열은
-> 잘못된 루트를 파괴하는 사고만 막지 예상 밖 자원은 못 막는다: dispatch 전에 13절의
-> `teardown-verify.sh`나 `aws ec2 describe-*`로 태그 기준 현황을 먼저 본다.
+> 🔴 **승인 지점은 plan 뒤다.** `plan` job이 `-destroy`로 끝나면 `apply` job이 승인을 기다린다.
+> Summary의 파기 목록(`must be destroyed`)을 읽고 승인한다. `confirm` 문자열은 잘못된 루트를
+> 파괴하는 사고만 막지 예상 밖 자원은 못 막는다: 승인 전에 13절의 `teardown-verify.sh`나
+> `aws ec2 describe-*`로 태그 기준 현황을 대조한다.
 
 ```bash
 aws eks list-clusters       # 우리 클러스터가 없어야 한다

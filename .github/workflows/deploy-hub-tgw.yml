@@ -1,11 +1,11 @@
-# live/hub/tgw: plan(main push) → 사람이 요약을 읽고 dispatch → plan → apply
+# live/hub/tgw: plan(main push) → 사람이 그 run의 요약을 읽고 승인 → 같은 run이 apply
 #
 # 설계 원칙(한 워크플로 두 job, plan job에 environment 없음, apply는 tofu apply tfplan, destroy
 # 확인 게이트)은 deploy-hub-network.yml 헤더가 근거를 설명한다. 여기 반복하지 않는다.
 #
-# ⚠️ 이 워크플로는 deploy-hub-network.yml보다 먼저 dispatch돼야 한다. GitHub Actions는 별도
+# ⚠️ 이 워크플로의 apply가 deploy-hub-network.yml보다 먼저 승인돼야 한다. GitHub Actions는 별도
 #    워크플로 파일 사이에 needs:로 순서를 강제할 수 없다. hub를 처음부터 세울 때 이 워크플로의
-#    apply가 끝난 뒤에 사람이 deploy-hub-network.yml을 dispatch한다. 순서를 어기면 그 워크플로의
+#    apply가 끝난 뒤에 deploy-hub-network.yml의 apply를 승인한다. 순서를 어기면 그 워크플로의
 #    spoke 자동 발견 for_each가 Invalid for_each argument로 실패한다(TGW가 아직 없어서).
 
 name: deploy · live/hub/tgw
@@ -156,15 +156,17 @@ jobs:
         with:
           name: tfplan-${{ github.run_id }}
           path: ${{ env.TF_ROOT }}/tfplan
-          retention-days: 1
+          retention-days: 7
           if-no-files-found: error
 
   apply:
     name: apply
     needs: plan
-    if: >-
-      github.event_name == 'workflow_dispatch'
-      && github.ref == 'refs/heads/main'
+    # 승인 게이트는 environment의 required reviewers다. push든 dispatch든 plan 뒤에 멈춘다.
+    # ⚠️ 브랜치 조건: workflow_dispatch는 임의 브랜치에서 눌릴 수 있다. Environment의 deployment
+    #    branch policy(main 하나)가 최종 방어선이지만, job 조건으로도 막아 두면 실패가 아니라
+    #    skip으로 끝난다.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: hub
     permissions:

@@ -67,6 +67,11 @@ hub와 같은 방식으로 `backend.hcl`을 만들고(`key = "dev/networking.tfs
 gh workflow run deploy-dev-network.yml --ref main -f action=apply
 ```
 
+run은 plan까지 돌고 apply job은 environment 승인을 기다린다. run의 Summary 탭에서 plan 요약을
+읽고 **Review deployments**로 승인하면 같은 run이 저장된 plan을 적용한다(`gh run watch <run-id>`로
+따라간다). main push가 만든 run도 같은 경로라, 이미 승인 대기 중인 run이 있으면 dispatch 없이
+그것을 승인한다. 이 문서의 모든 apply 명령이 같다.
+
 ✅ **apply 안에서 자동으로 수락한다. 사람 개입이 필요 없다.**
 RAM 초대는 `deploy-dev-network.yml` plan job의 CI 단계가 수락한다(설계 배경은
 `iac-module-library`의 `docs/architectures/gitops-hub-spoke/aws/network.md` 「RAM 초대 수락은
@@ -279,9 +284,8 @@ hub의 spoke 라우트(`aws_route.vpc_to_spoke`·`aws_ec2_transit_gateway_route.
 - hub를 재적용하지 않고 방치해도 에러는 안 난다. blackhole 라우트가 트래픽만 조용히
   막을 뿐이고, 다음 spoke가 재배포돼도 그 spoke의 CIDR과 겹치지 않는 한 무관하다.
 
-⚠️ `deploy-hub-network.yml`은 `workflow_dispatch`에서 **plan job이 끝나면 곧바로 apply
-job이 같은 run 안에서 이어진다.** "plan만 미리 보고 멈추는" 옵션은 없다. 정리할 각오가
-됐을 때만 dispatch한다.
+⚠️ `deploy-hub-network.yml`의 apply는 승인 뒤에 같은 run 안에서 이어진다. plan 요약의
+라우트 삭제 목록을 읽고 정리할 각오가 됐을 때만 승인한다.
 
 ### 14. 재배포 시 GitOps 재등록
 

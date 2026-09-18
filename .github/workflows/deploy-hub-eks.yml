@@ -1,6 +1,6 @@
-# live/hub/eks: plan(main push) → 사람이 요약을 읽고 dispatch → plan → apply
+# live/hub/eks: plan(main push) → 사람이 그 run의 요약을 읽고 승인 → 같은 run이 apply
 #
-# deploy-hub-network.yml과 같은 규약을 EKS 루트에 적용한다. 설계 원칙(dispatch가 승인, 한 워크플로
+# deploy-hub-network.yml과 같은 규약을 EKS 루트에 적용한다. 설계 원칙(environment 승인이 게이트, 한 워크플로
 # 두 job, plan job에 environment 없음, apply는 tofu apply tfplan, destroy 경로)은 그 파일 헤더가
 # 근거를 설명한다. 독립 배포를 위해 셋을 분리한다: 경로 필터 live/hub/eks/**(networking 변경은
 # 이 워크플로를 트리거하지 않는다), state 키 hub/eks.tfstate, concurrency live-hub-eks(두 루트의
@@ -17,7 +17,7 @@ on:
     paths:
       - live/hub/eks/**
       - .github/workflows/deploy-hub-eks.yml
-  # merge 후 plan까지만 자동으로 돈다(요약은 run Summary 탭). apply는 아래 dispatch로만.
+  # merge 후 plan이 돌고 apply는 승인을 기다린다(요약은 run Summary 탭). dispatch는 destroy·replace 경로다.
   workflow_dispatch:
     inputs:
       action:
@@ -50,9 +50,8 @@ env:
   TF_IN_AUTOMATION: "1"
 
 jobs:
-  # plan: main push와 dispatch 양쪽에서 돈다. environment를 선언하지 않는다. push run의 plan은
-  # 사람이 읽으라고 도는 것이고, 적용은 그 요약을 읽은 사람이 dispatch를 눌렀을 때 그 run 안에서
-  # 일어난다.
+  # plan: main push와 dispatch 양쪽에서 돈다. environment를 선언하지 않는다. 요약은 승인자가
+  # 읽으라고 남기고, 적용은 그 요약을 읽고 승인한 뒤 같은 run 안에서 일어난다.
   plan:
     name: plan
     runs-on: ubuntu-latest
@@ -202,21 +201,18 @@ jobs:
         with:
           name: tfplan-eks-${{ github.run_id }}
           path: ${{ env.TF_ROOT }}/tfplan
-          retention-days: 1
+          retention-days: 7
           if-no-files-found: error
 
-  # apply: workflow_dispatch에서만. main push에서는 skip된다.
+  # apply: plan 뒤 environment 승인을 기다린다. push·dispatch 모두 같은 경로다.
   apply:
     name: apply
     needs: plan
-    # dispatch를 누르는 행위가 승인이다(맨 위 헤더). 상위 요금제로 옮겨 environment hub에
-    # required reviewers를 걸 수 있게 되면 이 조건을 (push || workflow_dispatch)로 되돌린다.
-    # ⚠️ 브랜치 조건을 여기 한 번 더 쓰는 이유: workflow_dispatch는 임의 브랜치에서 눌릴 수 있다.
-    #    Environment의 deployment branch policy(main 하나)가 최종 방어선이지만, job 조건으로도
-    #    막아 두면 실패가 아니라 skip으로 끝난다.
-    if: >-
-      github.event_name == 'workflow_dispatch'
-      && github.ref == 'refs/heads/main'
+    # 승인 게이트는 environment의 required reviewers다. push든 dispatch든 plan 뒤에 멈춘다.
+    # ⚠️ 브랜치 조건: workflow_dispatch는 임의 브랜치에서 눌릴 수 있다. Environment의 deployment
+    #    branch policy(main 하나)가 최종 방어선이지만, job 조건으로도 막아 두면 실패가 아니라
+    #    skip으로 끝난다.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # 이 한 줄이 두 가지를 동시에 한다: 승인 게이트(protection rules가 걸려 있을 때)와 OIDC
     # sub를 ...:environment:hub로 바꾸는 것(입구 Role 신뢰 정책의 SUB_ENV_HUB 패턴).
