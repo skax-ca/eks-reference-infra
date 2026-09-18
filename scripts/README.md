@@ -35,12 +35,12 @@ VPC 기준으로 한 번 더 확인하는 것이 안전하다.
 `bash -n`(문법)과 `shellcheck -x`(인용·확장·종료코드)를 돌린다. 둘 다 통과해야 커밋이 선다.
 
 ```bash
-brew install shellcheck        # clone마다 1회. 없으면 훅이 즉시 실패한다
+brew install shellcheck gitleaks   # clone마다 1회. 없으면 훅이 즉시 실패한다
 ```
 
-⛔ CI에 두지 않았다. 배포 워크플로는 루트별 트리거라 `.sh`만 바뀐 커밋은 **어느 워크플로도
-돌리지 않고**, GitOps 저장소에는 워크플로 자체가 없어 `argocd-seed.sh`를 덮지 못한다.
-이 저장소군에서 셸을 실제로 막을 수 있는 자리는 커밋 전 훅 하나다.
+`verify.yml`이 같은 명령을 PR·main push에서 다시 돈다(shellcheck 버전을 로컬과 같게 핀한다).
+배포 워크플로는 루트별 트리거라 `.sh`만 바뀐 커밋은 어느 배포 워크플로도 돌리지 않지만,
+`verify.yml`은 경로 필터가 없어 그 커밋도 본다.
 
 `-x`는 `source`된 파일을 따라간다. 각 스크립트의 `# shellcheck source=` 지시자가 저장소 루트
 기준 경로를 주고 훅은 항상 루트에서 돌기 때문에, 그 경로가 그대로 맞는다.
