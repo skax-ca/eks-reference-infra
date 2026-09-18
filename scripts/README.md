@@ -7,6 +7,7 @@
 | `teardown-verify.sh` | 철수 후 잔존물 검사(읽기 전용). 지우지 않고 남은 것만 찾는다 | `docs/hub-lifecycle.md`, `docs/spoke-lifecycle.md` |
 | `validate-doc-conventions.py` | 이 저장소 문서(`docs/*.md`·`README.md`·`AGENTS.md`·`CLAUDE.md`)의 작성 규칙 검사 | `.githooks/pre-commit` |
 | `validate-comment-conventions.py` | `.tf`·셸·검사기·훅·워크플로·`dependabot.yml`의 주석에서 외부 참조와 이력 서술 검사. 적용 범위는 검사기 자신이 갖는다 | `.githooks/pre-commit`(해당 파일 staged 시)와 `verify.yml` |
+| `report-module-tag-drift.py` | 루트들이 같은 모듈을 다른 태그로 소싱하는지 보고. ⚠️ 검사기가 아니라 보고기다 — 갈려 있어도 실패시키지 않고 Summary에 표만 남긴다 | `verify.yml` |
 
 ⚠️ 모든 스크립트는 환경값을 하드코딩하지 않는다. 대상 계정·클러스터 이름 같은 값은 전부
 환경변수나 인자로 받는다.
