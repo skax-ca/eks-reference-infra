@@ -1,6 +1,7 @@
 # CLAUDE.md
 
-AWS hub-spoke EKS 배포 루트. `iac-module-library`의 모듈을 소비해 세우고 걷어낸다.
+AWS hub-spoke EKS 배포 루트. `iac-module-library`의 모듈을 소비해 인프라를 구축하고 철거한다.
+저장소 소개와 문서 라우팅은 `README.md`가 소유한다.
 규칙(엔진·실행 모델·브랜치·네이밍·주석·문서·모듈 계약 확인)은 `iac-module-library/CLAUDE.md`의
 「배포 루트 공통」이 갖는다. 이 파일은 이 repo의 값과 문서 위치만 갖는다.
 
