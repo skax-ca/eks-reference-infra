@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# argocd-tunnel-connect 로 연 hub ArgoCD 터널을 해제한다. 로컬 watchdog·SSM 세션·
+# eks-argocd-tunnel-connect 로 연 hub ArgoCD 터널을 해제한다. 로컬 watchdog·SSM 세션·
 # 원격 kubectl port-forward watchdog 을 전부 정리한다.
 set -uo pipefail
 
 AWS_PROFILE_NAME="team"
 REGION="ap-northeast-2"
 
-# connect.sh가 쓴 상태 폴더를 그대로 읽는다(짝 스킬 argocd-tunnel-connect 밑의 .state/,
+# connect.sh가 쓴 상태 폴더를 그대로 읽는다(짝 스킬 eks-argocd-tunnel-connect 밑의 .state/,
 # 전용 상태 폴더를 쓰는 이유는 connect.sh 쪽 주석 참고).
-STATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/argocd-tunnel-connect/.state"
+STATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/eks-argocd-tunnel-connect/.state"
 PID_FILE="$STATE_DIR/local-watchdog.pid"
 INSTANCE_FILE="$STATE_DIR/instance-id.txt"
 PORT_FILE="$STATE_DIR/local-port.txt"

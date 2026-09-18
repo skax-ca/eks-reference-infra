@@ -31,11 +31,13 @@ nv                   # eks-node-viewer
 ## 2. ArgoCD 웹 UI 접속: 2홉
 
 ArgoCD `Service`는 `ClusterIP`다. 노출을 만들지 않고 기존 인증 채널 위에 스트림만 얹는다.
+평소에는 `eks-argocd-tunnel-connect` 스킬(`.claude/skills/`, 멱등·자동 재연결)을 쓴다. 아래는
+같은 일을 손으로 한다.
 
 ```bash
 # 1홉: workbench 안에서 port-forward
 export HOME=/root KUBECONFIG=/root/.kube/config
-setsid nohup kubectl -n argocd port-forward svc/argocd-server 18080:443 \
+setsid nohup kubectl -n argocd port-forward svc/argocd-server 8080:443 \
   --address 127.0.0.1 > /tmp/argocd-pf.log 2>&1 < /dev/null &
 
 # 2홉: 로컬에서 SSM 포트 포워딩

@@ -141,7 +141,7 @@ helm_version    = "v3.21.3"
 argocd_version  = "v3.5.0"     # ArgoCD 차트 appVersion과 맞춘다
 ```
 
-apply 후 접근을 확인한다:
+apply 후 접근을 확인한다. ArgoCD 콘솔은 `eks-argocd-tunnel-connect` 스킬(2단 SSM 터널)을 쓰고, 손으로 여는 절차는 `runbooks.md` 「ArgoCD 웹 UI 접속」이 갖는다.
 
 ```bash
 aws ssm start-session --target <instance-id>

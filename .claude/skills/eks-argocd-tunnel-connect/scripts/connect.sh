@@ -11,10 +11,10 @@ AWS_PROFILE_NAME="team"
 REGION="ap-northeast-2"
 LOCAL_PORT="${1:-8080}"
 
-# 이 스킬 디렉토리(argocd-tunnel-connect) 밑에 전용 상태 폴더를 둔다. 에이전트 세션·
+# 이 스킬 디렉토리(eks-argocd-tunnel-connect) 밑에 전용 상태 폴더를 둔다. 에이전트 세션·
 # 워크트리 생명주기에 묶인 공유 상태 디렉토리는 워크트리 삭제 시 함께 지워질 수 있어
 # PID 추적 파일을 두기에 부적절하다. scripts/ 의 부모(스킬 루트) 밑에 .state/를 둔다.
-# aks-reference-infra의 argocd-tunnel-connect가 이미 이 방식으로 포팅돼 있다.
+# aks-reference-infra의 aks-argocd-tunnel-connect가 이미 이 방식으로 포팅돼 있다.
 STATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.state"
 mkdir -p "$STATE_DIR"
 PID_FILE="$STATE_DIR/local-watchdog.pid"
