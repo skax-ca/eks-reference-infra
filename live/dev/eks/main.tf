@@ -229,7 +229,7 @@ module "workbench" {
 #    생성을 허용한다(없으면 "Invalid principal in policy").
 # ⛔ vpc/eks-cluster/workbench 체인과 독립이다. naming만 공유하고 다른 모듈 출력을 참조하지 않는다.
 module "argocd_trust" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/cross-account-trust-role?ref=cross-account-trust-role-v0.3.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/cross-account-trust-role?ref=cross-account-trust-role-v0.4.0&depth=1"
 
   naming = {
     workload    = var.workload
