@@ -59,8 +59,8 @@ OIDC provider는 URL당 계정에 1개 제약이라 계정이 다르면 각자 �
 
 ### 4. 네트워크 (L1): TGW attachment + RAM 초대 수락
 
-hub와 같은 방식으로 `backend.hcl`을 만들고(`key = "dev/networking.tfstate"`) `init`·
-`validate`까지 로컬에서 한다. `main.tf`는 hub의 TGW·프리픽스 리스트를 `data` 소스로
+hub와 같은 방식으로 그 루트의 `backend.hcl.example`을 복사해 `backend.hcl`을 만들고 `init`·
+`validate`까지 로컬에서 한다(`key`는 예시 파일이 이미 갖고 있다). `main.tf`는 hub의 TGW·프리픽스 리스트를 `data` 소스로
 발견해 attachment와 라우트를 만든다.
 
 ```bash

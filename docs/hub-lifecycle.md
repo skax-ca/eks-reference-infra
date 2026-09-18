@@ -93,18 +93,15 @@ run은 plan까지 돌고 apply job은 environment 승인을 기다린다. Summar
 main push가 만든 run도 같은 경로라, 이미 승인 대기 중인 run이 있으면 dispatch 없이 그것을 승인한다. 이 문서의 모든 apply 명령이 같다.
 
 ```bash
-cat > live/hub/networking/backend.hcl <<'EOF'
-bucket       = "<bootstrap.sh 가 출력한 버킷명>"
-key          = "hub/networking.tfstate"
-region       = "ap-northeast-2"
-use_lockfile = true
-EOF
-
-tofu -chdir=live/hub/networking init -backend-config=backend.hcl
-tofu -chdir=live/hub/networking validate
+cd live/hub/networking
+cp backend.hcl.example backend.hcl     # bucket 줄을 bootstrap.sh 가 출력한 버킷명으로 채운다
+tofu init -backend-config=backend.hcl
+tofu validate
 ```
 
-`backend.hcl`은 `.gitignore` 대상이라 루트마다 새로 만든다. 커밋하지 않는다.
+`backend.hcl`은 `.gitignore` 대상이라 루트마다 새로 만든다. 커밋하지 않는다. 루트마다
+`backend.hcl.example`이 있고 `key`가 그 루트 값으로 채워져 있으니 손으로 적지 않는다 —
+`key`를 잘못 쓰면 다른 루트의 state를 덮어쓴다.
 
 > 🔴 **로컬에서 `plan`·`apply`는 성립하지 않는다.** provider가 실행 Role을 assume하는데 그
 > Role은 입구 Role만 신뢰한다: 개인 IAM user로는 관리자여도 `AccessDenied`다. **로컬은

@@ -1,0 +1,18 @@
+# backend.hcl 의 형태를 보여주는 예시(gitignore 대상인 실제 backend.hcl 은 이 파일을 복사해
+# 진짜 버킷명으로 채운다). 이 파일 자체는 값을 채우지 않은 placeholder 라 커밋해도 안전하다.
+# live/hub/tgw·live/hub/eks 의 backend.hcl.example 과 같은 버킷을 쓰되(hub 계정) key 만 다르다 —
+# state 는 root 마다 분리한다.
+#
+# 사용법: cp backend.hcl.example backend.hcl 후 아래 값을 채운 뒤
+#         tofu init -backend-config=backend.hcl
+#
+# ⚠️ 이 형태는 로컬 전용이다. CI 가 조립하는 backend.hcl 은 실행 Role 을 assume 하는
+#    assume_role 블록을 더 갖는다(.github/workflows/deploy-*.yml). 로컬은 작업자 자신의
+#    자격증명으로 버킷을 읽으므로 그 블록이 없다. 로컬에서 되는 것은 init·validate 까지다.
+
+# 실제 값은 bootstrap 실행 로그 또는 GitHub repo 변수(HUB_TF_STATE_BUCKET)에서 확인한다.
+# 형태: s3-<workload>-<env>-<region>-tfstate-<접미>(bootstrap/config.sh 의 *_BUCKET_PREFIX).
+bucket       = "s3-demo-hub-an2-tfstate-XXXXXXXX"
+key          = "hub/networking.tfstate"
+region       = "ap-northeast-2"
+use_lockfile = true
