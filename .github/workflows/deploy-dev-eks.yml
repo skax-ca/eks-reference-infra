@@ -72,16 +72,16 @@ jobs:
           fi
           echo "::warning::destroy 계획을 세운다: live/dev/eks"
 
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: opentofu/setup-opentofu@v2.0.2
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
           tofu_version: ${{ env.TOFU_VERSION }}
 
       # OIDC 2단 체인의 1단. 입구 Role의 권한은 "실행 Role을 assume" 하나뿐이다. 정적 키는
       # 어디에도 없다.
       - name: AWS 인증 (입구 Role)
-        uses: aws-actions/configure-aws-credentials@v6.2.3
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: ${{ vars.DEV_AWS_ENTRY_ROLE_ARN }}
           aws-region: ap-northeast-2
@@ -202,7 +202,7 @@ jobs:
       # ⚠️ plan 파일에는 리소스 속성이 평문으로 들어간다. repo read 권한자가 받을 수 있으므로
       #    보관을 하루로 제한한다. 이는 완화이지 해결이 아니다.
       - name: plan artifact 업로드
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tfplan-eks-${{ github.run_id }}
           path: ${{ env.TF_ROOT }}/tfplan
@@ -237,14 +237,14 @@ jobs:
       # checkout·setup·인증은 plan job과 같다. 자격증명은 job 간에 이동하지 않으므로 재수행한다
       # (중복이 아니라 격리). 승인 대기 중 세션(최대 1시간, 연장 불가)이 만료돼도 apply job이 새로
       # 인증하므로 승인 지연 자체는 문제가 되지 않는다.
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: opentofu/setup-opentofu@v2.0.2
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
           tofu_version: ${{ env.TOFU_VERSION }}
 
       - name: AWS 인증 (입구 Role)
-        uses: aws-actions/configure-aws-credentials@v6.2.3
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: ${{ vars.DEV_AWS_ENTRY_ROLE_ARN }}
           aws-region: ap-northeast-2
@@ -280,7 +280,7 @@ jobs:
 
       # 같은 run의 artifact다. run 경계를 넘지 않는 것이 이 설계의 핵심이다.
       - name: plan artifact 내려받기
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: tfplan-eks-${{ github.run_id }}
           path: ${{ env.TF_ROOT }}
