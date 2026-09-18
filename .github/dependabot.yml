@@ -1,0 +1,32 @@
+# Dependabot — iac-module-library 모듈 태그의 새 릴리스를 PR로 알린다.
+#
+# 이 저장소는 모듈을 git 소스로 소싱한다(source = "git::...//modules/aws/vpc?ref=vpc-v0.4.0&depth=1").
+# git 소스에는 version 제약을 쓸 수 없어 태그가 코드에 박히고, 새 태그가 나온 것을 사람이
+# 기억해야 알 수 있었다. Dependabot은 module 블록의 "?ref=<태그>"를 새 태그로 바꾼 PR을 올린다.
+#
+# 생태계는 opentofu다. 이 저장소의 엔진이 tofu 단독이라서다(terraform 값도 같은 .tf 를 읽지만
+# 엔진과 이름을 맞춘다). 버전 업데이트만 지원하고 보안 업데이트는 지원하지 않는다.
+#
+# ⚠️ 이 저장소의 모듈은 전부 개발 단계(0.y.z)라 마이너 올림에 파괴적 변경이 들어 있을 수 있다.
+#    Dependabot PR을 읽지 않고 머지하지 않는다. PR에서 verify.yml 이 돌고, 머지 뒤 그 루트를
+#    건드린 push 가 plan 을 띄우고, apply 는 environment 승인을 기다린다.
+#
+# ⚠️ provider 버전은 이 설정이 다루지 않는다. .terraform.lock.hcl 은 tofu init -upgrade 가
+#    갱신하고, 그 명령은 모듈 태그만 올릴 때 쓰지 않는다(lock 까지 같이 움직인다).
+version: 2
+updates:
+  - package-ecosystem: "opentofu"
+    # 배포 루트 5개가 각각 독립 state 다. 루트마다 태그를 따로 올릴 수 있어야 한다.
+    directories:
+      - "/live/hub/networking"
+      - "/live/hub/tgw"
+      - "/live/hub/eks"
+      - "/live/dev/networking"
+      - "/live/dev/eks"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore(deps)"
+    # 모듈 4종 × 루트 5개라 한 주에 여러 건이 뜰 수 있다. 기본값(5)보다 넉넉히 둔다.
+    open-pull-requests-limit: 10
