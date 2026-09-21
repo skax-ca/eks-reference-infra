@@ -26,6 +26,10 @@ nv                   # eks-node-viewer
 > `send-command`로 비밀·자격증명을 조회하지 않는다. 출력이 SSM에 저장되고 CloudTrail에 남는다.
 > 값을 봐야 하면 **대화형 세션**에서 사람이 직접 읽는다.
 
+> `AWS-StartInteractiveCommand`로 넘긴 명령은 세션이 끝나면 함께 죽는다. `nohup … & disown`으로는
+> 살아남지 못한다. 세션 뒤에도 돌아야 하는 작업(seed 스크립트 등)은
+> `setsid nohup … > 로그 2>&1 < /dev/null &`로 세션에서 떼어 낸다.
+
 ---
 
 ## 2. ArgoCD 웹 UI 접속: 2홉
@@ -79,6 +83,7 @@ kubectl -n argocd delete secret argocd-initial-admin-secret
 | `--insecure`의 뜻 | **클라이언트** 인증서 검증 생략이다. 서버 TLS를 끄는 것이 아니다 |
 | `broken pipe` 로그 | 포워더가 CLI 안에서 돌아 stderr로 섞인다. **실패가 아니다**(`2>`로 분리한다) |
 | 새 비밀번호 | `^.{8,32}$`를 만족해야 한다 |
+| tty 없이는 프롬프트가 안 된다 | `update-password`는 터미널을 요구해 stdin 파이프로는 `inappropriate ioctl for device`로 죽는다(`login`은 파이프가 된다). 비대화형으로 하려면 `--current-password`·`--new-password` 플래그다. 값이 argv에 남으므로 팀 소유 workbench에서만 쓴다. 플래그로 바꿨다면 명령이 성공한 **뒤에** 초기 Secret을 지운다 |
 
 교체 확인:
 
