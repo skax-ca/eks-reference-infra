@@ -26,6 +26,9 @@ nv                   # eks-node-viewer
 > `send-command`로 비밀·자격증명을 조회하지 않는다. 출력이 SSM에 저장되고 CloudTrail에 남는다.
 > 값을 봐야 하면 **대화형 세션**에서 사람이 직접 읽는다.
 
+> `AWS-StartInteractiveCommand`는 `ssm-user`로 돌아 root의 kubeconfig를 못 읽는다.
+> `sudo env KUBECONFIG=/root/.kube/config kubectl …`로 넘긴다.
+
 > `AWS-StartInteractiveCommand`로 넘긴 명령은 세션이 끝나면 함께 죽는다. `nohup … & disown`으로는
 > 살아남지 못한다. 세션 뒤에도 돌아야 하는 작업(seed 스크립트 등)은
 > `setsid nohup … > 로그 2>&1 < /dev/null &`로 세션에서 떼어 낸다.

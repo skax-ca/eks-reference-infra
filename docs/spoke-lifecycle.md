@@ -211,7 +211,28 @@ kubectl get nodepools 2>&1   # Karpenter를 쓰면 NodePool CR도 없어야 함(
 
 # ⑥ ④⑤ 확인 후에만 cluster-secret.yaml을 완전히 삭제해 클러스터 등록 자체를 해제한다
 #    (server/config까지 포함해 전체 삭제 — 이 시점엔 정리할 것이 이미 없어 안전하다)
+#    root-app은 prune=false라 파일을 지워도 hub의 라이브 Secret은 남고 OutOfSync가 된다.
+#    머지 뒤 hub에서 직접 지운다.
+kubectl -n argocd delete secret <spoke-cluster-name>
 ```
+
+🔴 **Karpenter뿐 아니라 ALBC가 소유한 CR도 같은 식으로 스턱된다.** ApplicationSet이 ALBC
+Application과 gateway Application을 병렬로 prune하면 ALBC가 먼저 사라져 `Gateway`
+(`gateway.k8s.aws/alb`)·`GatewayClass`(`gateway.k8s.aws/gatewayclass`)·
+`LoadBalancerConfiguration`(`gateway.k8s.aws/loadbalancerconfigurations`)가 `deletionTimestamp`를
+낀 채 남고, gateway Application은 `Progressing`에서 멈춘다. ALB는 ALBC가 죽기 전에 지워졌는데도
+백엔드·LB용 SG 2개(`elbv2.k8s.aws/cluster` 태그)가 고아로 남는다. 복구 전에 ALB·TargetGroup이
+남았는지 먼저 본다.
+
+```bash
+aws elbv2 describe-load-balancers        # 이 클러스터 것(alb-<workload>-<env>-*)이 없어야 한다
+aws ec2 describe-security-groups --filters "Name=tag:elbv2.k8s.aws/cluster,Values=<cluster-name>"
+kubectl patch <kind> <name> --type merge -p '{"metadata":{"finalizers":[]}}'   # 3종 각각
+aws ec2 delete-security-group --group-id <sg-id>                                # LB용 → 백엔드 순
+```
+
+ALB가 남아 있으면 patch 전에 태그로 특정해 먼저 지운다. 피하려면 ①에 앞서 spoke의 workbench에서
+`kubectl delete gateway --all -A`를 먼저 돌려 ALBC가 살아 있는 동안 ALB를 회수시킨다.
 
 🔴 **④에서 NodePool은 사라졌는데 EC2NodeClass가 `deletionTimestamp`를 낀 채 남아 있으면
 Karpenter의 `karpenter.k8s.aws/termination` finalizer가 스턱된 것이다.** ApplicationSet이
@@ -280,7 +301,9 @@ hub의 spoke 라우트(`aws_route.vpc_to_spoke`·`aws_ec2_transit_gateway_route.
   데이터소스가 그 attachment를 더 이상 반환하지 않게 됐을 뿐이라, **다음 hub networking
   plan/apply를 실제로 돌려야** 그 spoke의 라우트 2개가 destroy 대상으로 잡히고 정리된다.
   **코드 수정은 필요 없다.** TGW 자체·RAM 공유·hub 자신의 attachment/route는 그대로 유지된 채
-  그 spoke의 라우트만 없어진다.
+  그 spoke의 라우트만 없어진다. `action=plan`이 잡는 것은 TGW static route 1건과 hub VPC
+  라우트 4건뿐이고 그 밖의 변경은 0건이다. 이 구간에서 blackhole은 TGW 라우트 테이블의 그
+  static route뿐이다. hub VPC 라우트 테이블의 spoke 라우트는 TGW를 가리키므로 `active`로 남는다.
 - hub를 재적용하지 않고 방치해도 에러는 안 난다. blackhole 라우트가 트래픽만 조용히
   막을 뿐이고, 다음 spoke가 재배포돼도 그 spoke의 CIDR과 겹치지 않는 한 무관하다.
 
