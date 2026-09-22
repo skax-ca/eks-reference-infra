@@ -5,7 +5,8 @@
 > ⚠️ **hub가 먼저 구축되어 있어야 한다.** spoke는 hub의 `argocd_hub_pod_identity` Role·TGW·프리픽스
 > 리스트에 의존한다. `hub-lifecycle.md`부터 본다.
 > **검증 상태**: 구축·철거 둘 다 `eks-reference-infra`의 dev(spoke 첫 인스턴스)로
-> 실환경 검증했다. spoke 단독 teardown 시 hub 쪽 잔존물 처리(13절)는 **열린 질문**이다.
+> 실환경 검증했다. spoke 단독 teardown 뒤 hub 잔존 라우트(13절)도 `action=plan`으로 확인했다.
+> ⏳ 10절 ⓪(`decommission` 라벨)은 아직 실환경에서 돌려 보지 않았다.
 
 레퍼런스 구현이 `eks-reference-infra`의 `live/dev/`에 있다.
 
@@ -182,9 +183,18 @@ generator가 이 클러스터를 fan-out 대상으로 판단하는 라벨(`envir
 통째로 지우면 ArgoCD가 그 클러스터에 접속할 방법 자체를 잃어(`no clusters with this name`,
 argoproj/argo-cd#5817) cascade delete가 물리적으로 불가능해지고, Application 추적 기록만
 사라질 뿐 실제 Deployment·DaemonSet·Webhook·ClusterPolicy는 spoke 클러스터에 orphan으로
-남는다. **두 역할을 분리해 2단계로 진행한다**:
+남는다. **CR을 먼저 치우고(⓪), 그다음 두 역할을 분리해 진행한다**. ⓪이 따로 있는 이유(Argo CD가
+Application 사이의 삭제 순서를 보장하지 않는다)는 `iac-module-library`의
+`docs/architectures/gitops-hub-spoke/aws/`가 갖는다:
 
 ```bash
+# ⓪ cluster-secret.yaml에 decommission 라벨을 붙여 머지한다(값은 읽지 않는다). gateway·
+#    karpenter-nodepool ApplicationSet만 이 클러스터를 놓아, ALBC·Karpenter가 살아 있는 동안
+#    Gateway·NodePool·EC2NodeClass가 지워진다. root-app 반영은 ②와 같은 방법으로 본다.
+kubectl -n argocd get applications | grep -E '<spoke-cluster-name>-(gateway|karpenter-nodepool)'  # hub: 없어야 함
+kubectl get gateway -A; kubectl get nodepools,ec2nodeclasses                                      # spoke: 없어야 함
+aws ec2 describe-security-groups --filters "Name=tag:elbv2.k8s.aws/cluster,Values=<cluster-name>"  # 0개
+
 # ① 매칭 라벨만 먼저 지운다 — secret-type과 server/config(접속 정보)는 그대로 둔다.
 #    이렇게 하면 ApplicationSet은 이 클러스터를 더 이상 발견 못 해 Application을
 #    정상적으로 제거하려 하고, 그 순간에도 ArgoCD는 여전히 이 클러스터에 접속 가능해
@@ -206,8 +216,8 @@ kubectl get nodepools 2>&1   # Karpenter를 쓰면 NodePool CR도 없어야 함(
 
 # ⑤ ④는 GitOps가 만든 addon 자신만 다룬다 — 실제 워크로드가 만든 LB·PVC·Karpenter
 #    NodeClaim(addon이 아니라 사용자가 배포한 앱이 낳은 것)은 여전히 별도 대상이다.
-#    hub-lifecycle.md 11절과 동일한 패턴으로 이 spoke의 workbench에서 정리한다 —
-#    hub가 이미 fan-out을 멈췄으니 지워도 되살아나지 않는다.
+#    hub의 IaC 밖 자원 선처리와 동일한 패턴(컨트롤러 정지 → LB·PVC·NodePool 삭제)으로
+#    이 spoke의 workbench에서 정리한다 — hub가 이미 fan-out을 멈췄으니 지워도 되살아나지 않는다.
 
 # ⑥ ④⑤ 확인 후에만 cluster-secret.yaml을 완전히 삭제해 클러스터 등록 자체를 해제한다
 #    (server/config까지 포함해 전체 삭제 — 이 시점엔 정리할 것이 이미 없어 안전하다)
@@ -216,7 +226,9 @@ kubectl get nodepools 2>&1   # Karpenter를 쓰면 NodePool CR도 없어야 함(
 kubectl -n argocd delete secret <spoke-cluster-name>
 ```
 
-🔴 **Karpenter뿐 아니라 ALBC가 소유한 CR도 같은 식으로 스턱된다.** ApplicationSet이 ALBC
+아래 두 복구는 ⓪을 건너뛰었거나 ⓪ 뒤에도 CR이 남았을 때만 쓴다.
+
+🔴 **ALBC가 소유한 CR이 스턱된 경우.** ApplicationSet이 ALBC
 Application과 gateway Application을 병렬로 prune하면 ALBC가 먼저 사라져 `Gateway`
 (`gateway.k8s.aws/alb`)·`GatewayClass`(`gateway.k8s.aws/gatewayclass`)·
 `LoadBalancerConfiguration`(`gateway.k8s.aws/loadbalancerconfigurations`)가 `deletionTimestamp`를
@@ -231,10 +243,9 @@ kubectl patch <kind> <name> --type merge -p '{"metadata":{"finalizers":[]}}'   #
 aws ec2 delete-security-group --group-id <sg-id>                                # LB용 → 백엔드 순
 ```
 
-ALB가 남아 있으면 patch 전에 태그로 특정해 먼저 지운다. 피하려면 ①에 앞서 spoke의 workbench에서
-`kubectl delete gateway --all -A`를 먼저 돌려 ALBC가 살아 있는 동안 ALB를 회수시킨다.
+ALB가 남아 있으면 patch 전에 태그로 특정해 먼저 지운다.
 
-🔴 **④에서 NodePool은 사라졌는데 EC2NodeClass가 `deletionTimestamp`를 낀 채 남아 있으면
+🔴 **NodePool은 사라졌는데 EC2NodeClass가 `deletionTimestamp`를 낀 채 남아 있으면
 Karpenter의 `karpenter.k8s.aws/termination` finalizer가 스턱된 것이다.** ApplicationSet이
 karpenter 컨트롤러 Application과 karpenter-nodepool Application(NodePool·EC2NodeClass 소유)을
 병렬로 prune하면, finalizer를 처리해야 할 컨트롤러 파드가 먼저 사라져 아무도 처리하지 못한다
@@ -251,7 +262,7 @@ kubectl patch ec2nodeclass <name> --type merge -p '{"metadata":{"finalizers":[]}
 finalizer를 강제로 비워 즉시 GC시킨다. 오르판이 있으면 먼저 그 EC2 인스턴스를 정리한 뒤
 patch한다.
 
-**순서가 중요하다.** ①~⑤를 건너뛰고 Secret을 한 번에 지우면 hub의 Application 추적
+**순서가 중요하다.** ⓪~⑤를 건너뛰고 Secret을 한 번에 지우면 hub의 Application 추적
 기록은 사라지지만 실제 addon과 워크로드 잔존물은 spoke에 orphan으로 남는다. spoke
 EKS 클러스터 자체를 destroy(11절)하면 결국 함께 사라지므로 destroy 자체를 막지는
 않지만, 클러스터를 재파괴하지 않고 addon만 철거하려는 시나리오(예: 재구성 리허설)에서는
