@@ -5,7 +5,8 @@
 > ⚠️ **hub가 먼저 구축되어 있어야 한다.** spoke는 hub의 `argocd_hub_pod_identity` Role·TGW·프리픽스
 > 리스트에 의존한다. `hub-lifecycle.md`부터 본다.
 > **검증 상태**: 구축·철거 둘 다 `eks-reference-infra`의 dev(spoke 첫 인스턴스)로
-> 실환경 검증했다. spoke 단독 teardown 시 hub 쪽 잔존물 처리(13절)는 **열린 질문**이다.
+> 실환경 검증했다. spoke 단독 teardown 뒤 hub 잔존 라우트(13절)도 `action=plan`으로 확인했다.
+> ⏳ 10절 ⓪(`decommission` 라벨)은 아직 실환경에서 돌려 보지 않았다.
 
 레퍼런스 구현이 `eks-reference-infra`의 `live/dev/`에 있다.
 
