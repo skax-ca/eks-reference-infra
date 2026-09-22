@@ -206,8 +206,8 @@ kubectl get nodepools 2>&1   # Karpenter를 쓰면 NodePool CR도 없어야 함(
 
 # ⑤ ④는 GitOps가 만든 addon 자신만 다룬다 — 실제 워크로드가 만든 LB·PVC·Karpenter
 #    NodeClaim(addon이 아니라 사용자가 배포한 앱이 낳은 것)은 여전히 별도 대상이다.
-#    hub-lifecycle.md 11절과 동일한 패턴으로 이 spoke의 workbench에서 정리한다 —
-#    hub가 이미 fan-out을 멈췄으니 지워도 되살아나지 않는다.
+#    hub의 IaC 밖 자원 선처리와 동일한 패턴(컨트롤러 정지 → LB·PVC·NodePool 삭제)으로
+#    이 spoke의 workbench에서 정리한다 — hub가 이미 fan-out을 멈췄으니 지워도 되살아나지 않는다.
 
 # ⑥ ④⑤ 확인 후에만 cluster-secret.yaml을 완전히 삭제해 클러스터 등록 자체를 해제한다
 #    (server/config까지 포함해 전체 삭제 — 이 시점엔 정리할 것이 이미 없어 안전하다)
@@ -231,8 +231,12 @@ kubectl patch <kind> <name> --type merge -p '{"metadata":{"finalizers":[]}}'   #
 aws ec2 delete-security-group --group-id <sg-id>                                # LB용 → 백엔드 순
 ```
 
-ALB가 남아 있으면 patch 전에 태그로 특정해 먼저 지운다. 피하려면 ①에 앞서 spoke의 workbench에서
-`kubectl delete gateway --all -A`를 먼저 돌려 ALBC가 살아 있는 동안 ALB를 회수시킨다.
+ALB가 남아 있으면 patch 전에 태그로 특정해 먼저 지운다. ⛔ **`kubectl delete gateway --all -A`를
+①보다 먼저 돌려 회피하는 방법은 기대만큼 막지 못한다.** gateway Application의
+`syncPolicy.automated.selfHeal: true`가 몇 초 안에 되살리므로 ①(라벨 제거) 전에 지우는 것은
+효과가 없고, ① 직후로 미뤄도 ApplicationSet이 aws-lbc와 gateway를 병렬로 prune하는 한 ALBC
+파드가 먼저 죽는 경우를 이긴다는 보장이 없다. SG 2개가 남는 쪽을 기본으로 보고 위 patch·delete
+절차로 정리한다.
 
 🔴 **④에서 NodePool은 사라졌는데 EC2NodeClass가 `deletionTimestamp`를 낀 채 남아 있으면
 Karpenter의 `karpenter.k8s.aws/termination` finalizer가 스턱된 것이다.** ApplicationSet이
