@@ -156,7 +156,9 @@ gh repo create <org>/<project>-platform-gitops --public
 `eks-platform-gitops`의 레이아웃을 본뜬다. **이 저장소에 `.tf`를 두지 않는다.** public이어야 한다. ArgoCD가 repository Secret 없이 익명으로 읽고 workbench도 자격증명 없이 클론한다. private이면 seed의 preflight가 익명 `ls-remote`에서 멈춘다. `argocd-seed.sh`는 그 저장소의 `bootstrap/`이 소유한다(workbench가 그 저장소만 클론한다).
 
 ```bash
-git clone https://github.com/<org>/<project>-platform-gitops.git "$GITOPS_REPO_DIR"          # workbench에서
+export GITOPS_REPO_DIR=$HOME/<project>-platform-gitops                                        # workbench에서
+export CLUSTER_DIR=clusters/hub/<cluster-name>        # 예: clusters/hub/eks-demo-hub-an2-main-01
+git clone https://github.com/<org>/<project>-platform-gitops.git "$GITOPS_REPO_DIR"
 cd "$GITOPS_REPO_DIR/bootstrap" && ./argocd-seed.sh --dry-run && ./argocd-seed.sh
 ```
 

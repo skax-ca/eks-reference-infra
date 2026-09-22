@@ -29,6 +29,13 @@ nv                   # eks-node-viewer
 > `AWS-StartInteractiveCommand`는 `ssm-user`로 돌아 root의 kubeconfig를 못 읽는다.
 > `sudo env KUBECONFIG=/root/.kube/config kubectl …`로 넘긴다.
 
+> `AWS-RunShellScript`(`send-command`)는 root로 돌지만 `HOME`이 비어 있어 kubeconfig를 못 찾는다.
+> 스크립트 앞에 `export HOME=/root KUBECONFIG=/root/.kube/config`를 붙인다.
+
+> workbench role의 AWS API 권한은 `eks:DescribeCluster`(자기 클러스터)와 가격 조회
+> (`ec2:DescribeSpotPriceHistory`·`pricing:GetProducts`)뿐이다. SG·ALB 같은 조회는 workbench가 아니라
+> 로컬에서 그 계정 프로파일로 한다.
+
 > `AWS-StartInteractiveCommand`로 넘긴 명령은 세션이 끝나면 함께 죽는다. `nohup … & disown`으로는
 > 살아남지 못한다. 세션 뒤에도 돌아야 하는 작업(seed 스크립트 등)은
 > `setsid nohup … > 로그 2>&1 < /dev/null &`로 세션에서 떼어 낸다.
