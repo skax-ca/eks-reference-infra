@@ -179,7 +179,7 @@ module "workbench" {
   #    브라우저 UI 의존과 운영자 노트북까지의 터널이다.
   # ⛔ 비밀번호 교체는 대화형 세션으로 한다. 새 비밀번호를 send-command에 실으면 평문으로
   #    CloudTrail·히스토리에 남는다.
-  argocd_version = "v3.5.0"
+  argocd_version = "v3.5.3"
 
   # 노드별 CPU/메모리 할당과 비용을 한 화면에서 본다(Karpenter가 만든 노드가 실제로 어떻게
   # 채워졌는지). 릴리스 자산 이름이 _Linux_x86_64라 다른 도구의 amd64와 다른데 모듈이 매핑한다.
