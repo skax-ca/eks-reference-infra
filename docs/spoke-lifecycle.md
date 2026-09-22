@@ -6,7 +6,7 @@
 > 리스트에 의존한다. `hub-lifecycle.md`부터 본다.
 > **검증 상태**: 구축·철거 둘 다 `eks-reference-infra`의 dev(spoke 첫 인스턴스)로
 > 실환경 검증했다. spoke 단독 teardown 뒤 hub 잔존 라우트(13절)도 `action=plan`으로 확인했다.
-> ⏳ 10절 ⓪(`decommission` 라벨)은 아직 실환경에서 돌려 보지 않았다.
+> ⏳ 10절의 wave 역순 해제(부모 Application cascade)는 아직 실환경에서 돌려 보지 않았다.
 
 레퍼런스 구현이 `eks-reference-infra`의 `live/dev/`에 있다.
 
@@ -126,15 +126,17 @@ spoke는 자체 ArgoCD가 없다. hub의 ArgoCD가 크로스 계정으로 원격
 
 | 필드 | 값 | 확인 방법 |
 |---|---|---|
-| `metadata.labels.environment` | `<SPOKE_ENV>` | baseline ApplicationSet이 이 라벨의 **존재만** 검사(값은 경로 해석용) |
+| `metadata.labels.environment` | `<SPOKE_ENV>` | ApplicationSet `platform`이 이 라벨의 **존재**로 부모 Application을 만든다. 값은 공유 Gateway의 ALB 이름·태그에 쓰인다 |
 | `metadata.labels.vpcName`·`karpenterNodeRole` 등 | per-cluster addon 파라미터 | 실측한다(추정 금지): `aws ec2 describe-vpcs`·`aws iam list-roles` |
-| `addon-<name>: enabled` 라벨 | opt-in 카탈로그 구독 | 필요한 addon만 |
+| `metadata.labels.tier` | `nonprd` | 부모 차트가 버전 표의 줄을 고른다. `prd`·`nonprd` 밖의 값이면 부모 렌더가 실패한다 |
+| `addon-<name>: enabled` 라벨 | opt-in 구독 | 필요한 addon만 |
 | `stringData.server` | **EKS API endpoint**(`https://<hash>.<region>.eks.amazonaws.com`) | ⚠️ 클러스터 ARN이 아니다. ARN 계약은 AWS 완전관리형 "EKS Capability for Argo CD"(이 프로젝트가 안 쓰는 별개 제품) 전용, self-managed ArgoCD 공식 계약은 API endpoint다 |
 | `stringData.config.awsAuthConfig.roleARN` | `cross-account-trust-role`이 만든 Role ARN(5절) | |
 | `stringData.config.tlsClientConfig.caData` | 클러스터의 CA(base64) | `aws eks describe-cluster --query 'cluster.certificateAuthority.data'` |
 
-root-app이 이 커밋을 pull하면 baseline ApplicationSet이 이 클러스터를 fan-out 대상에
-자동 추가한다. **재배포 시 재등록**은 14절이다. 처음 등록과 절차는 같지만 `server`·`caData`가
+root-app이 이 커밋을 pull하면 ApplicationSet `platform`이 이 클러스터의 부모
+`<cluster>-platform`을 만들고, 부모가 addon Application을 wave 순서(CRD → 컨트롤러 → CR·정책)로
+만든다. **재배포 시 재등록**은 14절이다. 처음 등록과 절차는 같지만 `server`·`caData`가
 반드시 바뀐다는 것과 기존 `addon-*` 라벨을 그대로 옮겨야 한다는 함정이 있다.
 
 ⚠️ **`projects/platform.yaml`의 AppProject `destinations`는 편집하지 않는다.** 위 표만
@@ -147,7 +149,8 @@ policy다.
 
 ### 7. 완료 판정
 
-hub 7절과 같은 6항목을 이 spoke 클러스터 기준으로 확인한다. 3번(root Application이 커밋
+hub 7절과 같은 6항목을 이 spoke 클러스터 기준으로 확인한다. 부모 `<cluster>-platform`이
+`Healthy`면 마지막 wave까지 끝난 것이다. 3번(root Application이 커밋
 SHA를 읽음)·4번(Application `Synced`/`Healthy`)은 hub의 ArgoCD에서 확인한다. spoke 자신에는
 ArgoCD가 없다.
 
@@ -173,51 +176,44 @@ gh workflow run deploy-dev-network.yml --ref main -f action=apply
 ### 10. 1단계: IaC 밖 자원 선처리 (컨트롤러 정지 대상이 hub다)
 
 ⚠️ **hub-lifecycle.md 11절과 다르다.** spoke는 자체 ArgoCD가 없으므로 "컨트롤러를 scale
-0"할 대상이 spoke 안에 없다. hub의 ApplicationSet이 이 spoke를 계속 fan-out 대상으로
-보는 한, spoke 안의 LB·PVC·NodePool을 지워도 hub가 되살린다(대상만 원격일 뿐 hub 11절과
+0"할 대상이 spoke 안에 없다. hub의 ApplicationSet이 이 spoke의 부모를 유지하는 한, spoke 안의 LB·PVC·NodePool을 지워도 hub가 되살린다(대상만 원격일 뿐 hub 11절과
 같은 메커니즘).
 
 🔴 **cluster-secret.yaml을 한 번에 통째로 지우지 않는다.** 이 Secret은 두 역할을 겸한다:
-①ArgoCD가 이 클러스터에 접속할 자격증명(`server`/`config`), ②ApplicationSet cluster
-generator가 이 클러스터를 fan-out 대상으로 판단하는 라벨(`environment`·`tier`·`addon-*`).
-통째로 지우면 ArgoCD가 그 클러스터에 접속할 방법 자체를 잃어(`no clusters with this name`,
-argoproj/argo-cd#5817) cascade delete가 물리적으로 불가능해지고, Application 추적 기록만
-사라질 뿐 실제 Deployment·DaemonSet·Webhook·ClusterPolicy는 spoke 클러스터에 orphan으로
-남는다. **CR을 먼저 치우고(⓪), 그다음 두 역할을 분리해 진행한다**. ⓪이 따로 있는 이유(Argo CD가
-Application 사이의 삭제 순서를 보장하지 않는다)는 `iac-module-library`의
-`docs/architectures/gitops-hub-spoke/aws/`가 갖는다:
+①ArgoCD가 이 클러스터에 접속할 자격증명(`server`/`config`), ②ApplicationSet `platform`이 이
+클러스터의 부모를 만드는 라벨(`environment`). 통째로 지우면 ArgoCD가 그 클러스터에 접속할 방법
+자체를 잃어 cascade delete가 불가능해진다. ArgoCD는 목적지를 찾지 못한 Application의 기록만 버리고
+(`Resource entries removed from undefined cluster`), 실제 Deployment·Webhook·CR과 그 CR이 만든
+ALB SG는 spoke에 orphan으로 남는다. **두 역할을 분리해 진행한다**. 삭제 순서를 부모의 wave가 거는
+근거는 `iac-module-library`의 `docs/architectures/gitops-hub-spoke/ordering.md`가 갖는다:
 
 ```bash
-# ⓪ cluster-secret.yaml에 decommission 라벨을 붙여 머지한다(값은 읽지 않는다). gateway·
-#    karpenter-nodepool ApplicationSet만 이 클러스터를 놓아, ALBC·Karpenter가 살아 있는 동안
-#    Gateway·NodePool·EC2NodeClass가 지워진다. root-app 반영은 ②와 같은 방법으로 본다.
-kubectl -n argocd get applications | grep -E '<spoke-cluster-name>-(gateway|karpenter-nodepool)'  # hub: 없어야 함
-kubectl get gateway -A; kubectl get nodepools,ec2nodeclasses                                      # spoke: 없어야 함
-aws ec2 describe-security-groups --filters "Name=tag:elbv2.k8s.aws/cluster,Values=<cluster-name>"  # 0개
-
-# ① 매칭 라벨만 먼저 지운다 — secret-type과 server/config(접속 정보)는 그대로 둔다.
-#    이렇게 하면 ApplicationSet은 이 클러스터를 더 이상 발견 못 해 Application을
-#    정상적으로 제거하려 하고, 그 순간에도 ArgoCD는 여전히 이 클러스터에 접속 가능해
-#    cascade delete(resources-finalizer)가 실제로 완주한다.
-#    (kubectl delete로 Application을 직접 지우는 것도 통하지 않는다 — 매칭이 살아있는 동안은
-#     selfHeal이 즉시 되살린다. 반드시 "매칭을 끊기"여야 한다.)
+# ① environment 라벨만 먼저 지운다 — secret-type과 server/config(접속 정보)는 그대로 둔다.
+#    ApplicationSet이 부모 <spoke-cluster-name>-platform 을 지우고, 부모의 finalizer가 addon을
+#    wave 역순으로 지운다: CR·정책(gateway·karpenter-nodepool·kyverno-*) → 컨트롤러(aws-lbc·
+#    karpenter·kyverno·keda·cluster-autoscaler) → CRD(gateway-api-crds). 앞 wave의 삭제가 끝나야
+#    다음 wave로 넘어가므로 ALBC·Karpenter는 자기 CR의 finalizer를 처리한 뒤에 지워진다.
+#    (kubectl delete로 Application을 직접 지우는 것은 통하지 않는다 — 라벨이 살아 있는 동안은
+#     부모의 selfHeal이 즉시 되살린다. 반드시 "라벨을 끊기"여야 한다.)
 
 # ② hub의 root-app이 새 커밋을 실제로 반영했는지 확인
 #    (Synced/Healthy만으로는 반영을 보장 못 한다 — sync revision이 새 커밋 SHA인지 본다)
 kubectl -n argocd get application root-app -o jsonpath='{.status.sync.revision}'
 
-# ③ 이 spoke가 만든 Application들이 실제로 pruned됐는지 hub에서 확인
+# ③ 부모와 addon Application이 hub에서 사라졌는지 확인한다. 진행 중이면 부모가 남아 있고, addon이
+#    wave 순서대로 줄어든다(CR·정책이 먼저, CRD가 마지막).
 kubectl -n argocd get applications | grep <spoke-cluster-name>   # 결과 없어야 함
 
 # ④ Application 추적 기록 삭제와 실제 리소스 삭제는 별개다 — ③만으로는 부족하니
-#    이 spoke 클러스터 자체에서 addon 컨트롤러가 실제로 사라졌는지 확인한다.
+#    이 spoke 클러스터 자체에서 addon과 CR, AWS 뒷정리를 확인한다.
 kubectl get pods -A   # ArgoCD 관리 addon(aws-lbc·keda·kyverno·karpenter 등) 파드가 없어야 함
-kubectl get nodepools 2>&1   # Karpenter를 쓰면 NodePool CR도 없어야 함(addon 자신이 소유)
+kubectl get gateway -A; kubectl get nodepools,ec2nodeclasses 2>&1                                  # 없어야 함
+aws ec2 describe-security-groups --filters "Name=tag:elbv2.k8s.aws/cluster,Values=<cluster-name>"  # 0개
 
 # ⑤ ④는 GitOps가 만든 addon 자신만 다룬다 — 실제 워크로드가 만든 LB·PVC·Karpenter
 #    NodeClaim(addon이 아니라 사용자가 배포한 앱이 낳은 것)은 여전히 별도 대상이다.
 #    hub의 IaC 밖 자원 선처리와 동일한 패턴(컨트롤러 정지 → LB·PVC·NodePool 삭제)으로
-#    이 spoke의 workbench에서 정리한다 — hub가 이미 fan-out을 멈췄으니 지워도 되살아나지 않는다.
+#    이 spoke의 workbench에서 정리한다 — hub가 이미 부모를 지웠으니 지워도 되살아나지 않는다.
 
 # ⑥ ④⑤ 확인 후에만 cluster-secret.yaml을 완전히 삭제해 클러스터 등록 자체를 해제한다
 #    (server/config까지 포함해 전체 삭제 — 이 시점엔 정리할 것이 이미 없어 안전하다)
@@ -226,10 +222,11 @@ kubectl get nodepools 2>&1   # Karpenter를 쓰면 NodePool CR도 없어야 함(
 kubectl -n argocd delete secret <spoke-cluster-name>
 ```
 
-아래 두 복구는 ⓪을 건너뛰었거나 ⓪ 뒤에도 CR이 남았을 때만 쓴다.
+아래 두 복구는 wave 순서가 서지 않았을 때만 쓴다. Secret을 먼저 지웠거나, hub ArgoCD의
+Application health Lua가 빠져 부모가 컨트롤러를 CR과 함께 지운 경우다.
 
-🔴 **ALBC가 소유한 CR이 스턱된 경우.** ApplicationSet이 ALBC
-Application과 gateway Application을 병렬로 prune하면 ALBC가 먼저 사라져 `Gateway`
+🔴 **ALBC가 소유한 CR이 스턱된 경우.** ALBC Application과 gateway Application이 함께
+지워지면 ALBC가 먼저 사라져 `Gateway`
 (`gateway.k8s.aws/alb`)·`GatewayClass`(`gateway.k8s.aws/gatewayclass`)·
 `LoadBalancerConfiguration`(`gateway.k8s.aws/loadbalancerconfigurations`)가 `deletionTimestamp`를
 낀 채 남고, gateway Application은 `Progressing`에서 멈춘다. ALB는 ALBC가 죽기 전에 지워졌는데도
@@ -246,9 +243,8 @@ aws ec2 delete-security-group --group-id <sg-id>                                
 ALB가 남아 있으면 patch 전에 태그로 특정해 먼저 지운다.
 
 🔴 **NodePool은 사라졌는데 EC2NodeClass가 `deletionTimestamp`를 낀 채 남아 있으면
-Karpenter의 `karpenter.k8s.aws/termination` finalizer가 스턱된 것이다.** ApplicationSet이
-karpenter 컨트롤러 Application과 karpenter-nodepool Application(NodePool·EC2NodeClass 소유)을
-병렬로 prune하면, finalizer를 처리해야 할 컨트롤러 파드가 먼저 사라져 아무도 처리하지 못한다
+Karpenter의 `karpenter.k8s.aws/termination` finalizer가 스턱된 것이다.** karpenter 컨트롤러
+Application과 karpenter-nodepool Application(NodePool·EC2NodeClass 소유)이 함께 지워지면, finalizer를 처리해야 할 컨트롤러 파드가 먼저 사라져 아무도 처리하지 못한다
 (`kubectl get ec2nodeclasses`는 계속 남고, `argocd-application-controller` 로그는 "1 objects
 remaining for deletion"을 반복한다). 복구하기 전에 AWS 실물(Launch Template) 오르판이 없는지
 먼저 확인한다:
@@ -262,7 +258,7 @@ kubectl patch ec2nodeclass <name> --type merge -p '{"metadata":{"finalizers":[]}
 finalizer를 강제로 비워 즉시 GC시킨다. 오르판이 있으면 먼저 그 EC2 인스턴스를 정리한 뒤
 patch한다.
 
-**순서가 중요하다.** ⓪~⑤를 건너뛰고 Secret을 한 번에 지우면 hub의 Application 추적
+**순서가 중요하다.** ①~⑤를 건너뛰고 Secret을 한 번에 지우면 hub의 Application 추적
 기록은 사라지지만 실제 addon과 워크로드 잔존물은 spoke에 orphan으로 남는다. spoke
 EKS 클러스터 자체를 destroy(11절)하면 결국 함께 사라지므로 destroy 자체를 막지는
 않지만, 클러스터를 재파괴하지 않고 addon만 철거하려는 시나리오(예: 재구성 리허설)에서는
