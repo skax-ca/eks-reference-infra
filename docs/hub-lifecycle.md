@@ -251,45 +251,32 @@ VPC 모듈은 `prevent_destroy`를 쓴다. **CLI 플래그로 우회할 수 없�
 > `prevent_destroy`(Terraform lifecycle 메타 인자)일 뿐 AWS 쪽 실제 속성이 아니다: `false`로
 > apply해도 `No changes.`가 정상이다. EKS는 AWS 네이티브 속성이라 apply가 실행돼야 반영된다.
 
-### 11. 1단계: IaC 밖 자원 선처리
+### 11. 1단계: IaC 밖 자원 선처리 — addon 해제
 
-hub는 자기 ArgoCD를 스스로 멈춘다(아래). spoke는 다르다, `spoke-lifecycle.md`를 본다.
-workbench에서 실행한다.
-
-**먼저 ArgoCD 컨트롤러를 멈춘다.** 살아 있으면 아래 ②③④를 지우는 족족 되살린다.
-`syncPolicy`를 끄는 것으로는 부족하다: App-of-Apps라 root-app이 그 설정 자체를 복원한다.
+hub의 addon도 spoke와 같은 2단계 해제로 지운다(`spoke-lifecycle.md` 10절, 순서 근거는
+`iac-module-library`의 `docs/architectures/gitops-hub-spoke/ordering.md`). 부모가 addon을 wave 역순으로
+지우므로 Gateway가 만든 ALB·SG는 ALBC가, NodePool이 만든 노드는 Karpenter가 살아 있을 때 정리된다.
 
 ```bash
-# ① 컨트롤러 정지
-kubectl -n argocd scale statefulset argocd-application-controller --replicas=0
-kubectl -n argocd scale deployment  argocd-applicationset-controller --replicas=0
+# ① GitOps 저장소에서 hub cluster Secret의 environment 라벨만 지우는 PR을 머지한다.
+#    ApplicationSet이 부모 <cluster>-platform을 지우고, 부모가 addon을 wave 2 → 1 → 0 순으로 지운다.
+kubectl -n argocd get applications      # 1~2분 뒤 argocd·root-app 둘만 남아야 한다
 
-# ② LoadBalancer 타입 Service·Ingress·Gateway
-kubectl delete ingress --all -A
-kubectl delete svc -A --field-selector spec.type=LoadBalancer
-kubectl delete gateway --all -A
-
-# ③ PVC
-kubectl delete pvc --all -A
-
-# ④ Karpenter NodePool
-kubectl delete nodepool --all
-kubectl delete ec2nodeclass --all
+# ② addon 밖에서 만든 LB·PVC가 없는지 본다. 있으면 지운다
+kubectl get svc -A --field-selector spec.type=LoadBalancer; kubectl get ingress,pvc -A
+aws ec2 describe-security-groups --filters "Name=tag:elbv2.k8s.aws/cluster,Values=<cluster-name>"   # 0개
+aws elbv2 describe-load-balancers --query 'LoadBalancers[?VpcId==`<vpc-id>`]'                       # 0개
 ```
 
-**순서가 중요하다.** ①을 건너뛰면 ArgoCD가 ②③④를 되살린다. ④를 건너뛰고 클러스터를 지우면
-Karpenter 컨트롤러가 먼저 죽어 노드가 고아가 된다. `gateway.k8s.aws/alb`도 `Gateway`만으로 ALB를 만든다.
+`argocd`와 root-app은 부모 밖이라 남고, 2단계 destroy가 클러스터째 지운다.
+⚠️ 라벨은 git에서 뗀다. 라이브 Secret만 고치면 root-app의 selfHeal이 되돌린다.
+⚠️ 이 Secret은 다음 seed의 입력이다. destroy가 끝나면 라벨 제거 커밋을 되돌린다.
 
-확인: **지운 직후가 아니라 30초쯤 뒤에 본다.**
-
-```bash
-kubectl get nodes
-kubectl get nodepool -A
-aws elbv2 describe-load-balancers --query 'LoadBalancers[?VpcId==`<vpc-id>`]'
-```
-
-> 🔴 `kubectl get nodes`에 노드가 남아 있어도 실패가 아닐 수 있다: NodePool의 `NODES`가
-> 원래 `0`이면 남은 건 관리형 노드그룹(시스템 계층) 소속이라 2단계 `tofu destroy`가 회수한다.
+cascade가 서지 않으면(부모가 남거나 CR이 `deletionTimestamp`를 낀 채 멈추면) 먼저 `argocd-cm`에
+Application health Lua가 있는지 본다. 그래도 안 되면 손으로 지운다. `argocd-application-controller`
+(statefulset)와 `argocd-applicationset-controller`(deployment)를 `scale --replicas=0`으로 멈추고
+Gateway·LB Service·Ingress → PVC → NodePool·EC2NodeClass 순으로 지운다. 컨트롤러를 멈추지 않으면
+ArgoCD가 지운 것을 되살리고, NodePool을 건너뛰면 Karpenter 노드가 고아가 된다.
 
 ### 12. 2단계 · 3단계: destroy(EKS → 네트워크 → TGW)
 
@@ -394,6 +381,6 @@ aws s3 rb s3://<b>
 | 클러스터를 지웠는데 ALB가 남았다 | ALBC가 먼저 죽었다 | 태그(`elbv2.k8s.aws/cluster`)로 특정해 수동 삭제 |
 | state lock이 풀리지 않는다 | apply가 중단됐다 | S3의 lock 객체를 확인 후 제거 |
 | 로컬 destroy가 `AccessDenied` | 실행 Role 신뢰가 입구 Role 하나뿐 | 로컬 경로는 없다: 워크플로로 파기한다 |
-| 지운 리소스가 되살아난다 | ArgoCD 컨트롤러가 살아 있다 | 11절: `patch`가 아니라 컨트롤러를 `scale 0` |
+| 지운 리소스가 되살아난다 | 라벨을 라이브에서만 뗐거나, 손 삭제 중 컨트롤러가 살아 있다 | 11절: 라벨은 git에서 뗀다. 손 삭제는 컨트롤러를 `scale 0` |
 | destroy 성공 후 로그 그룹이 남았다 | Flow Logs가 CloudWatch를 자동 생성 | 13절: 손으로 지운다 |
 | `tofu init`이 provider SHA256SUMS 다운로드에서 실패 | runner-registry 간 일시적 네트워크 지연 | 새 dispatch가 아니라 `gh run rerun <run-id> --failed` |

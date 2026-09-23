@@ -173,11 +173,11 @@ gh workflow run deploy-dev-eks.yml     --ref main -f action=apply
 gh workflow run deploy-dev-network.yml --ref main -f action=apply
 ```
 
-### 10. 1단계: IaC 밖 자원 선처리 (컨트롤러 정지 대상이 hub다)
+### 10. 1단계: IaC 밖 자원 선처리 (해제 주체가 hub다)
 
-⚠️ **hub-lifecycle.md 11절과 다르다.** spoke는 자체 ArgoCD가 없으므로 "컨트롤러를 scale
-0"할 대상이 spoke 안에 없다. hub의 ApplicationSet이 이 spoke의 부모를 유지하는 한, spoke 안의 LB·PVC·NodePool을 지워도 hub가 되살린다(대상만 원격일 뿐 hub 11절과
-같은 메커니즘).
+hub-lifecycle.md 11절과 같은 라벨 해제다. 다른 점은 cascade를 hub의 ArgoCD가 원격으로 돌린다는 것뿐이다.
+spoke는 자체 ArgoCD가 없어 멈출 컨트롤러가 spoke 안에 없다. hub의 ApplicationSet이 이 spoke의 부모를
+유지하는 한 spoke 안의 LB·PVC·NodePool을 손으로 지워도 hub가 되살린다.
 
 🔴 **cluster-secret.yaml을 한 번에 통째로 지우지 않는다.** 이 Secret은 두 역할을 겸한다:
 ①ArgoCD가 이 클러스터에 접속할 자격증명(`server`/`config`), ②ApplicationSet `platform`이 이
