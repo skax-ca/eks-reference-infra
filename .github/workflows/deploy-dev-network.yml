@@ -313,6 +313,28 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}
         run: tofu apply -no-color -lock-timeout=5m tfplan
 
+      # apply 의 exit 0 이 실제 반영을 보장하지 않는다(근거는 deploy-hub-network.yml). 같은 run
+      # 안에서 읽기 전용 재-plan 으로 수렴을 종료 코드로 확인한다. 저장된 plan 이 아니라 새 plan 이라
+      # plan job 과 같은 변수를 다시 넘긴다.
+      - name: apply 후 수렴 검증 (읽기 전용 재-plan)
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          TF_VAR_execution_role_arn: ${{ vars.DEV_AWS_EXEC_ROLE_ARN }}
+        run: |
+          DESTROY=""
+          [ "${{ inputs.action }}" = "destroy" ] && DESTROY="-destroy"
+
+          set +e
+          tofu plan $DESTROY -no-color -lock-timeout=5m -detailed-exitcode -refresh=true
+          code=$?
+          set -e
+          if [ "$code" = 2 ]; then
+            echo "::error::apply 직후인데 재-plan 이 여전히 변경사항을 보고한다. 일부 리소스가 반영되지 않았을 가능성이 높다. AWS 콘솔/CLI로 실물을 직접 대조할 것."
+            exit 1
+          elif [ "$code" != 0 ]; then
+            exit "$code"
+          fi
+
       - name: apply 결과 요약
         if: always()
         working-directory: ${{ env.TF_ROOT }}
