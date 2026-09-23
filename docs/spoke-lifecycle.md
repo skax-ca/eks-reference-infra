@@ -6,7 +6,7 @@
 > 리스트에 의존한다. `hub-lifecycle.md`부터 본다.
 > **검증 상태**: 구축·철거 둘 다 `eks-reference-infra`의 dev(spoke 첫 인스턴스)로
 > 실환경 검증했다. spoke 단독 teardown 뒤 hub 잔존 라우트(13절)도 `action=plan`으로 확인했다.
-> ⏳ 10절의 wave 역순 해제(부모 Application cascade)는 아직 실환경에서 돌려 보지 않았다.
+> 10절의 wave 역순 해제(부모 Application cascade)도 같은 dev로 검증했다.
 
 레퍼런스 구현이 `eks-reference-infra`의 `live/dev/`에 있다.
 
