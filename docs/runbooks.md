@@ -32,6 +32,11 @@ nv                   # eks-node-viewer
 > `AWS-RunShellScript`(`send-command`)는 root로 돌지만 `HOME`이 비어 있어 kubeconfig를 못 찾는다.
 > 스크립트 앞에 `export HOME=/root KUBECONFIG=/root/.kube/config`를 붙인다.
 
+> workbench의 `kubectl`은 **자기 클러스터만** 본다. hub와 dev는 Gateway 이름까지
+> (`gateway-system/shared-gateway`) 같아서 출력만으로는 어느 쪽인지 구분되지 않는다. 명령 전에
+> `kubectl config current-context`를 찍고, dev를 보려면 dev workbench로 간다. hub에서 dev를 보는
+> 것은 hub ArgoCD의 Application 상태뿐이다.
+
 > workbench role의 AWS API 권한은 `eks:DescribeCluster`(자기 클러스터)와 가격 조회
 > (`ec2:DescribeSpotPriceHistory`·`pricing:GetProducts`)뿐이다. SG·ALB 같은 조회는 workbench가 아니라
 > 로컬에서 그 계정 프로파일로 한다.
