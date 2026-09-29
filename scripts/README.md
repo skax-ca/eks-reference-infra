@@ -5,6 +5,7 @@
 | 스크립트 | 무엇을 하는가 | 설계 SSOT |
 |---|---|---|
 | `teardown-verify.sh` | 철수 후 잔존물 검사(읽기 전용). 지우지 않고 남은 것만 찾는다 | `docs/hub-lifecycle.md`, `docs/spoke-lifecycle.md` |
+| `converge-check.sh` | EKS 루트 apply 직후 재-plan으로 수렴 판정. 계정 자동 태거의 workbench 볼륨 Name diff 한 건만 허용한다 | 스크립트 머리 주석, `live/<env>/eks/providers.tf` |
 | `validate-doc-conventions.py` | 이 저장소 문서(`docs/*.md`·`README.md`·`AGENTS.md`·`CLAUDE.md`)의 작성 규칙 검사 | `.githooks/pre-commit` |
 | `validate-comment-conventions.py` | `.tf`·셸·검사기·훅·워크플로·`dependabot.yml`의 주석에서 외부 참조와 이력 서술 검사. 적용 범위는 검사기 자신이 갖는다 | `.githooks/pre-commit`(해당 파일 staged 시)와 `verify.yml` |
 | `report-module-tag-drift.py` | 루트들이 같은 모듈을 다른 태그로 소싱하는지 보고. ⚠️ 검사기가 아니라 보고기다 — 갈려 있어도 실패시키지 않고 Summary에 표만 남긴다 | `verify.yml` |
@@ -30,6 +31,24 @@ WORKLOAD=demo ENVIRONMENT=hub AWS_PROFILE=team ./scripts/teardown-verify.sh
 VPC 기준으로 한 번 더 확인하는 것이 안전하다.
 
 종료 코드: `0` = 잔존물 없음, `1` = 잔존물 있음, `2` = 실행 불가.
+
+## `converge-check.sh`
+
+`deploy-hub-eks.yml`·`deploy-dev-eks.yml`의 apply job이 루트 디렉토리에서 부른다. 사람이 직접
+돌리는 경로는 판정만 떼어 낸 `--judge`다. 재-plan은 CI 신원이 있어야 돌기 때문이다.
+
+```bash
+# 받아 둔 plan artifact로 판정만 확인한다(자격증명 불필요)
+cd live/hub/eks && tofu init -backend=false
+tofu show -json <tfplan> > /tmp/plan.json
+../../../scripts/converge-check.sh --judge /tmp/plan.json
+```
+
+workbench가 새로 생긴 apply 직후에는 경고(`::warning::`) 한 줄과 함께 통과하는 것이 정상이다.
+볼륨 `Name`은 다음 apply가 되돌린다. 허용 조건과 그 이유는 스크립트 머리 주석이 갖는다.
+조건을 고치면 `--judge`로 양성(볼륨 `Name` 한 건)과 음성(다른 변경이 섞인 plan)을 함께 돌려 본다.
+
+종료 코드: `0` = 수렴(허용된 태거 diff 포함), `1` = 미수렴, `2` = 실행 불가.
 
 ## 셸 게이트: `bash -n` + `shellcheck`
 

@@ -45,6 +45,8 @@ provider "aws" {
 #    Name으로 덮어쓰지만, Name은 이 repo의 네이밍 계약이라 무시하면 모든 Name 규약이 함께 눈이
 #    먼다. tofu가 되돌리는 것이 정답이고, 대가는 볼륨이 생성될 때마다 한 번씩 volume_tags.Name
 #    diff가 뜨는 것뿐이다(반복 drift가 아니라 생성당 1회).
+#    apply job의 수렴 검증(scripts/converge-check.sh)은 이 diff 한 건만 경고로 통과시킨다. 이
+#    주석의 판정(다음 apply가 되돌린다)과 검증 게이트가 같은 결론을 내게 하려는 것이다.
 #    EKS 노드 볼륨은 Name·DependencyName이 빈 값이다. 태거가 인스턴스 Name을 읽는 시점에 아직
 #    태그가 없었던 경쟁 상태다. workbench는 volume_tags를 쓰므로 TagSpecifications로 생성
 #    시점에 붙어 태거가 값을 읽을 수 있다.
