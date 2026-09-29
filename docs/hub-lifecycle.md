@@ -77,6 +77,13 @@ inline 정책(Resource=실행 Role). IAM은 신뢰 정책의 principal이 실제
 버킷명은 **git에 넣지 않는다.** GitHub 저장소 변수 `HUB_TF_STATE_BUCKET`과 로컬
 `backend.hcl`에만 둔다.
 
+**재구축 전에 `verify.sh`부터 돌린다.** 공용 계정은 계정 관리자가 이 절의 자원(버킷·OIDC
+provider·Role)을 IaC 밖에서 정리할 수 있다. 그러면 CI가 인증 단계에서 `web identity token
+could not be validated`로 멈춘다. drift가 전부 `존재하지 않는다`면 `bootstrap.sh`를 다시 돌린다.
+버킷명의 임의 접미는 새로 생기므로 `HUB_TF_STATE_BUCKET`과 루트마다의 `backend.hcl`을 새 이름으로
+바꾼다. Role 이름은 결정적이라 `HUB_AWS_*_ROLE_ARN`은 그대로다. 옛 state는 버킷과 함께 사라지므로,
+남은 자원이 있으면 첫 apply가 `already exists`로 실패한다.
+
 ### 4. TGW와 네트워크 (L1)
 
 TGW(`live/hub/tgw`)는 네트워킹과 **분리된 배포 루트**이고, **반드시 먼저 apply한다**(같은
