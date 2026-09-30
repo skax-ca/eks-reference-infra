@@ -218,7 +218,10 @@ aws ec2 describe-security-groups --filters "Name=tag:elbv2.k8s.aws/cluster,Value
 # ⑥ ④⑤ 확인 후에만 cluster-secret.yaml을 완전히 삭제해 클러스터 등록 자체를 해제한다
 #    (server/config까지 포함해 전체 삭제 — 이 시점엔 정리할 것이 이미 없어 안전하다)
 #    root-app은 prune=false라 파일을 지워도 hub의 라이브 Secret은 남고 OutOfSync가 된다.
-#    머지 뒤 hub에서 직접 지운다.
+#    머지 뒤 hub에서 직접 지운다. ⚠️ ②처럼 root-app의 sync revision이 이 삭제 커밋인지 먼저 본다.
+#    옛 revision에서 지우면 selfHeal이 파일이 있는 커밋 기준으로 몇 초 안에 되살린다
+#    (environment 라벨이 없어 addon은 다시 깔리지 않지만, 등록이 남는다).
+kubectl -n argocd get application root-app -o jsonpath='{.status.sync.revision}'
 kubectl -n argocd delete secret <spoke-cluster-name>
 ```
 
