@@ -136,8 +136,8 @@ spoke는 자체 ArgoCD가 없다. hub의 ArgoCD가 크로스 계정으로 원격
 
 root-app이 이 커밋을 pull하면 ApplicationSet `cluster-addons`가 이 클러스터의 부모
 `<cluster>-addons`를 만들고, 부모가 addon Application을 wave 순서(CRD → 컨트롤러 → CR·정책)로
-만든다. **재배포 시 재등록**은 14절이다. 처음 등록과 절차는 같지만 `server`·`caData`가
-반드시 바뀐다는 것과 기존 `addon-*` 라벨을 그대로 옮겨야 한다는 함정이 있다.
+만든다. **재배포 시 재등록**은 14절이다. 철거 때 남겨 둔 이 파일에서 `server`·`caData`를 바꾸고
+`environment` 라벨을 되돌린다.
 
 ⚠️ **`projects/platform.yaml`의 AppProject `destinations`는 편집하지 않는다.** 위 표만
 채우면 되고, fan-out과 별개로 존재하는 세 번째 가드레일(AppProject `destinations`,
@@ -215,15 +215,17 @@ aws ec2 describe-security-groups --filters "Name=tag:elbv2.k8s.aws/cluster,Value
 #    hub의 IaC 밖 자원 선처리와 동일한 패턴(컨트롤러 정지 → LB·PVC·NodePool 삭제)으로
 #    이 spoke의 workbench에서 정리한다 — hub가 이미 부모를 지웠으니 지워도 되살아나지 않는다.
 
-# ⑥ ④⑤ 확인 후에만 cluster-secret.yaml을 완전히 삭제해 클러스터 등록 자체를 해제한다
-#    (server/config까지 포함해 전체 삭제 — 이 시점엔 정리할 것이 이미 없어 안전하다)
-#    root-app은 prune=false라 파일을 지워도 hub의 라이브 Secret은 남고 OutOfSync가 된다.
-#    머지 뒤 hub에서 직접 지운다. ⚠️ ②처럼 root-app의 sync revision이 이 삭제 커밋인지 먼저 본다.
-#    옛 revision에서 지우면 selfHeal이 파일이 있는 커밋 기준으로 몇 초 안에 되살린다
-#    (environment 라벨이 없어 addon은 다시 깔리지 않지만, 등록이 남는다).
-kubectl -n argocd get application root-app -o jsonpath='{.status.sync.revision}'
-kubectl -n argocd delete secret <spoke-cluster-name>
+# ⑥ cluster-secret.yaml은 지우지 않는다. environment 라벨만 뗀 채로 둔다.
+#    재구축 때 바뀌는 값은 server·caData 둘뿐이고(14절), 나머지(addon-* 라벨·roleARN·vpcName)는
+#    재구축을 견딘다. 파일을 지웠다 되살리면 addon-* 라벨을 빠뜨릴 자리가 생긴다.
+#    파일을 지우면 root-app이 prune=false라 라이브 Secret이 남아 hub에서 손으로 지워야 하고, 그 사이
+#    root-app이 옛 revision이면 selfHeal이 되살린다. 두면 이 단계와 경합이 모두 없다.
 ```
+
+⚠️ **철거 뒤 hub의 클러스터 목록에는 이 spoke가 마지막 연결 상태(`Successful`)로 남는다.**
+`environment` 라벨이 없어 이 클러스터를 대상으로 하는 Application이 없으면, ArgoCD가 연결을 다시
+확인하지 않는다. 연결 오류 로그도 쌓이지 않는다. 목록의 상태 표시가 클러스터의 실재를 뜻하지
+않는다는 점만 기억한다.
 
 아래 두 복구는 wave 순서가 서지 않았을 때만 쓴다. Secret을 먼저 지웠거나, hub ArgoCD의
 Application health Lua가 빠져 부모가 컨트롤러를 CR과 함께 지운 경우다.
@@ -323,18 +325,20 @@ hub의 spoke 라우트(`aws_route.vpc_to_spoke`·`aws_ec2_transit_gateway_route.
 ### 14. 재배포 시 GitOps 재등록
 
 spoke EKS를 destroy 후 재생성하면 클러스터 이름이 같아도 API endpoint·CA 인증서는 **반드시
-새로 발급**된다. 6절에서 등록한 `cluster-secret.yaml`은 옛 값을 그대로 갖고 있으므로, 재적용
-없이는 hub ArgoCD가 죽은 엔드포인트를 계속 찌른다.
+새로 발급**된다. 10절 ⑥에서 남겨 둔 `cluster-secret.yaml`은 옛 값을 갖고 있다.
 
 ```bash
 aws eks describe-cluster --profile asset --region ap-northeast-2 --name <cluster-name> \
   --query 'cluster.{endpoint:endpoint,ca:certificateAuthority.data}'
 ```
 
-`server`·`caData`만 갱신하고 **`addon-*` 라벨은 그대로 유지**한다(빠뜨리면 addon 구독이
-조용히 빠진 채 재배포된다. 갱신 전에 `git diff`로 기존 라벨 목록을 먼저 확인한다).
-`roleARN`은 안 바뀐다. `cross-account-trust-role`의 Role 이름은 네이밍 규약상 결정적이라
-재생성 후에도 동일하다.
+**한 커밋으로 세 가지를 한다**: `server` 교체, `caData` 교체, `environment` 라벨 복원. 커밋 전에
+`git diff`가 이 세 줄뿐인지 본다. `roleARN`은 안 바뀐다. `cross-account-trust-role`의 Role 이름은
+네이밍 규약상 결정적이라 재생성 후에도 동일하다.
+
+엔드포인트를 DNS 별칭 등으로 고정해 이 교체를 없애는 안은 성립하지 않는다(API 서버 인증서에 SAN을
+추가할 수 없고, CA도 재생성마다 바뀐다). 근거는 `iac-module-library`의
+`docs/architectures/gitops-hub-spoke/aws/README.md` 「하지 않는 것」.
 
 ### 15. 되돌릴 수 없는 것 / 자주 막히는 지점
 
