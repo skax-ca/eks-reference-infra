@@ -266,7 +266,7 @@ hub의 addon도 spoke와 같은 2단계 해제로 지운다(`spoke-lifecycle.md`
 
 ```bash
 # ① GitOps 저장소에서 hub cluster Secret의 environment 라벨만 지우는 PR을 머지한다.
-#    ApplicationSet이 부모 <cluster>-platform을 지우고, 부모가 addon을 wave 2 → 1 → 0 순으로 지운다.
+#    ApplicationSet이 부모 <cluster>-addons를 지우고, 부모가 addon을 wave 2 → 1 → 0 순으로 지운다.
 kubectl -n argocd get applications      # 1~2분 뒤 argocd·root-app 둘만 남아야 한다
 
 # ② addon 밖에서 만든 LB·PVC가 없는지 본다. 있으면 지운다

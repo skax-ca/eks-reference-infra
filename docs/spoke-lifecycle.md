@@ -126,7 +126,7 @@ spoke는 자체 ArgoCD가 없다. hub의 ArgoCD가 크로스 계정으로 원격
 
 | 필드 | 값 | 확인 방법 |
 |---|---|---|
-| `metadata.labels.environment` | `<SPOKE_ENV>` | ApplicationSet `platform`이 이 라벨의 **존재**로 부모 Application을 만든다. 값은 공유 Gateway의 ALB 이름·태그에 쓰인다 |
+| `metadata.labels.environment` | `<SPOKE_ENV>` | ApplicationSet `cluster-addons`가 이 라벨의 **존재**로 부모 Application을 만든다. 값은 공유 Gateway의 ALB 이름·태그에 쓰인다 |
 | `metadata.labels.vpcName`·`karpenterNodeRole` 등 | per-cluster addon 파라미터 | 실측한다(추정 금지): `aws ec2 describe-vpcs`·`aws iam list-roles` |
 | `metadata.labels.tier` | `nonprd` | 부모 차트가 버전 표의 줄을 고른다. `prd`·`nonprd` 밖의 값이면 부모 렌더가 실패한다 |
 | `addon-<name>: enabled` 라벨 | opt-in 구독 | 필요한 addon만 |
@@ -134,8 +134,8 @@ spoke는 자체 ArgoCD가 없다. hub의 ArgoCD가 크로스 계정으로 원격
 | `stringData.config.awsAuthConfig.roleARN` | `cross-account-trust-role`이 만든 Role ARN(5절) | |
 | `stringData.config.tlsClientConfig.caData` | 클러스터의 CA(base64) | `aws eks describe-cluster --query 'cluster.certificateAuthority.data'` |
 
-root-app이 이 커밋을 pull하면 ApplicationSet `platform`이 이 클러스터의 부모
-`<cluster>-platform`을 만들고, 부모가 addon Application을 wave 순서(CRD → 컨트롤러 → CR·정책)로
+root-app이 이 커밋을 pull하면 ApplicationSet `cluster-addons`가 이 클러스터의 부모
+`<cluster>-addons`를 만들고, 부모가 addon Application을 wave 순서(CRD → 컨트롤러 → CR·정책)로
 만든다. **재배포 시 재등록**은 14절이다. 처음 등록과 절차는 같지만 `server`·`caData`가
 반드시 바뀐다는 것과 기존 `addon-*` 라벨을 그대로 옮겨야 한다는 함정이 있다.
 
@@ -149,7 +149,7 @@ policy다.
 
 ### 7. 완료 판정
 
-hub 7절과 같은 6항목을 이 spoke 클러스터 기준으로 확인한다. 부모 `<cluster>-platform`이
+hub 7절과 같은 6항목을 이 spoke 클러스터 기준으로 확인한다. 부모 `<cluster>-addons`가
 `Healthy`면 마지막 wave까지 끝난 것이다. 3번(root Application이 커밋
 SHA를 읽음)·4번(Application `Synced`/`Healthy`)은 hub의 ArgoCD에서 확인한다. spoke 자신에는
 ArgoCD가 없다.
@@ -180,7 +180,7 @@ spoke는 자체 ArgoCD가 없어 멈출 컨트롤러가 spoke 안에 없다. hub
 유지하는 한 spoke 안의 LB·PVC·NodePool을 손으로 지워도 hub가 되살린다.
 
 🔴 **cluster-secret.yaml을 한 번에 통째로 지우지 않는다.** 이 Secret은 두 역할을 겸한다:
-①ArgoCD가 이 클러스터에 접속할 자격증명(`server`/`config`), ②ApplicationSet `platform`이 이
+①ArgoCD가 이 클러스터에 접속할 자격증명(`server`/`config`), ②ApplicationSet `cluster-addons`가 이
 클러스터의 부모를 만드는 라벨(`environment`). 통째로 지우면 ArgoCD가 그 클러스터에 접속할 방법
 자체를 잃어 cascade delete가 불가능해진다. ArgoCD는 목적지를 찾지 못한 Application의 기록만 버리고
 (`Resource entries removed from undefined cluster`), 실제 Deployment·Webhook·CR과 그 CR이 만든
@@ -189,7 +189,7 @@ ALB SG는 spoke에 orphan으로 남는다. **두 역할을 분리해 진행한�
 
 ```bash
 # ① environment 라벨만 먼저 지운다 — secret-type과 server/config(접속 정보)는 그대로 둔다.
-#    ApplicationSet이 부모 <spoke-cluster-name>-platform 을 지우고, 부모의 finalizer가 addon을
+#    ApplicationSet이 부모 <spoke-cluster-name>-addons 를 지우고, 부모의 finalizer가 addon을
 #    wave 역순으로 지운다: CR·정책(gateway·karpenter-nodepool·kyverno-*) → 컨트롤러(aws-lbc·
 #    karpenter·kyverno·keda·cluster-autoscaler) → CRD(gateway-api-crds). 앞 wave의 삭제가 끝나야
 #    다음 wave로 넘어가므로 ALBC·Karpenter는 자기 CR의 finalizer를 처리한 뒤에 지워진다.
