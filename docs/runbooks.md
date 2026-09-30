@@ -168,6 +168,7 @@ kubectl -n argocd get applications \
 | `Synced` / `Healthy` | 정상 |
 | `OutOfSync`가 **고착** | 대개 CRD 스키마 defaulting. 해당 Application에 `ServerSideDiff=true`를 켠다 |
 | `Progressing`이 오래 | 파드 이벤트를 본다. 대개 이미지 pull 또는 리소스 부족 |
+| seed 중 wave 0 CRD Application이 `Degraded`에 **고착**, CRD 조건은 전부 `True` | 생성 순간의 health가 갱신되지 않아 부모가 다음 wave로 못 넘어간다. 그 Application을 `argocd app get <app> --hard-refresh --core`로 풀고, 풀기 전에 `argocd app get <app> --core`로 CRD별 health를 남긴다. 원인은 확정하지 않았다(차트 기본 `ignoreResourceUpdates`의 `/status` 무시가 후보지만, Argo CD 문서는 health가 바뀌면 무시하지 않는다고 적는다) |
 
 root Application이 저장소를 실제로 읽었는지는 **revision으로** 판정한다:
 
