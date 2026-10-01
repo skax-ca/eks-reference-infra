@@ -79,6 +79,8 @@ converge_role_description() {
 }
 
 # state 버킷 하나를 기대 상태로 수렴시킨다(hub·spoke 공용, prefix·env 태그만 다르게 받는다).
+# ⚠️ 버킷 이름은 stdout이 아니라 전역 BUCKET_RESULT로 돌려준다. $(...)로 부르면 서브셸에서 돌아
+#    changed가 올린 CHANGES가 버려지고, 버킷만 고친 실행이 "변경 0건"으로 보고된다.
 converge_bucket() {
   local prefix="$1" env="$2" label="$3" bucket
   bucket="$(find_bucket_by_prefix "$prefix")"
@@ -127,7 +129,7 @@ converge_bucket() {
     {Key=Owner,Value=$TAG_OWNER},{Key=CostCenter,Value=$TAG_COST_CENTER}]"
   ok "[$label] 버킷 태그"
 
-  echo "$bucket"
+  BUCKET_RESULT="$bucket"
 }
 
 echo "=== 부트스트랩 (target=$BOOTSTRAP_TARGET profile=$AWS_PROFILE region=$REGION) ==="
@@ -137,9 +139,11 @@ echo
 
 # 1. state 버킷. 대상 세트만 수렴시킨다.
 if [[ "$BOOTSTRAP_TARGET" == hub ]]; then
-  HUB_BUCKET="$(converge_bucket "$HUB_BUCKET_PREFIX" "$HUB_ENV" "hub")"
+  converge_bucket "$HUB_BUCKET_PREFIX" "$HUB_ENV" "hub"
+  HUB_BUCKET="$BUCKET_RESULT"
 else
-  SPOKE_BUCKET="$(converge_bucket "$SPOKE_BUCKET_PREFIX" "$SPOKE_ENV" "spoke:$SPOKE_ENV")"
+  converge_bucket "$SPOKE_BUCKET_PREFIX" "$SPOKE_ENV" "spoke:$SPOKE_ENV"
+  SPOKE_BUCKET="$BUCKET_RESULT"
 fi
 
 # 2. OIDC provider. 계정에 1개뿐이다. hub(team)·spoke(각자 별도 계정)는 서로 다른 계정이라 각자

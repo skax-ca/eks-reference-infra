@@ -118,8 +118,10 @@ readonly TAG_COST_CENTER="internal-poc"
 readonly C_OK=$'\033[32m'; readonly C_CHG=$'\033[33m'
 readonly C_ERR=$'\033[31m'; readonly C_OFF=$'\033[0m'
 
-# ⚠️ 전부 stderr로 보낸다. "로그를 찍으면서 값도 $(...)로 반환"하는 함수(converge_bucket 등)가
-#    stdout에 로그를 섞으면 반환값이 로그와 뒤섞여 깨진다.
+# ⚠️ 전부 stderr로 보낸다. 값을 $(...)로 반환하는 함수(check_* 등)가 stdout에 로그를 섞으면
+#    반환값이 로그와 뒤섞여 깨진다.
+# ⚠️ changed·mismatch는 $(...) 안에서 부르지 않는다. 서브셸의 카운터 증가는 부모에 닿지 않아
+#    메시지는 찍히는데 합계에서 빠진다.
 ok()      { printf '%s  ok%s      %s\n' "$C_OK" "$C_OFF" "$*" >&2; }
 changed() { printf '%s changed%s  %s\n' "$C_CHG" "$C_OFF" "$*" >&2; CHANGES=$((CHANGES + 1)); }
 mismatch(){ printf '%s  DRIFT%s   %s\n' "$C_ERR" "$C_OFF" "$*" >&2; DRIFTS=$((DRIFTS + 1)); }
