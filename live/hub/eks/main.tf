@@ -212,7 +212,7 @@ module "workbench" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.11.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.12.0&depth=1"
 
   # 리소스 타입 약어는 모듈이 조합한다.
   naming = {
@@ -249,6 +249,10 @@ module "eks" {
   #      3층 없음 → dial tcp …: i/o timeout(인증 계층에 닿지도 못했다는 뜻)
 
   # 2층: 클러스터 안에서 무엇을 할 수 있는가.
+  # 이 맵이 클러스터에 들어가는 주체의 전부다. 모듈이 인증 모드를 API로 고정해 aws-auth
+  # ConfigMap을 읽지 않고, tofu를 실행하는 CI 실행 Role에도 entry를 만들지 않는다.
+  # ⚠️ 이 루트에 kubernetes·helm provider를 들이면 CI 실행 Role을 이 맵에 넣는다. 빠뜨리면
+  #    클러스터 생성은 성공하고 그 provider의 첫 호출이 Unauthorized로 실패한다.
   # ⚠️ ClusterAdmin은 넓다. SSM 접근 통제가 곧 클러스터 보안이 된다. 최소 권한은 실제 운영이
   #    요구하는 것을 안 뒤에 좁힌다.
   access_entries = {
