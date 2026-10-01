@@ -385,6 +385,7 @@ aws s3 rb s3://<b>
 | VPC destroy가 몇 분째 멈춰 있다 | ENI 해제 대기 | EKS가 완전히 사라졌는지 먼저 확인 |
 | `prevent_destroy`로 plan이 실패한다 | 삭제 보호 | 10절: 코드를 고쳐 apply한다 |
 | destroy 후에도 노드가 살아 있다 | Karpenter 고아 | NodePool을 먼저 지웠어야 한다 |
+| workbench의 `kubectl`이 `Unauthorized`다 | 그 Role의 Access Entry가 없다. 인증 모드가 `API`라 `access_entries`에 적힌 주체만 들어가고, CI 실행 Role에도 entry가 없다 | `aws eks list-access-entries --cluster-name <cluster>`로 확인한다. 들어갈 Role을 `live/<env>/eks/main.tf`의 `access_entries`에 더해 PR → plan → 승인으로 적용한다. Access Entry는 EKS API가 만들어 클러스터에 접근할 수 없어도 적용된다 |
 | 클러스터를 지웠는데 ALB가 남았다 | ALBC가 먼저 죽었다 | 태그(`elbv2.k8s.aws/cluster`)로 특정해 수동 삭제 |
 | state lock이 풀리지 않는다 | apply가 중단됐다 | S3의 lock 객체를 확인 후 제거 |
 | 로컬 destroy가 `AccessDenied` | 실행 Role 신뢰가 입구 Role 하나뿐 | 로컬 경로는 없다: 워크플로로 파기한다 |
