@@ -391,6 +391,8 @@ module "eks" {
   # identity association)는 merge 뒤에 재주입되어 살아남는다.
   # ⚠️ 여기 안 적은 addon도 사라지지 않는다(누락 != 삭제). 제거는 enabled = false 명시로만 하고,
   #    core 4종(vpc-cni·coredns·kube-proxy·eks-pod-identity-agent)은 그것마저 차단된다.
+  # ⚠️ enabled = false는 EKS의 addon 등록만 지운다. addon이 preserve = true로 만들어져 파드·CRD·
+  #    webhook·RBAC는 클러스터에 남는다. 남은 것을 걷는 절차는 docs/runbooks.md가 갖는다.
   # ⚠️ 값의 정의역은 f(kubernetes_version, region)이고 아래는 k8s 1.35·ap-northeast-2 기준이다.
   #    kubernetes_version을 올리면 이 표도 함께 갱신한다. 안 하면 "그 버전 없음"으로 apply가
   #    죽는다(kube-proxy는 정의상 k8s 마이너를 따라간다). 조회:
@@ -424,9 +426,6 @@ module "eks" {
       configuration = local.system_node_selector
     }
 
-    # cert-manager는 쓰지 않는다. 누락은 삭제가 아니라서 클러스터의 addon을 지우는 apply에는 이 줄이
-    # 필요하다. 지운 뒤에는 이 줄째 삭제한다.
-    "cert-manager" = { enabled = false }
     # ⛔ external-dns는 싣지 않는다. 아래 enable_external_dns_iam과 한 쌍이다. IAM 없이 컨트롤러만
     #    돌면 Route53에 아무것도 쓰지 못하는 파드가 남는다. 되켤 때는 addon과 IAM을 함께 켠다.
   }
