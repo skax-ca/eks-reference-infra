@@ -274,7 +274,6 @@ app 워크로드는 Karpenter가, 플랫폼 컴포넌트와 상태 저장 OSS(re
 |---|---|---|
 | 시스템 관리형 노드그룹(`managed_node_groups`) | taint `CriticalAddonsOnly=true:NO_SCHEDULE` + 라벨 `workload-class=system` | — |
 | coredns · metrics-server · **ebs-csi controller** | `nodeSelector`만 | addon 기본 toleration이 `CriticalAddonsOnly: Exists`다 |
-| **cert-manager**(컨트롤러·cainjector·webhook) | 셋 다 `nodeSelector` + toleration | 없다. 기본 toleration을 갖지 않는 유일한 addon이다 |
 | **Karpenter 컨트롤러**(helm) | 아무것도 쓰지 않는다 | 기본 toleration `CriticalAddonsOnly: Exists` + 기본 affinity `karpenter.sh/nodepool DoesNotExist` |
 | Cluster Autoscaler(helm) | `nodeSelector` + toleration + `karpenter.sh/nodepool DoesNotExist` affinity | 차트 기본값이 셋 다 비어 있다 |
 | KEDA(helm) | `nodeSelector` + toleration | 차트 기본값이 비어 있다 |
@@ -283,7 +282,7 @@ app 워크로드는 Karpenter가, 플랫폼 컴포넌트와 상태 저장 OSS(re
 | vpc-cni · eks-pod-identity-agent · **efs-csi node**(DaemonSet) | 아무것도 쓰지 않는다 | 차트 기본값 `tolerations: [{operator: Exists}]`가 모든 taint를 통과한다 |
 | **ebs-csi node**(DaemonSet) | `node.tolerateAllTaints = true` | 같은 값이 기본이다. 명시는 "DaemonSet은 모든 taint를 통과한다"를 눈에 보이게 두려는 것이다 |
 | kube-proxy | 아무것도 쓰지 않는다 | 매니페스트에 `operator: Exists`가 하드코딩돼 있다(`configuration_values` 스키마에 `tolerations` 필드가 없다) |
-| **efs-csi controller** | 들일 때 판정한다 | ⚠️ 기본값을 확인하지 않았다. `CriticalAddonsOnly`가 없으면 cert-manager와 같이 쓴다 |
+| **efs-csi controller** | 들일 때 판정한다 | ⚠️ 기본값을 확인하지 않았다. `CriticalAddonsOnly`가 없으면 `nodeSelector`와 toleration을 함께 쓴다 |
 | app 워크로드 | 아무것도 쓰지 않는다 | 제약이 없는 것이 곧 Karpenter 영역이다 |
 | Karpenter `NodePool` | taint를 두지 않는다 | — |
 
@@ -329,21 +328,13 @@ helm show values oci://public.ecr.aws/karpenter/karpenter --version <ver> | grep
 
 ### addon 주입 (`cluster_addons[name].configuration`)
 
-써 넣는 값의 대부분이 끌어당기기 축이다. toleration을 직접 쓰는 자리는 cert-manager 하나뿐이다.
+써 넣는 값은 끌어당기기 축뿐이다.
 
 ```hcl
 locals {
   # 끌어당기기 축만 갖는 값. 밀어내기는 이 addon들의 기본 toleration이 이미 통과한다.
   system_node_selector = jsonencode({
     nodeSelector = { "workload-class" = "system" }
-  })
-
-  # 두 축을 다 갖는 값. 기본 toleration이 없는 addon만 쓴다.
-  system_node_placement = jsonencode({
-    nodeSelector = { "workload-class" = "system" }
-    tolerations = [
-      { key = "CriticalAddonsOnly", operator = "Equal", value = "true", effect = "NoSchedule" },
-    ]
   })
 }
 
@@ -355,16 +346,6 @@ cluster_addons = {
       node       = { tolerateAllTaints = true }
       controller = jsondecode(local.system_node_selector)
     })
-  }
-  # 세 컴포넌트가 각자 받는다. 최상위만 주면 cainjector·webhook이 빠진다.
-  "cert-manager" = {
-    configuration = jsonencode(merge(
-      jsondecode(local.system_node_placement),
-      {
-        cainjector = jsondecode(local.system_node_placement)
-        webhook    = jsondecode(local.system_node_placement)
-      }
-    ))
   }
 }
 ```
