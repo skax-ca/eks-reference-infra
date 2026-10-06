@@ -59,17 +59,6 @@ locals {
   system_node_selector = jsonencode({
     nodeSelector = { "workload-class" = "system" }
   })
-
-  # 두 축을 다 갖는 값. 기본 toleration이 없는 addon만 쓴다(지금은 cert-manager 하나).
-  # ⛔ vpc-cni·eks-pod-identity-agent에는 쓰지 않는다. 두 DaemonSet은 차트 기본 tolerations가
-  #    이미 operator:Exists라 모든 taint를 통과하므로 좁은 값을 직접 쓰면 후퇴이고, vpc-cni는
-  #    enable_custom_networking=true라 모듈이 configuration_values를 재주입해 반영되지도 않는다.
-  system_node_placement = jsonencode({
-    nodeSelector = { "workload-class" = "system" }
-    tolerations = [
-      { key = "CriticalAddonsOnly", operator = "Equal", value = "true", effect = "NoSchedule" },
-    ]
-  })
 }
 
 # VPC 디스커버리. networking state를 읽지 않고 Name 태그로 우리 VPC를 찾는다. 공용 개발
@@ -296,7 +285,7 @@ module "eks" {
     #    요구해 Karpenter가 만든 노드에는 못 뜬다(자기 자신을 부트스트랩할 수 없다).
     system = {
       # graviton(arm64). 비용 우선이라 system 계층이 감당 가능한 가장 작은 크기를 쓴다. 이 노드가
-      # Karpenter + core addon + 컨트롤러(cert-manager·external-dns·ALBC·ebs-csi)를 얹는다.
+      # Karpenter + core addon + 컨트롤러(external-dns·ALBC·ebs-csi)를 얹는다.
       # ⚠️ 더 줄이면(t4g.small = 2 GiB) kubelet+daemonset 몫을 빼고 남는 여유가 거의 없다.
       instance_types = ["t4g.medium"]
       min_size       = 2
@@ -377,23 +366,9 @@ module "eks" {
       configuration = local.system_node_selector
     }
 
-    # community tier(opt-in). 컨트롤러+CRD는 IaC addon, Issuer/Certificate CR은 GitOps 소관이다.
-    # ⚠️ toleration을 직접 쓰는 유일한 addon이다. 스키마에 기본 tolerations가 없어 기댈 값이
-    #    없다(coredns·metrics-server·ebs-csi controller와 갈리는 지점).
-    # ⚠️ 최상위만 주면 부족하다. 차트가 컨트롤러·cainjector·webhook 세 개의 독립된 Deployment로
-    #    구성되고 각각 자기 nodeSelector·tolerations를 따로 받는다. 빠뜨리면 그 둘이 taint를 넘지
-    #    못해, Karpenter 노드가 아직 없는 상태(GitOps 미시딩)에서 addon 전체가
-    #    DEGRADED(InsufficientNumberOfReplicas)로 멈춘다.
-    "cert-manager" = {
-      addon_version = "v1.21.0-eksbuild.3"
-      configuration = jsonencode(merge(
-        jsondecode(local.system_node_placement),
-        {
-          cainjector = jsondecode(local.system_node_placement)
-          webhook    = jsondecode(local.system_node_placement)
-        }
-      ))
-    }
+    # cert-manager는 쓰지 않는다. 누락은 삭제가 아니라서 클러스터의 addon을 지우는 apply에는 이 줄이
+    # 필요하다. 지운 뒤에는 이 줄째 삭제한다.
+    "cert-manager" = { enabled = false }
     # ⛔ external-dns는 싣지 않는다. 아래 enable_external_dns_iam과 한 쌍이다. IAM 없이 컨트롤러만
     #    돌면 Route53에 아무것도 쓰지 못하는 파드가 남는다. 되켤 때는 addon과 IAM을 함께 켠다.
   }
