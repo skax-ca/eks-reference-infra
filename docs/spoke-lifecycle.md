@@ -110,10 +110,17 @@ policy의 Principal이 hub의 `argocd_hub_pod_identity` Role ARN이다.
 gh workflow run deploy-dev-eks.yml --ref main -f action=apply
 ```
 
-⚠️ **hub의 `argocd_hub_pod_identity`가 아직 `enable=false`여도 이 apply는 성공한다.** AWS는
-trust policy의 Principal 존재를 **생성 시점에 검증하지 않는다.** 순서를 걱정해 hub를 먼저
-켤 필요는 없지만, 크로스 계정 인증이 실제로 되려면 결국 hub 쪽도 켜야 한다(6절에서 등록한
-뒤 확인).
+⚠️ **hub eks의 apply가 끝난 뒤에 건다.** IAM은 trust policy의 Principal이 실재하는지 **생성
+시점에 검증한다.** hub의 `argocd_hub_pod_identity` Role이 없으면 이 apply가 `Invalid principal in
+policy`로 실패한다. plan은 IAM을 호출하지 않아 Role이 없어도 통과하므로, plan 성공은 순서가 맞다는
+신호가 아니다. 승인 전에 hub 계정에서 Role을 확인한다.
+
+```bash
+aws --profile <hub-profile> iam get-role --role-name iamr-<workload>-hub-<region>-argocd-hub
+```
+
+반대 방향은 순서가 없다. hub의 Role은 spoke Role을 permission policy의 `Resource`로 가리키고,
+`Resource`는 존재 검증을 받지 않는다.
 
 ### 6. GitOps 등록: hub에 `cluster-secret.yaml` 신규 등록
 
