@@ -362,6 +362,26 @@ controller 쪽에는 그런 불리언이 없어 `nodeSelector`로 간다.
 (`modules/eks-cluster/addons.tf`의 재주입 로직)이 `configuration_values`를 env·eniConfig로 다시 써서
 소비자 입력을 덮는다. 설정표대로 손댈 필요도 없다.
 
+### addon을 뺄 때
+
+두 번에 나눈다. `cluster_addons`에서 블록을 지우기만 하면 plan이 `No changes`이고 addon은 남는다.
+
+1. `"<addon>" = { enabled = false }`로 바꿔 apply한다. plan에 `aws_eks_addon.this["<addon>"]` 1건이
+   destroy로 잡힌다.
+2. 클러스터에 남은 것을 workbench에서 걷는다. addon이 `preserve = true`로 만들어져 EKS는 등록만 지우고
+   파드·CRD·webhook·RBAC를 남긴다. 그 addon의 CR이 0건인지 먼저 보고 webhook부터 지운다(webhook 파드가
+   먼저 사라지면 호출이 실패한다). ⚠️ 라벨은 addon마다 다를 수 있다. `kubectl get crd -l "$L"`로 먼저 본다.
+3. `enabled = false` 줄을 지운다. 이 apply는 변경 0건이다.
+
+```bash
+L='app.kubernetes.io/instance=<addon>,app.kubernetes.io/managed-by=EKS'
+kubectl delete validatingwebhookconfiguration,mutatingwebhookconfiguration -l "$L"
+kubectl delete crd -l "$L"
+kubectl delete ns <addon-namespace>
+kubectl delete clusterrolebinding,clusterrole -l "$L"
+kubectl get crd,clusterrole,clusterrolebinding,ns -o name | grep <addon>      # 결과가 없어야 한다
+```
+
 ### 확인 (workbench에서)
 
 ```bash
