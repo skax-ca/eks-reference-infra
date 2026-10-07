@@ -216,6 +216,10 @@ kubectl -n argocd get applications | grep <spoke-cluster-name>   # 결과 없어
 kubectl get pods -A   # ArgoCD 관리 addon(aws-lbc·keda·kyverno·karpenter 등) 파드가 없어야 함
 kubectl get gateway -A; kubectl get nodepools,ec2nodeclasses 2>&1                                  # 없어야 함
 aws ec2 describe-security-groups --filters "Name=tag:elbv2.k8s.aws/cluster,Values=<cluster-name>"  # 0개
+#    ⚠️ wave 순서가 서도 ALBC의 공유 backend SG(`elbv2.k8s.aws/resource=backend-sg`) 하나가 남을 수 있다.
+#       Gateway가 지워진 뒤 ALBC가 그 SG를 걷기 전에 자기 wave가 온 경우다. 그 SG를 쓰는 ENI가 0건인지
+#       보고 `aws ec2 delete-security-group`으로 지운다. 남기면 networking destroy가 VPC 삭제에서 막힌다.
+#    kyverno의 웹훅 설정 일부와 addon CRD는 남는다. 클러스터째 지울 때는 손대지 않는다.
 
 # ⑤ ④는 GitOps가 만든 addon 자신만 다룬다 — 실제 워크로드가 만든 LB·PVC·Karpenter
 #    NodeClaim(addon이 아니라 사용자가 배포한 앱이 낳은 것)은 여전히 별도 대상이다.

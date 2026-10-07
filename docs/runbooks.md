@@ -367,9 +367,9 @@ controller 쪽에는 그런 불리언이 없어 `nodeSelector`로 간다.
 `cluster_addons`에서 블록만 지우면 plan이 `No changes`이고 addon은 남는다. 길은 둘이고, 끝나면 더한 줄을 지운다(변경 0건).
 
 **EKS에 맡긴다.** `preserve = false`를 apply한 뒤(1건 in-place) `enabled = false`를 apply한다(1건 destroy).
-삭제가 state의 값으로 일어나 한 번에 넣으면 `true`로 지워진다. `metrics-server`는 Deployment·Service·
-PDB·APIService·RBAC가 1분 안에 전부 걷힌다. ⏳ CRD·webhook을 가진 addon은 확인하지 않았다. ⚠️ CRD가
-지워지면 그 CR도 사라진다.
+삭제가 state의 값으로 일어나 한 번에 넣으면 `true`로 지워진다. 워크로드·Service·RBAC·APIService에 더해 CRD와
+webhook 설정까지 1분 안에 걷힌다(`metrics-server`·`cert-manager`). 남는 것은 네임스페이스와 addon이 실행 중에
+만든 Secret(`cert-manager-webhook-ca`)이다. ⚠️ CRD가 지워지면 그 CR도 사라진다.
 
 **손으로 걷는다**(기본값 `preserve = true`). `"<addon>" = { enabled = false }`로 apply하면 EKS는 등록만
 지우고 파드·CRD·webhook·RBAC를 남긴다. CR이 0건인지 먼저 보고 webhook부터 지운다(webhook 파드가 먼저
