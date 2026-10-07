@@ -427,6 +427,7 @@ module "eks" {
       # 이 addon을 지울 때 EKS가 클러스터 안 리소스까지 걷게 한다. 삭제는 state의 값으로 일어나므로
       # enabled = false보다 먼저 apply돼 있어야 한다.
       preserve = false
+      enabled  = false
     }
 
     # ⛔ external-dns는 싣지 않는다. 아래 enable_external_dns_iam과 한 쌍이다. IAM 없이 컨트롤러만
