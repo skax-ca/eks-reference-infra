@@ -55,6 +55,17 @@ locals {
   system_node_selector = jsonencode({
     nodeSelector = { "workload-class" = "system" }
   })
+
+  # 두 축을 다 갖는 값. 기본 toleration이 없는 addon만 쓴다(지금은 cert-manager 하나).
+  # ⛔ vpc-cni·eks-pod-identity-agent에는 쓰지 않는다. 두 DaemonSet은 차트 기본 tolerations가
+  #    이미 operator:Exists라 모든 taint를 통과하므로 좁은 값을 직접 쓰면 후퇴이고, vpc-cni는
+  #    enable_custom_networking=true라 모듈이 configuration_values를 재주입해 반영되지도 않는다.
+  system_node_placement = jsonencode({
+    nodeSelector = { "workload-class" = "system" }
+    tolerations = [
+      { key = "CriticalAddonsOnly", operator = "Equal", value = "true", effect = "NoSchedule" },
+    ]
+  })
 }
 
 # 허브 uniq CIDR 발견. networking과 별도 state라 같은 RAM 조회를 독립적으로 반복한다(remote_state를
@@ -425,6 +436,26 @@ module "eks" {
     "metrics-server" = {
       addon_version = "v0.9.0-eksbuild.5"
       configuration = local.system_node_selector
+    }
+
+    # community tier(opt-in). ALB Controller 웹훅의 TLS를 발급하고 갱신한다. 컨트롤러+CRD는 IaC
+    # addon이고 Certificate·Issuer는 GitOps의 ALBC 차트가 만든다. GitOps가 서기 전에 이 addon이
+    # 먼저 서야 그 차트의 Certificate가 받아들여진다.
+    # ⚠️ toleration을 직접 쓰는 유일한 addon이다. 스키마에 기본 tolerations가 없어 기댈 값이
+    #    없다(coredns·metrics-server·ebs-csi controller와 갈리는 지점).
+    # ⚠️ 최상위만 주면 부족하다. 차트가 컨트롤러·cainjector·webhook 세 개의 독립된 Deployment로
+    #    구성되고 각각 자기 nodeSelector·tolerations를 따로 받는다. 빠뜨리면 그 둘이 taint를 넘지
+    #    못해, Karpenter 노드가 아직 없는 상태(GitOps 미시딩)에서 addon 전체가
+    #    DEGRADED(InsufficientNumberOfReplicas)로 멈춘다.
+    "cert-manager" = {
+      addon_version = "v1.21.2-eksbuild.2"
+      configuration = jsonencode(merge(
+        jsondecode(local.system_node_placement),
+        {
+          cainjector = jsondecode(local.system_node_placement)
+          webhook    = jsondecode(local.system_node_placement)
+        }
+      ))
     }
 
     # ⛔ external-dns는 싣지 않는다. 아래 enable_external_dns_iam과 한 쌍이다. IAM 없이 컨트롤러만
