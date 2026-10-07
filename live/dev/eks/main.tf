@@ -231,7 +231,7 @@ module "argocd_trust" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.12.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.13.0&depth=1"
 
   # 리소스 타입 약어는 모듈이 조합한다.
   naming = {
@@ -424,6 +424,9 @@ module "eks" {
     "metrics-server" = {
       addon_version = "v0.9.0-eksbuild.5"
       configuration = local.system_node_selector
+      # 이 addon을 지울 때 EKS가 클러스터 안 리소스까지 걷게 한다. 삭제는 state의 값으로 일어나므로
+      # enabled = false보다 먼저 apply돼 있어야 한다.
+      preserve = false
     }
 
     # ⛔ external-dns는 싣지 않는다. 아래 enable_external_dns_iam과 한 쌍이다. IAM 없이 컨트롤러만
