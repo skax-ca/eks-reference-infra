@@ -201,7 +201,7 @@ module "workbench" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.12.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.13.0&depth=1"
 
   # 리소스 타입 약어는 모듈이 조합한다.
   naming = {
@@ -333,8 +333,9 @@ module "eks" {
   # identity association)는 merge 뒤에 재주입되어 살아남는다.
   # ⚠️ 여기 안 적은 addon도 사라지지 않는다(누락 != 삭제). 제거는 enabled = false 명시로만 하고,
   #    core 4종(vpc-cni·coredns·kube-proxy·eks-pod-identity-agent)은 그것마저 차단된다.
-  # ⚠️ enabled = false는 EKS의 addon 등록만 지운다. addon이 preserve = true로 만들어져 파드·CRD·
-  #    webhook·RBAC는 클러스터에 남는다. 남은 것을 걷는 절차는 docs/runbooks.md가 갖는다.
+  # ⚠️ enabled = false는 기본값(preserve = true)에서 EKS의 addon 등록만 지운다. 파드·CRD·webhook·
+  #    RBAC는 클러스터에 남는다. EKS에 맡기는 길(preserve = false)과 손으로 걷는 절차는
+  #    docs/runbooks.md가 갖는다.
   # ⚠️ 값의 정의역은 f(kubernetes_version, region)이고 아래는 k8s 1.35·ap-northeast-2 기준이다.
   #    kubernetes_version을 올리면 이 표도 함께 갱신한다. 안 하면 "그 버전 없음"으로 apply가
   #    죽는다(kube-proxy는 정의상 k8s 마이너를 따라간다). 조회:

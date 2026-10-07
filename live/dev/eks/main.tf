@@ -391,8 +391,9 @@ module "eks" {
   # identity association)는 merge 뒤에 재주입되어 살아남는다.
   # ⚠️ 여기 안 적은 addon도 사라지지 않는다(누락 != 삭제). 제거는 enabled = false 명시로만 하고,
   #    core 4종(vpc-cni·coredns·kube-proxy·eks-pod-identity-agent)은 그것마저 차단된다.
-  # ⚠️ enabled = false는 EKS의 addon 등록만 지운다. addon이 preserve = true로 만들어져 파드·CRD·
-  #    webhook·RBAC는 클러스터에 남는다. 남은 것을 걷는 절차는 docs/runbooks.md가 갖는다.
+  # ⚠️ enabled = false는 기본값(preserve = true)에서 EKS의 addon 등록만 지운다. 파드·CRD·webhook·
+  #    RBAC는 클러스터에 남는다. EKS에 맡기는 길(preserve = false)과 손으로 걷는 절차는
+  #    docs/runbooks.md가 갖는다.
   # ⚠️ 값의 정의역은 f(kubernetes_version, region)이고 아래는 k8s 1.35·ap-northeast-2 기준이다.
   #    kubernetes_version을 올리면 이 표도 함께 갱신한다. 안 하면 "그 버전 없음"으로 apply가
   #    죽는다(kube-proxy는 정의상 k8s 마이너를 따라간다). 조회:
@@ -424,10 +425,6 @@ module "eks" {
     "metrics-server" = {
       addon_version = "v0.9.0-eksbuild.5"
       configuration = local.system_node_selector
-      # 이 addon을 지울 때 EKS가 클러스터 안 리소스까지 걷게 한다. 삭제는 state의 값으로 일어나므로
-      # enabled = false보다 먼저 apply돼 있어야 한다.
-      preserve = false
-      enabled  = false
     }
 
     # ⛔ external-dns는 싣지 않는다. 아래 enable_external_dns_iam과 한 쌍이다. IAM 없이 컨트롤러만
