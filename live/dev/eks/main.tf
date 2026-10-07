@@ -242,7 +242,7 @@ module "argocd_trust" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.13.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.14.0&depth=1"
 
   # 리소스 타입 약어는 모듈이 조합한다.
   naming = {
