@@ -168,7 +168,7 @@ kubectl -n argocd get applications \
 | `Synced` / `Healthy` | 정상 |
 | `OutOfSync`가 **고착** | 대개 CRD 스키마 defaulting. 해당 Application에 `ServerSideDiff=true`를 켠다 |
 | `Progressing`이 오래 | 파드 이벤트를 본다. 대개 이미지 pull 또는 리소스 부족 |
-| seed 중 wave 0 CRD Application이 `Degraded`에 **고착**, CRD 조건은 전부 `True` | 생성 순간의 health가 갱신되지 않아 부모가 다음 wave로 못 넘어간다. 그 Application을 `argocd app get <app> --hard-refresh --core`로 풀고, 풀기 전에 `argocd app get <app> --core`로 CRD별 health를 남긴다. 원인은 확정하지 않았다(차트 기본 `ignoreResourceUpdates`의 `/status` 무시가 후보지만, Argo CD 문서는 health가 바뀌면 무시하지 않는다고 적는다) |
+| seed나 spoke 등록 직후 wave 0 CRD Application이 `Degraded`로 남는다. CRD 조건은 전부 `True` | 대개 고장이 아니라 주기 refresh를 기다리는 것이다. CRD가 `Established`가 된 뒤에는 그 Application을 다시 reconcile하게 하는 것이 없어, 생성 순간의 health가 다음 주기 refresh(`argocd-cm`의 `timeout.reconciliation` 120초에 jitter 최대 60초)까지 남는다. 3분 남짓이면 스스로 `Healthy`가 되고, 부모는 재시도 backoff만큼 더 기다린 뒤 다음 wave로 넘어간다(전체로 5분쯤 늦어진다). 그보다 오래 남거나 기다리지 않으려면 `argocd app get <app> --core`로 CRD별 health를 남기고 `argocd app get <app> --hard-refresh --core`로 푼다. 그 사이 refresh가 없는 것은 차트 기본 `ignoreResourceUpdates`의 `/status` 무시와 맞는다. 마지막 reconcile이 이미 `Established`인 CRD를 왜 `Degraded`로 읽는지는 확인하지 못했다 |
 
 root Application이 저장소를 실제로 읽었는지는 **revision으로** 판정한다:
 
