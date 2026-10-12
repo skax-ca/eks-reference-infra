@@ -46,7 +46,8 @@ dispatch는 새 plan이라 승인을 다시 받는다. plan artifact는 7일 보
 | hub를 구축·철거한다 | [`docs/hub-lifecycle.md`](docs/hub-lifecycle.md) |
 | spoke를 구축·철거한다 | [`docs/spoke-lifecycle.md`](docs/spoke-lifecycle.md) |
 | 이미 구축된 환경을 운영한다 | [`docs/runbooks.md`](docs/runbooks.md) |
-| Kubernetes 마이너를 올리거나 되돌린다 | [`docs/upgrade.md`](docs/upgrade.md) |
+| Kubernetes 마이너를 올린다 | [`docs/upgrade.md`](docs/upgrade.md) |
+| 올린 마이너를 되돌린다 | [`docs/upgrade-rollback.md`](docs/upgrade-rollback.md) |
 | state 버킷·CI 신원(OIDC·IAM Role 2단)을 만든다(IaC 밖) | [`bootstrap/README.md`](bootstrap/README.md) |
 | 셸·문서 게이트를 손본다 | [`scripts/README.md`](scripts/README.md) |
 | 왜 이 패턴인가 | `iac-module-library`의 [`docs/architectures/gitops-hub-spoke/aws/`](https://github.com/skax-ca/iac-module-library/tree/main/docs/architectures/gitops-hub-spoke/aws) |

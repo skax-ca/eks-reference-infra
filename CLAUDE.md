@@ -10,7 +10,8 @@ AWS hub-spoke EKS 배포 루트. `iac-module-library`의 모듈을 소비해 인
 - `docs/hub-lifecycle.md`: hub 구축·철거
 - `docs/spoke-lifecycle.md`: spoke 구축·철거
 - `docs/runbooks.md`: 이미 선 환경 운영
-- `docs/upgrade.md`: Kubernetes 마이너 업그레이드와 되돌리기
+- `docs/upgrade.md`: Kubernetes 마이너 업그레이드
+- `docs/upgrade-rollback.md`: 올린 마이너 되돌리기
 
 패턴 갈림길은 `iac-module-library/docs/architectures/gitops-hub-spoke/aws/`가 갖는다. 이 repo 고유의
 판단(TGW 별도 root, `for_each` key 고정 등)은 해당 `.tf`/`.sh` 인라인 주석이 SSOT다.

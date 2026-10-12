@@ -1,6 +1,6 @@
 # EKS 마이너 업그레이드
 
-**읽는 사람**: 이미 구축된 hub·spoke 클러스터의 Kubernetes 마이너 버전을 올리거나 되돌리는 사람.
+**읽는 사람**: 이미 구축된 hub·spoke 클러스터의 Kubernetes 마이너 버전을 올리는 사람.
 
 클러스터에 접근하는 법과 GitOps 상태를 읽는 법은 [`runbooks.md`](runbooks.md)가 갖는다. 승인 게이트와
 plan을 읽는 법은 `iac-module-library/CLAUDE.md` 「배포 루트 공통」이 갖는다.
@@ -100,7 +100,7 @@ kubectl get nodes -L karpenter.sh/nodepool,eks.amazonaws.com/nodegroup
 
 ```bash
 aws eks start-insights-refresh --cluster-name <cluster>
-aws eks describe-insights-refresh --cluster-name <cluster>     # status가 IN_PROGRESS를 벗어날 때까지
+aws eks describe-insights-refresh --cluster-name <cluster>     # status가 COMPLETED가 될 때까지
 
 aws eks list-insights --cluster-name <cluster> \
   --filter '{"categories":["UPGRADE_READINESS"]}' \
@@ -115,6 +115,9 @@ aws eks list-insights --cluster-name <cluster> \
 | `UNKNOWN` | EKS가 판정하지 못했다 | refresh를 다시 돌린다 |
 
 ⚠️ deprecated API 사용은 지난 30일을 본다. 고친 뒤에도 상태가 바뀌기까지 최대 30일이 걸린다.
+
+⚠️ **빈 목록은 통과가 아니다.** 갓 만든 클러스터는 refresh를 한 번 돌리기 전까지 목록이 비어 있다.
+`start-insights-refresh`가 없다는 오류가 나면 AWS CLI가 낡은 것이다. 올리고 다시 돈다.
 
 ### 3.3. 올릴 값 조회
 
@@ -214,12 +217,23 @@ nonprd 티어(dev)를 끝까지 올리고 확인한 뒤 prd 티어(hub)를 올�
 
 ### 5.1. 보류 걸기
 
-`eks-platform-gitops`의 `addons/karpenter/nodepool/values.yaml`에서 그 티어의 drift 보류를 건다.
+`eks-platform-gitops`의 `addons/karpenter/nodepool/values.yaml`에서 **올릴 클러스터의 티어 줄만** `true`로
+바꾸고 PR로 머지한다. dev는 `nonprd`, hub는 `prd`다.
+
+```yaml
+driftHoldByTier:
+  prd: false
+  nonprd: true      # dev를 올리는 동안
+```
+
+머지하면 hub의 ArgoCD가 그 티어 클러스터의 `NodePool`에 budget을 건다. 반영까지 3분쯤 걸린다.
 
 ```bash
-# workbench에서. budgets에 nodes "0"·reasons Drifted 줄이 보여야 한다
+# 올릴 클러스터의 workbench에서. {"nodes":"0","reasons":["Drifted"]}가 보여야 한다
 kubectl get nodepool default -o jsonpath='{.spec.disruption.budgets}'; echo
 ```
+
+⛔ 반대 티어 클러스터에서도 같은 명령을 돌려 `[{"nodes":"10%"}]`만 나오는지 본다.
 
 ### 5.2. apply 1: 컨트롤플레인
 
@@ -233,7 +247,11 @@ plan에서 볼 것:
 |----|------|
 | `aws_eks_cluster.this[0]` | `version`이 바뀌는 `update in-place` |
 | `time_sleep.this[0]` | `must be replaced`. 클러스터 버전이 trigger라서 정상이다 |
-| 그 밖 | ⏳ 없어야 한다. 노드그룹·addon·workbench가 뜨면 승인하지 않고 원인을 찾는다 |
+| `aws_iam_openid_connect_provider` | `thumbprint_list`가 `(known after apply)`로 바뀌는 `update in-place`. 클러스터를 읽는 data source가 apply 때 다시 읽혀서다 |
+| `data.aws_eks_addon_version.*` | `will be read during apply`. data source라 리소스 변경이 아니다 |
+| 그 밖 | 없어야 한다. 노드그룹·addon·workbench가 뜨면 승인하지 않고 원인을 찾는다 |
+
+요약 줄은 `Plan: 1 to add, 2 to change, 1 to destroy`다. add와 destroy는 `time_sleep`의 교체다.
 
 ⛔ 클러스터가 `must be replaced`로 뜨면 승인하지 않는다.
 
@@ -277,8 +295,15 @@ kubectl get nodes -L karpenter.sh/nodepool,eks.amazonaws.com/nodegroup -w
 
 ### 5.4. cluster-autoscaler
 
-`eks-platform-gitops` 버전 표에서 그 티어의 cluster-autoscaler 이미지 태그를 3.3에서 조회한 값으로
-올린다. AWS는 cluster-autoscaler를 클러스터와 같은 마이너로 맞추라고 적는다.
+`eks-platform-gitops`의 `addons/cluster-addons/values.yaml`에서 그 티어의 이미지 줄을 3.3에서 조회한
+값으로 올리고 PR로 머지한다. AWS는 cluster-autoscaler를 클러스터와 같은 마이너로 맞추라고 적는다.
+
+```yaml
+versions:
+  clusterAutoscalerImage:
+    prd: v1.35.0
+    nonprd: v1.36.1   # dev를 올리는 동안
+```
 
 ```bash
 kubectl -n kube-system get deploy -l app.kubernetes.io/name=aws-cluster-autoscaler \
@@ -291,8 +316,8 @@ kubectl -n kube-system logs -l app.kubernetes.io/name=aws-cluster-autoscaler --t
 
 ### 5.5. 되돌릴지 정하고 보류를 푼다
 
-여기가 되돌릴 수 있는 마지막 지점이다. 6절의 컨트롤플레인·노드·GitOps 행을 확인하고, 되돌린다면 7절로
-간다. 진행한다면 5.1에서 건 보류를 푼다.
+여기가 되돌릴 수 있는 마지막 지점이다. 6절의 컨트롤플레인·노드·GitOps 행을 확인하고, 되돌린다면
+`upgrade-rollback.md`로 간다. 진행한다면 5.1에서 `true`로 바꾼 줄을 `false`로 되돌려 PR로 머지한다.
 
 ```bash
 # workbench에서. Karpenter 노드가 한 대씩 대상 마이너로 바뀐다
@@ -357,37 +382,7 @@ Server가 같은 마이너인지 본다.
 
 ## 7. 되돌리기
 
-⏳ 이 절은 실환경에서 확인하지 않았다.
-
-| 조건 | 내용 |
-|------|------|
-| 기한 | 업그레이드 완료 뒤 7일 |
-| 범위 | 한 마이너. `1.35 → 1.36 → 1.37`로 올렸으면 `1.36`까지만 돌아간다 |
-| 되돌려지는 것 | 컨트롤플레인 |
-| 되돌려지지 않는 것 | EKS 관리형 addon 버전, 관리형 노드그룹, etcd 데이터, 워크로드 |
-| 되돌릴 수 없는 경우 | 그 버전으로 생성한 클러스터, 7일 경과, 그 뒤 다시 올린 클러스터 |
-
-올린 순서의 역순으로 내린다. 5.5에서 보류를 풀기 전이면 아래 넷이 전부다.
-
-| 순서 | 무엇을 | 방법 |
-|------|--------|------|
-| 1 | 준비 상태를 읽는다 | 아래 명령. `ERROR`·`UNKNOWN`이 있으면 고친다 |
-| 2 | cluster-autoscaler | 5.4의 커밋을 revert한다 |
-| 3 | system 노드그룹 | apply 2의 커밋을 revert한다 |
-| 4 | 컨트롤플레인 | apply 1의 커밋을 revert한다 |
-
-```bash
-aws eks list-insights --cluster-name <cluster> --filter '{"categories":["ROLLBACK_READINESS"]}' \
-  --query 'insights[].[insightStatus.status,name]' --output table
-```
-
-- ⚠️ 보류 중에 새로 뜬 Karpenter 노드는 새 마이너다. kubelet version skew insight가 `ERROR`로 뜨면
-  `kubectl delete nodeclaim <name>`으로 그 노드를 비우고 지운다. 컨트롤플레인이 내려간 뒤 Karpenter가
-  옛 마이너로 다시 띄운다.
-- ⚠️ 보류를 이미 풀었다면 Karpenter 노드 전부가 여기에 해당한다. 워크로드가 전부 옮겨진다.
-- ⚠️ apply 3까지 갔다면 옛 마이너의 호환 목록에 없는 addon을 먼저 내린다. `kube-proxy`가 해당한다.
-- ⛔ revert한 plan에 클러스터나 노드그룹이 `must be replaced`로 뜨면 승인하지 않는다. provider 코드는
-  버전 하향을 교체로 다루지 않지만 ⏳ plan으로 확인하지 않았다.
+조건과 순서는 [`upgrade-rollback.md`](upgrade-rollback.md)가 갖는다. 5.5에서 보류를 풀기 전에 읽는다.
 
 ---
 

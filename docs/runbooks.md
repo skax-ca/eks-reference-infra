@@ -115,7 +115,8 @@ kubectl -n argocd get secret argocd-initial-admin-secret     # NotFound 여야 �
 
 ## 4. EKS 업그레이드
 
-Kubernetes 마이너를 올리거나 되돌리는 절차는 [`upgrade.md`](upgrade.md)가 갖는다. 사전 점검, 단계별 plan
+Kubernetes 마이너를 올리는 절차는 [`upgrade.md`](upgrade.md)가, 되돌리는 절차는
+[`upgrade-rollback.md`](upgrade-rollback.md)가 갖는다. 사전 점검, 단계별 plan
 기대값, Karpenter 노드의 보류와 되돌릴 수 있는 구간이 거기 있다.
 
 ---
