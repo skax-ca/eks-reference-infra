@@ -115,44 +115,8 @@ kubectl -n argocd get secret argocd-initial-admin-secret     # NotFound 여야 �
 
 ## 4. EKS 업그레이드
 
-### 하드 제약 두 가지
-
-- **마이너는 1단계씩만.** `1.35 -> 1.37` 직행은 불가하다. 두 번 돈다.
-- **컨트롤플레인을 올리기 전에** 노드 kubelet이 이미 컨트롤플레인과 같은 마이너여야 한다.
-
-### apply를 셋으로 나눈다
-
-| 단계 | 바꾸는 값 | 무엇이 일어나나 |
-|------|----------|----------------|
-| 사전 | (없음) | Upgrade Insights로 deprecated API 스캔 + 노드 kubelet 버전 확인 |
-| **apply 1** | `kubernetes_version` **+1 마이너** | 컨트롤플레인만 |
-| **apply 2** | `managed_node_groups[*].ami_release_version` | 노드 롤링 교체 |
-| **apply 3** | `cluster_addons[*].addon_version` **전부** | addon |
-
-**한 커밋에 몰지 않는다.** 순서가 의존성 그래프에 맡겨지는데, 모듈이 심어 둔 순서
-(vpc-cni의 `before_compute`)는 **최초 생성** 기준이지 업그레이드 기준이 아니다. 승인도 갈린다:
-컨트롤플레인 업그레이드는 rollback 창이 7일이고 노드 교체는 워크로드 중단을 동반한다. 한 plan에
-섞으면 **승인자가 무엇을 승인하는지 분간할 수 없다.**
-
-### 값을 조회하는 법: 추정하지 않는다
-
-```bash
-# 현재 버전
-aws eks describe-cluster --name <cluster> --query 'cluster.version'
-
-# ami_release_version — 아키텍처별로 값이 다르다
-aws ssm get-parameter --region <region> \
-  --name /aws/service/eks/optimized-ami/<k8s>/amazon-linux-2023/arm64/standard/recommended/release_version
-#                                                                  ^^^^^ x86_64 는 여기를 바꾼다
-
-# addon_version — f(kubernetes_version, region) 이다. k8s를 올릴 때마다 전 addon 재조회
-aws eks describe-addon-versions --region <region> \
-  --kubernetes-version <k8s> --addon-name <name> \
-  --query 'addons[].addonVersions[].addonVersion'
-```
-
-> addon 버전은 **k8s 축과 리전 축 양쪽으로 파손된다.** 그래서 핀의 소유자가 모듈이 아니라
-> 배포 루트다.
+Kubernetes 마이너를 올리거나 되돌리는 절차는 [`upgrade.md`](upgrade.md)가 갖는다. 사전 점검, 단계별 plan
+기대값, Karpenter 노드의 보류와 되돌릴 수 있는 구간이 거기 있다.
 
 ---
 
@@ -277,7 +241,8 @@ app 워크로드는 Karpenter가, 플랫폼 컴포넌트와 상태 저장 OSS(re
 | **Karpenter 컨트롤러**(helm) | 아무것도 쓰지 않는다 | 기본 toleration `CriticalAddonsOnly: Exists` + 기본 affinity `karpenter.sh/nodepool DoesNotExist` |
 | Cluster Autoscaler(helm) | `nodeSelector` + toleration + `karpenter.sh/nodepool DoesNotExist` affinity | 차트 기본값이 셋 다 비어 있다 |
 | KEDA(helm) | `nodeSelector` + toleration | 차트 기본값이 비어 있다 |
-| ALBC · Kyverno · ArgoCD(helm) | toleration만(고정이 아니라 부트스트랩 허용) | 차트 기본값이 비어 있다 |
+| ALBC · Kyverno(helm) | toleration만(고정이 아니라 부트스트랩 허용) | 차트 기본값이 비어 있다 |
+| **ArgoCD**(helm, hub만) | `nodeSelector` + toleration. redis-ha 서브차트에는 같은 값을 따로 쓴다 | 차트 기본값이 비어 있고, 서브차트에는 `global` 값이 닿지 않는다 |
 | redis·postgresql·mongodb(helm) | `nodeSelector` + toleration | — |
 | vpc-cni · eks-pod-identity-agent · **efs-csi node**(DaemonSet) | 아무것도 쓰지 않는다 | 차트 기본값 `tolerations: [{operator: Exists}]`가 모든 taint를 통과한다 |
 | **ebs-csi node**(DaemonSet) | `node.tolerateAllTaints = true` | 같은 값이 기본이다. 명시는 "DaemonSet은 모든 taint를 통과한다"를 눈에 보이게 두려는 것이다 |
@@ -296,9 +261,14 @@ app 워크로드는 Karpenter가, 플랫폼 컴포넌트와 상태 저장 OSS(re
 "Karpenter가 만든 노드는 안 된다"만 말하고, 남는 후보가 시스템 노드그룹뿐이라 거기 선다. 관리형
 노드그룹을 하나 더 만들면 그때 `nodeSelector`를 명시로 채운다(Cluster Autoscaler가 그 형태다).
 
-⚠️ **ALBC·Kyverno·ArgoCD의 toleration은 고정이 아니라 부트스트랩 허용이다.** Karpenter 노드가
+⚠️ **ALBC·Kyverno의 toleration은 고정이 아니라 부트스트랩 허용이다.** Karpenter 노드가
 없는 구간에서 설 자리를 주는 것이 목적이라, 노드가 생긴 뒤에는 어느 쪽에 있어도 된다.
 ⛔ 고정할 근거가 생기기 전에 `nodeSelector`를 미리 넣지 않는다.
+
+⚠️ **ArgoCD는 고정한다.** hub의 ArgoCD 하나가 등록된 전 클러스터를 reconcile한다. Karpenter 노드에
+서면 drift·consolidation으로 노드가 교체될 때마다 재시작하고 그 시점을 고를 수 없다. system
+노드그룹은 값을 올리는 커밋으로만 교체된다. ⛔ hub의 system 노드그룹은 3대 아래로 내리지 않는다.
+HA 구성의 redis-ha가 redis와 haproxy를 각각 서로 다른 노드 3대에 세운다.
 
 🔴 **`aws-ebs-csi-driver`는 `node`(DaemonSet)와 `controller`(Deployment, 2 replica)로 나뉘고
 스키마도 `node.*`·`controller.*`로 분리돼 있다.** `controller`의 기본 toleration이 우리 taint를
