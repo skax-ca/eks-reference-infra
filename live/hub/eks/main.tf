@@ -212,7 +212,7 @@ module "workbench" {
 }
 
 module "eks" {
-  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.14.0&depth=1"
+  source = "git::https://github.com/skax-ca/iac-module-library.git//modules/aws/eks-cluster?ref=eks-cluster-v0.15.0&depth=1"
 
   # 리소스 타입 약어는 모듈이 조합한다.
   naming = {
@@ -287,7 +287,8 @@ module "eks" {
   #    재구축이 끝나면 true로 되돌린다.
   deletion_protection = false
 
-  # 배포 루트가 버전을 명시로 소유한다. 올릴 때 addon 핀·ami_release_version도 함께 갱신한다.
+  # 배포 루트가 버전을 명시로 소유한다. 이 값은 컨트롤플레인만 올린다. 노드그룹·addon 핀·
+  # kubectl_version은 각각 다음 커밋에서 올린다(docs/upgrade.md).
   kubernetes_version = "1.35"
 
   # 시스템 계층 노드. 앱·버스트는 Karpenter.
@@ -295,13 +296,17 @@ module "eks" {
     # ⚠️ Karpenter 자신도 여기 떠야 한다. chart affinity가 karpenter.sh/nodepool DoesNotExist를
     #    요구해 Karpenter가 만든 노드에는 못 뜬다(자기 자신을 부트스트랩할 수 없다).
     system = {
-      # graviton(arm64). 비용 우선이라 system 계층이 감당 가능한 가장 작은 크기를 쓴다. 이 노드가
-      # Karpenter + core addon + 컨트롤러(external-dns·ALBC·ebs-csi)를 얹는다.
+      # graviton(arm64). 이 노드가 Karpenter + core addon + 컨트롤러(external-dns·ALBC·ebs-csi)에 더해
+      # HA 구성의 ArgoCD 전체(파드 13개)를 얹는다.
       # ⚠️ 더 줄이면(t4g.small = 2 GiB) kubelet+daemonset 몫을 빼고 남는 여유가 거의 없다.
+      # ⚠️ ArgoCD 파드에는 requests가 없다. 메모리가 모자라도 Pending이 되지 않아 cluster-autoscaler가
+      #    노드를 늘리지 않고, 부족은 OOM으로 나타난다. 그때는 노드 수가 아니라 타입을 올린다.
       instance_types = ["t4g.medium"]
-      min_size       = 2
-      max_size       = 4
-      desired_size   = 2
+      # ⛔ 3 아래로 내리지 않는다. ArgoCD의 redis-ha가 redis 3개와 haproxy 3개를 각각 서로 다른 노드에
+      #    세운다. 2대면 세 번째 파드가 Pending으로 남고 seed의 preflight가 설치 전에 막는다.
+      min_size     = 3
+      max_size     = 5
+      desired_size = 3
 
       # ⚠️ instance_types와 짝이다. t4g(arm64)를 쓰면서 이 줄을 빼면 기본값이 x86이라 AMI와
       #    CPU가 어긋나 노드가 부팅되지 않는다. plan에서 잡히지 않고 AWS도 노드그룹 생성
@@ -313,8 +318,14 @@ module "eks" {
       # ⚠️ 아키텍처별로 값이 다르다(arm SSM 경로):
       #   aws ssm get-parameter --profile team --region ap-northeast-2 \
       #     --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/arm64/standard/recommended/release_version
-      # ⚠️ kubernetes_version을 올리면 이 값도 함께 갱신한다.
+      # ⚠️ 아래 kubernetes_version과 마이너가 같아야 한다(모듈이 plan에서 검증한다).
       ami_release_version = "1.35.6-20260810"
+
+      # 노드그룹의 k8s 마이너. 클러스터의 kubernetes_version과 따로 적어야 컨트롤플레인 업그레이드와
+      # 노드 롤링 교체가 다른 커밋·다른 승인으로 나뉜다. 빼면 노드그룹이 클러스터 버전을 따라가
+      # 컨트롤플레인을 올리는 plan에 노드 교체가 함께 뜬다. 올리는 순서는 docs/upgrade.md가 갖는다.
+      # ⛔ 클러스터보다 먼저 올리지 않는다. kubelet은 컨트롤플레인보다 높을 수 없다.
+      kubernetes_version = "1.35"
 
       # 노드 배치 두 축을 여기서 함께 건다: 밀어내기는 taint, 끌어당기기는 labels다. 두 이름이
       # 갈리는 것이 정상이다 — taint 키는 생태계 관례를 따라 플랫폼 차트의 기본 toleration을
