@@ -2,8 +2,10 @@
 
 **읽는 사람**: 올린 Kubernetes 마이너를 이전 버전으로 되돌릴지 정하거나 되돌리는 사람.
 
-올리는 절차와 단계 이름(컨트롤플레인 apply·노드그룹 apply·disruption 차단)은 [`upgrade.md`](upgrade.md)가 갖는다. 이 문서는 그
-절차의 「되돌릴지 정한다」 단계에서 되돌리기로 정했을 때 연다.
+올리는 절차와 단계 이름(컨트롤플레인 apply·노드그룹 apply·disruption 차단), 명령을 치는 자리(`# 로컬:`·
+`# workbench:`)는 [`upgrade.md`](upgrade.md)가 갖는다. 이 문서는 그 절차의 「되돌릴지 정한다」 단계에서
+되돌리기로 정했을 때 연다. 순서의 근거는 `iac-module-library`의
+`docs/architectures/gitops-hub-spoke/aws/upgrade.md`가 갖는다.
 
 > **검증 상태**: ⏳ 표시가 붙은 줄은 실환경에서 확인하지 않았다. 나머지는 dev에서 `1.36 → 1.35`로
 > 확인한 값이다.
@@ -66,8 +68,9 @@ AWS는 먼저 내릴 수단이 없는 Fargate에만 이 방법을 대안으로 �
 ## 3. 준비 상태를 읽는다
 
 ```bash
+# 로컬: refresh의 status가 COMPLETED가 된 뒤에 목록을 읽는다
 aws eks start-insights-refresh --cluster-name <cluster>
-aws eks describe-insights-refresh --cluster-name <cluster>     # status가 COMPLETED가 될 때까지
+aws eks describe-insights-refresh --cluster-name <cluster> --query status
 
 aws eks list-insights --cluster-name <cluster> --filter '{"categories":["ROLLBACK_READINESS"]}' \
   --query 'insights[].[insightStatus.status,id,name]' --output table
@@ -85,7 +88,7 @@ aws eks describe-insight --cluster-name <cluster> --id <id> \
 | `API usage rollback compatibility` · `Cluster health rollback compatibility` | 대상을 읽고 고친다 |
 
 ```bash
-# workbench에서. 어느 노드가 새 마이너인지와 Karpenter 노드인지를 함께 본다
+# workbench: 어느 노드가 새 마이너인지와 Karpenter 노드인지를 함께 본다
 kubectl get nodes -L karpenter.sh/nodepool,eks.amazonaws.com/nodegroup
 ```
 
@@ -97,7 +100,7 @@ addon 호환성」 표로 직접 확인한다. 지원하지 않으면 그 차트
 
 ## 4. 절차
 
-올린 순서의 역순이다. 앞 단계의 완료를 확인하기 전에 다음으로 가지 않는다. 차단(`upgradeHoldByTier`)은
+올린 순서의 역순이다. 앞 단계의 완료를 확인하기 전에 다음으로 가지 않는다. 차단(`disruptionBlockByTier`)은
 끝까지 `true`로 둔다.
 
 ### 4.1. cluster-autoscaler
@@ -106,6 +109,7 @@ addon 호환성」 표로 직접 확인한다. 지원하지 않으면 그 차트
 머지한다.
 
 ```bash
+# workbench:
 kubectl -n kube-system get deploy -l app.kubernetes.io/name=aws-cluster-autoscaler \
   -o jsonpath='{.items[0].spec.template.spec.containers[0].image}'; echo
 ```
@@ -124,7 +128,7 @@ kubectl -n kube-system get deploy -l app.kubernetes.io/name=aws-cluster-autoscal
 ⛔ 노드그룹이 `must be replaced`로 뜨면 승인하지 않는다.
 
 올릴 때와 같은 방식으로 교체된다. 새 노드가 AZ마다 한 대씩 함께 뜨고, 기존 노드가 함께 cordon된 뒤 한
-대씩 약 3분 간격으로 비워진다. 노드 2대 기준으로 apply는 약 10분이다.
+대씩 약 3분 간격으로 비워진다. apply는 노드 2대에 10분, 3대에 15분쯤이다.
 
 완료 조건: system 노드가 전부 옛 마이너이고 `Ready`다. 3절의 insight를 다시 읽으면 kubelet 항목의 대상에서
 system 노드가 빠져 있다.
@@ -145,6 +149,7 @@ addon apply까지 갔을 때만 한다. addon apply의 커밋을 revert해 PR로
 **비상 경로**: kubelet 항목의 `ERROR` 대상이 Karpenter 노드뿐인지 확인한 뒤 아래를 실행한다.
 
 ```bash
+# 로컬: 사람이 직접 실행한다
 aws eks update-cluster-version --profile <profile> --region <region> \
   --name <cluster> --kubernetes-version <옛 마이너> --force
 ```
@@ -156,7 +161,7 @@ AWS에 닿지 않아 클러스터는 그대로다. 한 줄로 다시 실행한�
 마이너라, 그 plan은 클러스터를 다시 올리려 한다.
 
 ```bash
-# type이 VersionRollback이고 status가 Successful이 될 때까지
+# 로컬: type이 VersionRollback이고 status가 Successful이 될 때까지
 aws eks describe-update --name <cluster> --update-id <응답의 update.id> --query 'update.[type,status,errors]'
 ```
 
@@ -190,7 +195,7 @@ apply가 insight 검사에서 거부된다.
 그 전에 노드를 지우면 대체 노드가 다시 새 마이너로 뜬다.
 
 ```bash
-# workbench에서. AMI 이름의 마이너가 옛 마이너로 바뀔 때까지 기다린다
+# workbench: AMI 이름의 마이너가 옛 마이너로 바뀔 때까지 기다린다
 kubectl get ec2nodeclass default -o jsonpath='{.status.amis[*].name}'; echo
 
 # 새 마이너 노드의 NodeClaim에 AMIDrift가 붙고 옛 마이너 노드에서는 사라진다
@@ -222,7 +227,7 @@ kubectl get nodes -L karpenter.sh/nodepool
 | 드리프트 | `gh workflow run deploy-<env>-eks.yml --ref main -f action=plan` | plan job 로그에 `No changes` |
 | Insights | `upgrade.md`의 Upgrade Insights 조회 | `UPGRADE_READINESS`가 전부 `PASSING` |
 
-차단(`upgradeHoldByTier`)은 다시 올릴 계획이 없을 때 `false`로 되돌린다. 곧 다시 올린다면 그대로 둔다.
+차단(`disruptionBlockByTier`)은 다시 올릴 계획이 없을 때 `false`로 되돌린다. 곧 다시 올린다면 그대로 둔다.
 
 ---
 

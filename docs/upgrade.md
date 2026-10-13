@@ -166,7 +166,7 @@ drift로 판정하는데, 컨트롤플레인과 system 노드그룹을 확인하
 - **고칠 곳**: `eks-platform-gitops` `addons/karpenter/nodepool/values.yaml`. **올릴 클러스터의 티어 줄만** 바꾼다.
 
 ```yaml
-upgradeHoldByTier:
+disruptionBlockByTier:
   prd: false
   nonprd: true      # dev를 올리는 동안
 ```
