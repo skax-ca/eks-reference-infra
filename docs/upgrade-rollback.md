@@ -100,6 +100,25 @@ addon 호환성」 표로 직접 확인한다. 지원하지 않으면 그 차트
 올린 순서의 역순이다. 앞 단계의 완료를 확인하기 전에 다음으로 가지 않는다. 보류(`upgradeHoldByTier`)는
 끝까지 `true`로 둔다.
 
+### 커밋을 revert해 PR로 머지하는 방법
+
+아래 단계의 "커밋을 revert한다"는 올릴 때 머지한 PR을 되돌리는 PR을 새로 만들어 머지한다는 뜻이다.
+`main`에 직접 push하지 않는다.
+
+| 순서 | GitHub 화면에서 |
+|------|-----------------|
+| 1 | 저장소의 **Pull requests** 탭에서 `is:merged`로 걸러 올릴 때 머지한 PR을 연다. 제목이 `ops(<env>-eks): ...을 <새 마이너>로 올린다`다 |
+| 2 | PR 맨 아래 "Pull request successfully merged and closed" 상자의 **Revert**를 누른다 |
+| 3 | GitHub가 되돌리는 브랜치와 PR 작성 화면을 만든다. **Files changed**에서 값이 옛 마이너로 돌아가는지 읽고 **Create pull request**를 누른다 |
+| 4 | 검사 3개가 통과하면 **Squash and merge**를 누른다 |
+| 5 | `eks-reference-infra`는 **Actions** 탭에 `deploy` run이 뜬다. plan job의 Summary를 그 단계의 기대값과 맞대고 **Review deployments** → environment 선택 → **Approve and deploy**를 누른다 |
+
+- `eks-platform-gitops`는 5번이 없다. 머지가 곧 적용이고 hub의 ArgoCD가 3분 안에 반영한다.
+- 명령으로는 `gh pr revert <PR 번호>`가 2~3번을, `gh pr merge <새 PR 번호> --squash`가 4번을 한다.
+- ⚠️ **Revert** 버튼이 없으면 그 PR 뒤에 같은 줄을 고친 커밋이 있어 자동으로 되돌릴 수 없는 것이다. 브랜치를
+  만들어 그 값을 손으로 옛 마이너로 고치고 PR을 연다.
+- ⚠️ plan이 기대값과 다르면 승인하지 않고 **Reject**한다. 게이트를 열어 둔 채 다음 PR을 머지하지 않는다.
+
 ### 4.1. cluster-autoscaler
 
 `eks-platform-gitops`에서 그 티어의 `versions.clusterAutoscalerImage`를 올린 커밋을 revert해 PR로
