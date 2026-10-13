@@ -159,8 +159,8 @@ module "workbench" {
   #    함께 넘긴다(노드그룹의 ami_type ↔ instance_types와 같은 함정).
   ami_id = "ami-0f4109eb491b0476f"
 
-  # 클러스터 마이너와 맞춘다(1.35 → v1.35.x). https://dl.k8s.io/release/stable-1.35.txt
-  kubectl_version = "v1.35.7"
+  # 클러스터 마이너와 맞춘다(1.36 → v1.36.x). https://dl.k8s.io/release/stable-1.36.txt
+  kubectl_version = "v1.36.5"
 
   # helm은 GitOps(pull) 전제와 무관하게 필수다. self-managed ArgoCD를 workbench에서 helm install로
   # seed하는 것이 부트스트랩 경로다(scripts/argocd-seed.sh). helm이 없으면 손으로 설치해야 하고
