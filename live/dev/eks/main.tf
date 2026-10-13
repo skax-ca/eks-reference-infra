@@ -371,15 +371,15 @@ module "eks" {
       # 업그레이드는 이 값을 올리는 명시적 커밋이어야 plan diff로 리뷰된다.
       # ⚠️ 아키텍처별로 값이 다르다(arm SSM 경로):
       #   aws ssm get-parameter --profile team --region ap-northeast-2 \
-      #     --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/arm64/standard/recommended/release_version
+      #     --name /aws/service/eks/optimized-ami/1.36/amazon-linux-2023/arm64/standard/recommended/release_version
       # ⚠️ 아래 kubernetes_version과 마이너가 같아야 한다(모듈이 plan에서 검증한다).
-      ami_release_version = "1.35.6-20260728"
+      ami_release_version = "1.36.4-20261003"
 
       # 노드그룹의 k8s 마이너. 클러스터의 kubernetes_version과 따로 적어야 컨트롤플레인 업그레이드와
       # 노드 롤링 교체가 다른 커밋·다른 승인으로 나뉜다. 빼면 노드그룹이 클러스터 버전을 따라가
       # 컨트롤플레인을 올리는 plan에 노드 교체가 함께 뜬다. 올리는 순서는 docs/upgrade.md가 갖는다.
       # ⛔ 클러스터보다 먼저 올리지 않는다. kubelet은 컨트롤플레인보다 높을 수 없다.
-      kubernetes_version = "1.35"
+      kubernetes_version = "1.36"
 
       # 노드 배치 두 축을 여기서 함께 건다: 밀어내기는 taint, 끌어당기기는 labels다. 두 이름이
       # 갈리는 것이 정상이다 — taint 키는 생태계 관례를 따라 플랫폼 차트의 기본 toleration을
