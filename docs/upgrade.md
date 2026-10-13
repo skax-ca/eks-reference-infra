@@ -32,12 +32,12 @@ cluster-autoscaler → addon → `kubectl`)다.
 | 단계 | 값 | 자리 | 올리면 일어나는 일 |
 |------|----|------|-------------------|
 | 보류 걸기 | 그 티어의 `upgradeHoldByTier` | `eks-platform-gitops` `addons/karpenter/nodepool/values.yaml` | Karpenter가 기존 노드를 교체하지 않는다 |
-| apply 1 | `kubernetes_version` | `live/<env>/eks/main.tf` | 컨트롤플레인 업그레이드 |
-| apply 2 | `managed_node_groups[*]`의 `kubernetes_version`·`ami_release_version` | 같은 파일 | system 노드그룹 롤링 교체 |
+| 컨트롤플레인 apply | `kubernetes_version` | `live/<env>/eks/main.tf` | 컨트롤플레인 업그레이드 |
+| 노드그룹 apply | `managed_node_groups[*]`의 `kubernetes_version`·`ami_release_version` | 같은 파일 | system 노드그룹 롤링 교체 |
 | cluster-autoscaler | 그 티어의 이미지 태그 | `eks-platform-gitops` `addons/cluster-addons/values.yaml` | cluster-autoscaler 재배포 |
 | 보류 풀기 | 그 티어의 `upgradeHoldByTier` | 보류를 건 자리 | Karpenter가 노드를 한 대씩 교체한다 |
-| apply 3 | `cluster_addons[*].addon_version` | `live/<env>/eks/main.tf` | EKS 관리형 addon 갱신 |
-| apply 4 | `kubectl_version` | 같은 파일 | workbench 인스턴스 교체 |
+| addon apply | `cluster_addons[*].addon_version` | `live/<env>/eks/main.tf` | EKS 관리형 addon 갱신 |
+| workbench apply | `kubectl_version` | 같은 파일 | workbench 인스턴스 교체 |
 
 ### 컨트롤플레인과 노드그룹을 나눈다
 
@@ -79,7 +79,7 @@ app 워크로드가 Karpenter 노드에 있으므로, 컨트롤플레인과 syst
 Karpenter 노드는 alias가 컨트롤플레인을 따라가므로 컨트롤플레인보다 먼저 내릴 방법이 없다. 새 마이너의
 Karpenter 노드가 하나라도 있으면 EKS의 검사를 건너뛰는 비상 경로로만 되돌릴 수 있다.
 
-**되돌릴지는 보류를 풀기 전에 정한다.** addon 핀(apply 3)도 되돌려지지 않는 값이라 그 뒤에 둔다.
+**되돌릴지는 보류를 풀기 전에 정한다.** addon 핀(addon apply)도 되돌려지지 않는 값이라 그 뒤에 둔다.
 
 ---
 
@@ -136,7 +136,7 @@ aws ssm get-parameter --region <region> --query Parameter.Value --output text \
 aws eks describe-addon-versions --region <region> --kubernetes-version <k8s> --addon-name <name> \
   --query 'addons[0].addonVersions[?compatibilities[0].defaultVersion==`true`].addonVersion | [0]'
 
-# 지금 핀이 대상 마이너의 호환 목록에 남아 있는가. 0이면 apply 1 전에 그 addon부터 올린다
+# 지금 핀이 대상 마이너의 호환 목록에 남아 있는가. 0이면 컨트롤플레인 apply 전에 그 addon부터 올린다
 aws eks describe-addon-versions --region <region> --kubernetes-version <k8s> --addon-name <name> \
   --query "length(addons[0].addonVersions[?addonVersion=='<지금 핀>'])"
 
@@ -202,7 +202,7 @@ nonprd 티어(dev)를 끝까지 올리고 확인한 뒤 prd 티어(hub)를 올�
 ⚠️ **승격 구간에는 `eks-platform-gitops`의 티어로 가르지 않은 매니페스트가 두 마이너 모두에서 유효해야
 한다.** 새 마이너에만 있는 API를 쓰는 변경은 hub까지 끝난 뒤에 머지한다.
 
-⚠️ hub는 ArgoCD가 도는 클러스터다. ArgoCD는 system 노드그룹에 고정되어 있어 **hub의 apply 2 동안**
+⚠️ hub는 ArgoCD가 도는 클러스터다. ArgoCD는 system 노드그룹에 고정되어 있어 **hub의 노드그룹 apply 동안**
 노드와 함께 옮겨진다. server·repo-server·applicationset은 복제본 2개에 PDB가 있어 이어지고, 복제본이
 하나인 application-controller가 옮겨지는 동안 dev를 포함한 전 클러스터의 reconcile이 멈춘다. 그
 구간에는 `eks-platform-gitops`에 머지하지 않는다. ⏳ 멈추는 시간과 재시작 뒤 스스로 `Synced`로
@@ -235,7 +235,7 @@ kubectl get nodepool default -o jsonpath='{.spec.disruption.budgets}'; echo
 
 ⛔ 반대 티어 클러스터에서도 같은 명령을 돌려 `Drifted`를 막는 줄이 없는지 본다.
 
-### 5.2. apply 1: 컨트롤플레인
+### 5.2. 컨트롤플레인 apply
 
 ```hcl
 kubernetes_version = "<k8s>"
@@ -264,7 +264,7 @@ aws eks describe-update --name <cluster> --update-id <id> --query 'update.[type,
 마이너에 남아 있고(`kubectl get nodes`), `runbooks.md` 「GitOps 상태 확인」의 Application이 전부
 `Synced`/`Healthy`다. ⏳ 소요 시간은 확인하지 않았다.
 
-### 5.3. apply 2: system 노드그룹
+### 5.3. 노드그룹 apply: system 노드그룹
 
 두 값을 함께 올린다. 주석의 조회 경로에 든 마이너(`optimized-ami/<k8s>/`)도 함께 고친다.
 
@@ -331,7 +331,7 @@ kubectl get nodeclaims -o wide -w
 
 완료 조건: `kubectl get nodes`의 `VERSION`이 전부 대상 마이너다.
 
-### 5.6. apply 3: EKS 관리형 addon
+### 5.6. addon apply: EKS 관리형 addon
 
 `cluster_addons`의 `addon_version`을 3.3에서 조회한 값으로 올린다. 값이 그대로인 addon은 건드리지
 않는다. 주석에 적힌 기준 마이너도 함께 고친다. `kube-proxy`는 Kubernetes 마이너를 따라가므로 빠뜨리지
@@ -349,7 +349,7 @@ done
 전부 `ACTIVE`이고 버전이 커밋한 값과 같아야 한다. ⏳ `vpc-cni`·`coredns` 갱신 중 워크로드가 끊기는지는
 확인하지 않았다.
 
-### 5.7. apply 4: workbench의 `kubectl`
+### 5.7. workbench apply: `kubectl` 버전
 
 ```hcl
 kubectl_version = "<3.3에서 조회한 값>"
@@ -390,6 +390,6 @@ Server가 같은 마이너인지 본다.
 
 | 증상 | 원인 | 대응 |
 |------|------|------|
-| apply 1의 plan에 노드그룹이 뜬다 | 노드그룹의 `kubernetes_version`을 적지 않아 클러스터 버전을 따라간다 | 승인하지 않고 Reject한 뒤 노드그룹에 지금 마이너를 명시한다 |
+| 컨트롤플레인 apply의 plan에 노드그룹이 뜬다 | 노드그룹의 `kubernetes_version`을 적지 않아 클러스터 버전을 따라간다 | 승인하지 않고 Reject한 뒤 노드그룹에 지금 마이너를 명시한다 |
 | apply가 `그 버전 없음`으로 죽는다 | addon 핀이 대상 마이너의 호환 목록에 없다 | 3.3의 조회로 그 addon의 값을 다시 고른다 |
 | 승인 게이트가 서지 않고 apply가 `skipped`다 | plan에 변경이 없다 | 값이 실제로 바뀌었는지, 이미 적용된 커밋인지 plan job 로그로 본다 |

@@ -2,7 +2,7 @@
 
 **읽는 사람**: 올린 Kubernetes 마이너를 이전 버전으로 되돌릴지 정하거나 되돌리는 사람.
 
-올리는 절차와 단계 이름(apply 1·apply 2·보류)은 [`upgrade.md`](upgrade.md)가 갖는다. 이 문서는 그
+올리는 절차와 단계 이름(컨트롤플레인 apply·노드그룹 apply·보류)은 [`upgrade.md`](upgrade.md)가 갖는다. 이 문서는 그
 절차의 「되돌릴지 정하고 보류를 푼다」 단계에서 되돌리기로 정했을 때 연다.
 
 > **검증 상태**: ⏳ 표시가 붙은 줄은 실환경에서 확인하지 않았다. 나머지는 dev에서 `1.36 → 1.35`로
@@ -37,7 +37,7 @@ alias가 컨트롤플레인 버전을 따라가므로 컨트롤플레인보다 �
 
 | 상태 | 경로 | 컨트롤플레인을 내리는 수단 |
 |------|------|-----------------------------|
-| 보류를 풀기 전이고 Karpenter 노드가 전부 옛 마이너다 | CI 경로 | apply 1의 커밋 revert ⏳ |
+| 보류를 풀기 전이고 Karpenter 노드가 전부 옛 마이너다 | CI 경로 | 컨트롤플레인 apply의 커밋 revert ⏳ |
 | 보류를 풀기 전인데 Karpenter 노드 몇 대가 새 마이너로 떴다 | 비상 경로 | AWS CLI의 `--force` |
 | 보류를 이미 풀었다 | 되돌리지 않는다 | 없다. 문제를 새 마이너에서 고친다 |
 
@@ -114,7 +114,7 @@ kubectl -n kube-system get deploy -l app.kubernetes.io/name=aws-cluster-autoscal
 
 ### 4.2. system 노드그룹
 
-apply 2의 커밋을 revert해 PR로 머지한다. `kubernetes_version`과 `ami_release_version`이 함께 내려간다.
+노드그룹 apply의 커밋을 revert해 PR로 머지한다. `kubernetes_version`과 `ami_release_version`이 함께 내려간다.
 
 | plan의 줄 | 기대 |
 |-----------|------|
@@ -131,14 +131,14 @@ system 노드가 빠져 있다.
 
 ### 4.3. EKS 관리형 addon ⏳
 
-apply 3까지 갔을 때만 한다. apply 3의 커밋을 revert해 PR로 머지한다. plan에는 `aws_eks_addon`의
+addon apply까지 갔을 때만 한다. addon apply의 커밋을 revert해 PR로 머지한다. plan에는 `aws_eks_addon`의
 `addon_version` 변경만 떠야 한다. `kube-proxy`가 여기에 든다.
 
 완료 조건: `upgrade.md`의 addon 조회에서 전부 `ACTIVE`이고, 3절의 addon·`kube-proxy` 항목이 `PASSING`이다.
 
 ### 4.4. 컨트롤플레인
 
-**CI 경로** ⏳: 3절의 항목이 전부 `PASSING`이면 apply 1의 커밋을 revert해 PR로 머지한다. plan에는
+**CI 경로** ⏳: 3절의 항목이 전부 `PASSING`이면 컨트롤플레인 apply의 커밋을 revert해 PR로 머지한다. plan에는
 `aws_eks_cluster.this[0]`의 `version`이 내려가는 `update in-place`와 `time_sleep`의 교체가 떠야 한다.
 4.5를 건너뛴다.
 
@@ -166,7 +166,7 @@ aws eks describe-update --name <cluster> --update-id <응답의 update.id> --que
 
 ### 4.5. 코드를 실제와 맞춘다 (비상 경로)
 
-apply 1의 커밋을 revert해 PR로 머지한다. 컨트롤플레인이 `ACTIVE`가 된 **뒤에** 머지한다. 먼저 머지하면
+컨트롤플레인 apply의 커밋을 revert해 PR로 머지한다. 컨트롤플레인이 `ACTIVE`가 된 **뒤에** 머지한다. 먼저 머지하면
 apply가 insight 검사에서 거부된다.
 
 | plan의 줄 | 기대 |
