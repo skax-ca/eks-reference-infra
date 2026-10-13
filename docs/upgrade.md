@@ -7,8 +7,8 @@
 클러스터 접근과 GitOps 상태를 읽는 법은 [`runbooks.md`](runbooks.md)가, 승인 게이트와 plan을 읽는 법은
 `iac-module-library/CLAUDE.md` 「배포 루트 공통」이 갖는다.
 
-> **검증 상태**: ⏳ 표시가 붙은 줄은 실환경에서 확인하지 않았다. 소요 시간과 끊김은 dev(노드 4대)에서
-> `1.35 → 1.36`으로 잰 값이다.
+> **검증 상태**: ⏳ 표시가 붙은 줄은 실환경에서 확인하지 않았다. 소요 시간과 끊김은 dev(노드 4대)와
+> hub(노드 5대)를 `1.35 → 1.36`으로 올리며 잰 값이다.
 
 ---
 
@@ -21,7 +21,7 @@
 | 0 | 사전 점검, 값 기록 | 없음 | 조회만 | 20분 | 영향 없음 |
 | 1 | disruption 차단 | `eks-platform-gitops` | 머지 | 5분 | 영향 없음 |
 | 2 | 컨트롤플레인 apply | 이 저장소 | 승인 | 8~10분 | 끊김 없음 |
-| 3 | 노드그룹 apply | 이 저장소 | 승인 | 9~10분 | system 노드의 파드가 옮겨진다 |
+| 3 | 노드그룹 apply | 이 저장소 | 승인 | 노드 2대 10분, 3대 15분 | system 노드의 파드가 옮겨진다 |
 | 4 | cluster-autoscaler | `eks-platform-gitops` | 머지 | 5분 | 영향 없음 |
 | 5 | **되돌릴지 정한다** | 없음 | 판단 | | |
 | 6 | disruption 차단 해제 | `eks-platform-gitops` | 머지 | 5분 + 노드당 1분 | app 파드가 옮겨진다 |
@@ -178,6 +178,7 @@ kubectl get nodepool default -o jsonpath='{.spec.disruption.budgets}'; echo
 
 - **완료 조건**: 올릴 클러스터에 위 줄이 보인다. ⛔ 반대 티어 클러스터에서도 같은 명령을 돌려 `Drifted`를
   막는 줄이 없는지 본다.
+- Karpenter 노드가 지금 없는 클러스터에도 건다. 올리는 도중 스케일 아웃으로 생길 수 있다.
 
 ### 3.2. 컨트롤플레인 apply
 
@@ -193,11 +194,12 @@ kubernetes_version = "<k8s>"
 | `time_sleep.this[0]` | `must be replaced`. 클러스터 버전이 trigger다 |
 | `aws_iam_openid_connect_provider` | `thumbprint_list`가 `(known after apply)`로 바뀌는 `update in-place` |
 | `data.aws_eks_addon_version.*` | `will be read during apply`. 리소스 변경이 아니다 |
+| `module.workbench`의 `volume_tags` (hub만) | `update in-place`. 5절의 태깅 자동화가 덮어쓴 `Name`을 되돌린다. 요약이 `3 to change`가 된다 |
 | 그 밖 | 없어야 한다 |
 
 요약 줄은 `Plan: 1 to add, 2 to change, 1 to destroy`다.
 
-⛔ 클러스터가 `must be replaced`로 뜨거나 노드그룹·addon·workbench가 뜨면 승인하지 않는다.
+⛔ 클러스터나 workbench가 `must be replaced`로 뜨거나 노드그룹·addon이 뜨면 승인하지 않는다.
 
 ```bash
 # 로컬:
@@ -233,6 +235,7 @@ kubectl get nodes -L karpenter.sh/nodepool,eks.amazonaws.com/nodegroup -w
 
 새 노드가 AZ마다 한 대씩 함께 뜨고, 기존 노드가 함께 cordon된 뒤 한 대씩 약 3분 간격으로 비워진다.
 system 노드의 파드(플랫폼 컴포넌트)가 이때 옮겨진다. 복제본이 하나인 컴포넌트는 옮겨지는 동안 멈춘다.
+hub(3대)에서는 도중에 임시 노드가 한 대 더 떴다가 내려갔고, 거기 자리 잡았던 파드는 두 번 옮겨졌다.
 
 - **완료 조건**: system 노드가 전부 `<k8s>`이고 `Ready`다. Karpenter 노드는 옛 마이너에 남아 있다.
 
@@ -305,7 +308,16 @@ done
 `vpc-cni`와 `kube-proxy` DaemonSet이 전 노드에서 다시 뜨고 `coredns`가 롤링된다. 그동안 Service 호출은
 끊기지 않는다.
 
-- **완료 조건**: 전부 `ACTIVE`이고 버전이 커밋한 값과 같다.
+```bash
+# workbench: addon 설정이 남아 있는가. 세 값이 true·zone 라벨·true이고 파드 IP가 전부 Pod 대역이어야 한다
+kubectl -n kube-system get ds aws-node -o jsonpath='{range .spec.template.spec.containers[0].env[*]}{.name}={.value}{"\n"}{end}' \
+  | grep -E 'CUSTOM_NETWORK_CFG|ENI_CONFIG_LABEL_DEF|ENABLE_PREFIX_DELEGATION'
+kubectl get pods -A -o custom-columns=IP:.status.podIP,HN:.spec.hostNetwork --no-headers \
+  | awk '$2!="true"{split($1,a,"."); print a[1]"."a[2]}' | sort | uniq -c
+```
+
+- **완료 조건**: 전부 `ACTIVE`이고 버전이 커밋한 값과 같다. `vpc-cni`의 custom networking 설정이 그대로이고
+  파드 IP가 노드 대역이 아니라 Pod 대역(`100.64`)이다.
 
 ### 3.8. workbench apply
 
@@ -346,12 +358,10 @@ kubectl version
 | addon | 3.7의 조회 | 전부 `ACTIVE` |
 | cluster-autoscaler | 3.4의 조회 | 이미지가 `<ca>` |
 | disruption 차단 | 3.1의 조회 | `Drifted`를 막는 줄이 없다 |
-| 드리프트 | `gh workflow run deploy-<env>-eks.yml --ref main -f action=plan` | plan job 로그에 `No changes` |
+| 드리프트 | `gh workflow run deploy-<env>-eks.yml --ref main -f action=plan` | plan job 로그에 `No changes`. hub는 workbench의 `volume_tags` 한 줄만 남는다 |
 | Insights | 2.2의 조회 | `UPGRADE_READINESS`에 다음 마이너에 대한 `ERROR`가 없다 |
 
 `ROLLBACK_READINESS` 항목은 여기서 `ERROR`인 것이 정상이다. 노드와 addon이 새 마이너라는 뜻이다.
-
-dev가 끝나면 워크로드를 지켜볼 시간을 두고 hub를 올린다.
 
 ---
 
@@ -365,9 +375,11 @@ dev가 끝나면 워크로드를 지켜볼 시간을 두고 hub를 올린다.
 | 노드그룹 apply | 플랫폼 컴포넌트가 옮겨진다 | **ArgoCD도 함께 옮겨진다** |
 
 - ⚠️ hub의 노드그룹 apply 동안 ArgoCD가 노드와 함께 옮겨진다. server·repo-server·applicationset은 복제본
-  2개에 PDB가 있어 이어진다. 복제본이 하나인 application-controller가 옮겨지는 동안 dev를 포함한 전
-  클러스터의 reconcile이 멈춘다. ⛔ 그 구간에는 `eks-platform-gitops`에 머지하지 않는다. ⏳ 멈추는 시간과
-  재시작 뒤 스스로 `Synced`로 돌아오는지는 확인하지 않았다.
+  2개에 PDB가 있어 이어진다. 복제본이 하나인 application-controller가 옮겨지는 30~40초 동안 dev를 포함한 전
+  클러스터의 reconcile이 멈췄다가 스스로 이어진다. Application은 `Synced`를 유지하고 일부가 잠깐
+  `Progressing`이 된다. ⛔ 그 구간에는 `eks-platform-gitops`에 머지하지 않는다.
+- ⚠️ hub 계정에는 새 EBS 볼륨의 `Name` 태그를 인스턴스 이름으로 덮어쓰는 태깅 자동화(Lambda)가 돈다.
+  workbench가 교체되면 몇 초 안에 볼륨 태그가 코드와 달라져, 그 뒤의 plan마다 `volume_tags` 한 줄이 뜬다.
 - ⚠️ hub의 workbench apply는 ArgoCD 터널이 걸린 인스턴스를 교체한다.
 - dev와 hub의 `main.tf`를 한 PR에 함께 올리지 않는다. 두 plan이 동시에 떠 순서가 사라진다.
 - dev가 `<k8s>`이고 hub가 옛 마이너인 동안, `eks-platform-gitops`의 티어로 가르지 않은 매니페스트는 두 마이너
