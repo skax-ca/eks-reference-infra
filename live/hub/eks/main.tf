@@ -358,10 +358,10 @@ module "eks" {
   # ⚠️ enabled = false는 기본값(preserve = true)에서 EKS의 addon 등록만 지운다. 파드·CRD·webhook·
   #    RBAC는 클러스터에 남는다. EKS에 맡기는 길(preserve = false)과 손으로 걷는 절차는
   #    docs/runbooks.md가 갖는다.
-  # ⚠️ 값의 정의역은 f(kubernetes_version, region)이고 아래는 k8s 1.35·ap-northeast-2 기준이다.
+  # ⚠️ 값의 정의역은 f(kubernetes_version, region)이고 아래는 k8s 1.36·ap-northeast-2 기준이다.
   #    kubernetes_version을 올리면 이 표도 함께 갱신한다. 안 하면 "그 버전 없음"으로 apply가
   #    죽는다(kube-proxy는 정의상 k8s 마이너를 따라간다). 조회:
-  #      aws eks describe-addon-versions --kubernetes-version 1.35 --region ap-northeast-2 \
+  #      aws eks describe-addon-versions --kubernetes-version 1.36 --region ap-northeast-2 \
   #        --addon-name <name> --profile team \
   #        --query 'addons[0].addonVersions[?compatibilities[0].defaultVersion==`true`].addonVersion | [0]'
   # ⚠️ 최신이 아니라 AWS 기본(default) 버전을 박는다. 핀은 "지금 상태를 고정"하는 일이고,
@@ -369,15 +369,15 @@ module "eks" {
   #    plan diff로 리뷰된다.
   cluster_addons = {
     # baseline 6종(버전만 override)
-    "vpc-cni" = { addon_version = "v1.22.3-eksbuild.1" }
+    "vpc-cni" = { addon_version = "v1.22.4-eksbuild.3" }
     "coredns" = {
-      addon_version = "v1.13.2-eksbuild.11"
+      addon_version = "v1.14.7-eksbuild.10"
       configuration = local.system_node_selector
     }
-    "kube-proxy"             = { addon_version = "v1.35.3-eksbuild.17" }
+    "kube-proxy"             = { addon_version = "v1.36.0-eksbuild.25" }
     "eks-pod-identity-agent" = { addon_version = "v1.3.10-eksbuild.3" }
     "aws-ebs-csi-driver" = {
-      addon_version = "v1.63.1-eksbuild.1"
+      addon_version = "v1.66.1-eksbuild.1"
       # node(DaemonSet)·controller(Deployment) 스키마가 완전히 분리돼 있다. controller를 빠뜨리면
       # 무제약 상태로 남아 Karpenter가 그 파드를 위해 노드를 만든다. node는 tolerateAllTaints
       # 불리언으로 같은 값을 눈에 보이게 두고, controller는 끌어당기기 축만 받는다.
@@ -387,7 +387,7 @@ module "eks" {
       })
     }
     "metrics-server" = {
-      addon_version = "v0.9.0-eksbuild.5"
+      addon_version = "v0.9.0-eksbuild.11"
       configuration = local.system_node_selector
     }
 
