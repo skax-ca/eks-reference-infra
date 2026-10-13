@@ -31,11 +31,11 @@ cluster-autoscaler → addon → `kubectl`)다.
 
 | 단계 | 값 | 자리 | 올리면 일어나는 일 |
 |------|----|------|-------------------|
-| 보류 걸기 | 그 티어의 `upgradeHoldByTier` | `eks-platform-gitops` `addons/karpenter/nodepool/values.yaml` | Karpenter가 기존 노드를 교체하지 않는다 |
+| disruption 차단 | 그 티어의 `upgradeHoldByTier` | `eks-platform-gitops` `addons/karpenter/nodepool/values.yaml` | Karpenter가 기존 노드를 교체하지 않는다 |
 | 컨트롤플레인 apply | `kubernetes_version` | `live/<env>/eks/main.tf` | 컨트롤플레인 업그레이드 |
 | 노드그룹 apply | `managed_node_groups[*]`의 `kubernetes_version`·`ami_release_version` | 같은 파일 | system 노드그룹 롤링 교체 |
 | cluster-autoscaler | 그 티어의 이미지 태그 | `eks-platform-gitops` `addons/cluster-addons/values.yaml` | cluster-autoscaler 재배포 |
-| 보류 풀기 | 그 티어의 `upgradeHoldByTier` | 보류를 건 자리 | Karpenter가 노드를 한 대씩 교체한다 |
+| disruption 차단 해제 | 그 티어의 `upgradeHoldByTier` | 차단을 건 자리 | Karpenter가 노드를 한 대씩 교체한다 |
 | addon apply | `cluster_addons[*].addon_version` | `live/<env>/eks/main.tf` | EKS 관리형 addon 갱신 |
 | workbench apply | `kubectl_version` | 같은 파일 | workbench 인스턴스 교체 |
 
@@ -55,7 +55,7 @@ Upgrades](https://docs.aws.amazon.com/eks/latest/best-practices/cluster-upgrades
 클러스터 버전에서 받아 와, `kubernetes_version`만 올린 plan에 노드그룹이 함께 뜬다. 노드그룹의
 `kubernetes_version`과 `ami_release_version`의 마이너는 항상 같은 값이다.
 
-### Karpenter 노드는 보류했다가 푼다
+### Karpenter의 disruption을 차단했다가 푼다
 
 `EC2NodeClass`는 버전을 적은 alias(`al2023@v<날짜>`)로 AMI를 고르고, Karpenter는 이 alias를
 **컨트롤플레인 버전에 맞는 AMI**로 푼다. 컨트롤플레인이 올라가면 같은 alias가 새 마이너의 AMI를 가리키고
@@ -63,29 +63,30 @@ Karpenter가 기존 노드를 drift로 판정해 교체한다([Managing AMIs](ht
 `amiAliasByTier`를 고치지 않아도 일어난다.
 
 app 워크로드가 Karpenter 노드에 있으므로, 컨트롤플레인과 system 노드그룹이 끝날 때까지 이 교체를
-막는다. `NodePool`의 disruption budget에 `Drifted`와 `Underutilized`를 막는 줄을 티어별로 둔다.
+막는다. `NodePool`의 disruption budget에 `Drifted`와 `Underutilized`를 `nodes: "0"`으로 막는 줄을 티어별로
+둔다. 이 문서는 그 줄이 걸린 상태를 **disruption 차단**이라 부른다.
 
-- 보류는 **Karpenter가 스스로 노드를 갈아 끼우는 것**만 막는다. 보류 중에 스케일 아웃, spot 중단,
-  만료(`expireAfter`)로 새로 뜨는 노드는 새 마이너다. 보류 기간을 길게 끌지 않는다.
-- 보류를 풀면 Karpenter가 대체 노드를 먼저 띄우고 PDB를 지키며 기존 노드를 비운다. 한 번에 교체하는
+- 차단은 **Karpenter가 스스로 노드를 갈아 끼우는 것**만 막는다. 차단 중에 스케일 아웃, spot 중단,
+  만료(`expireAfter`)로 새로 뜨는 노드는 새 마이너다. 차단 기간을 길게 끌지 않는다.
+- 차단을 풀면 Karpenter가 대체 노드를 먼저 띄우고 PDB를 지키며 기존 노드를 비운다. 한 번에 교체하는
   노드 수는 budget이 정한다.
 - ⚠️ alias의 날짜 버전이 **새 마이너에도 있어야** 한다. 없으면 Karpenter가 새 노드를 띄우지 못한다.
-- ⏳ 보류를 푼 뒤 drift 교체가 시작되기까지 걸리는 시간과, 교체 중 복제본 2개에 PDB를 건 워크로드가
+- ⏳ 차단을 푼 뒤 drift 교체가 시작되기까지 걸리는 시간과, 교체 중 복제본 2개에 PDB를 건 워크로드가
   끊기는지는 확인하지 않았다.
 
-### 🔑 보류를 풀기 전까지가 되돌릴 수 있는 구간이다
+### 🔑 차단을 풀기 전까지가 되돌릴 수 있는 구간이다
 
 되돌리려면 노드가 먼저 옛 마이너로 내려가야 한다. 관리형 노드그룹은 값을 내려 되돌릴 수 있지만,
 Karpenter 노드는 alias가 컨트롤플레인을 따라가므로 컨트롤플레인보다 먼저 내릴 방법이 없다. 새 마이너의
 Karpenter 노드가 하나라도 있으면 EKS의 검사를 건너뛰는 비상 경로로만 되돌릴 수 있다.
 
-**되돌릴지는 보류를 풀기 전에 정한다.** addon 핀(addon apply)도 되돌려지지 않는 값이라 그 뒤에 둔다.
+**되돌릴지는 차단을 풀기 전에 정한다.** addon 핀(addon apply)도 되돌려지지 않는 값이라 그 뒤에 둔다.
 
 ---
 
 ## 3. 사전 점검
 
-클러스터마다 보류를 걸기 전에 돈다. `<k8s>`는 **올릴 대상** 마이너다.
+클러스터마다 차단을 걸기 전에 돈다. `<k8s>`는 **올릴 대상** 마이너다.
 
 ### 3.1. 현재 상태
 
@@ -215,7 +216,7 @@ nonprd 티어(dev)를 끝까지 올리고 확인한 뒤 prd 티어(hub)를 올�
 배포 루트의 apply는 브랜치 → PR → 머지이고, 머지가 plan을 돌리고 environment 승인이 apply를 돌린다.
 `eks-platform-gitops`는 머지가 곧 적용이다. 앞 단계의 완료를 확인하기 전에 다음 PR을 머지하지 않는다.
 
-### 5.1. 보류 걸기
+### 5.1. disruption 차단
 
 `eks-platform-gitops`의 `addons/karpenter/nodepool/values.yaml`에서 **올릴 클러스터의 티어 줄만** `true`로
 바꾸고 PR로 머지한다. dev는 `nonprd`, hub는 `prd`다.
@@ -314,7 +315,7 @@ kubectl -n kube-system logs -l app.kubernetes.io/name=aws-cluster-autoscaler --t
 ⏳ 차트가 새 마이너의 이미지가 요구하는 RBAC를 갖고 있는지는 확인하지 않았다. 로그에 `forbidden`이
 있으면 차트 버전도 함께 올린다.
 
-### 5.5. 되돌릴지 정하고 보류를 푼다
+### 5.5. 되돌릴지 정하고 차단을 푼다
 
 여기가 되돌릴 수 있는 마지막 지점이다. 6절의 컨트롤플레인·노드·GitOps 행을 확인하고, 되돌린다면
 `upgrade-rollback.md`로 간다. 진행한다면 5.1에서 `true`로 바꾼 줄을 `false`로 되돌려 PR로 머지한다.
@@ -374,7 +375,7 @@ Server가 같은 마이너인지 본다.
 | GitOps | `runbooks.md` 「GitOps 상태 확인」 | 전부 `Synced`/`Healthy` |
 | addon | 5.6의 조회 | 전부 `ACTIVE` |
 | cluster-autoscaler | 5.4의 조회 | 이미지가 대상 마이너 |
-| 보류 | 5.1의 조회 | `Drifted`를 막는 줄이 없다 |
+| disruption 차단 | 5.1의 조회 | `Drifted`를 막는 줄이 없다 |
 | 드리프트 | `gh workflow run deploy-<env>-eks.yml --ref main -f action=plan` | plan job 로그에 `No changes` |
 | Insights | 3.2의 조회 | 다음 마이너에 대한 `ERROR`가 없다 |
 
@@ -382,7 +383,7 @@ Server가 같은 마이너인지 본다.
 
 ## 7. 되돌리기
 
-조건, 경로, 단계별 명령은 [`upgrade-rollback.md`](upgrade-rollback.md)가 갖는다. 5.5에서 보류를 풀기 전에 읽는다.
+조건, 경로, 단계별 명령은 [`upgrade-rollback.md`](upgrade-rollback.md)가 갖는다. 5.5에서 차단을 풀기 전에 읽는다.
 
 ---
 
