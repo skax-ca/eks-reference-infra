@@ -347,7 +347,7 @@ module "eks" {
 
   # 배포 루트가 버전을 명시로 소유한다. 이 값은 컨트롤플레인만 올린다. 노드그룹·addon 핀·
   # kubectl_version은 각각 다음 커밋에서 올린다(docs/upgrade.md).
-  kubernetes_version = "1.36"
+  kubernetes_version = "1.35"
 
   # 시스템 계층 노드. 앱·버스트는 Karpenter.
   managed_node_groups = {
