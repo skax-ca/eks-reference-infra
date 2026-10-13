@@ -100,52 +100,6 @@ addon 호환성」 표로 직접 확인한다. 지원하지 않으면 그 차트
 올린 순서의 역순이다. 앞 단계의 완료를 확인하기 전에 다음으로 가지 않는다. 보류(`upgradeHoldByTier`)는
 끝까지 `true`로 둔다.
 
-### 커밋을 revert해 PR로 머지하는 방법
-
-아래 단계의 "커밋을 revert한다"는 올릴 때 머지한 PR을 되돌리는 PR을 새로 만들어 머지한다는 뜻이다.
-`main`에 직접 push하지 않는다. 그 저장소의 클론에서 돌린다.
-
-```bash
-# 1. 올릴 때 머지한 PR의 번호를 찾는다. 제목이 "ops(<env>-eks): ...을 <새 마이너>로 올린다"다
-gh pr list --state merged --limit 10 --json number,title,mergedAt \
-  --jq '.[] | "\(.number)\t\(.mergedAt)\t\(.title)"'
-
-# 2. 그 PR을 되돌리는 PR을 만들고 새 PR의 번호를 읽는다
-gh pr revert <올린 PR 번호>
-gh pr list --state open --json number,title --jq '.[] | "\(.number)\t\(.title)"'
-
-# 3. 값이 옛 마이너로 돌아가는지 읽고, 검사가 끝나면 머지한다
-gh pr diff <새 PR 번호>
-gh pr checks <새 PR 번호> --watch
-gh pr merge <새 PR 번호> --squash --delete-branch
-```
-
-`eks-platform-gitops`는 여기까지다. 머지가 곧 적용이고 hub의 ArgoCD가 3분 안에 반영한다.
-`eks-reference-infra`는 머지가 plan을 돌리고 apply가 승인을 기다린다.
-
-```bash
-# 4. 머지가 깨운 run과 그 plan job을 찾는다
-gh run list --workflow deploy-<env>-eks.yml --limit 1 --json databaseId,status --jq '.[0]'
-gh run view <run id> --json jobs --jq '.jobs[] | "\(.databaseId)\t\(.name)\t\(.conclusion)"'
-
-# 5. plan job이 끝나면 요약을 읽어 그 단계의 기대값과 맞댄다
-gh api repos/<owner>/eks-reference-infra/actions/jobs/<plan job id>/logs \
-  | sed 's/\x1b\[[0-9;]*m//g' | grep -E ' (will be|must be) |Plan:|No changes'
-
-# 6. 승인한다. 거절은 state=rejected다
-ENV_ID=$(gh api repos/<owner>/eks-reference-infra/actions/runs/<run id>/pending_deployments \
-  --jq '.[0].environment.id')
-gh api -X POST repos/<owner>/eks-reference-infra/actions/runs/<run id>/pending_deployments \
-  -f state=approved -f comment='<읽은 plan 요약>' -F "environment_ids[]=$ENV_ID"
-
-gh run watch <run id>
-```
-
-- ⚠️ `gh pr revert`가 충돌로 실패하면 그 PR 뒤에 같은 줄을 고친 커밋이 있는 것이다. 브랜치를 만들어 그
-  값을 손으로 옛 마이너로 고치고 `gh pr create`로 연다.
-- ⚠️ plan이 기대값과 다르면 승인하지 않고 거절한다. 게이트를 열어 둔 채 다음 PR을 머지하지 않는다.
-- 승인 대기 중인 run은 `gh run view --log`로 plan을 읽을 수 없어 5번처럼 job 로그 API를 쓴다.
-
 ### 4.1. cluster-autoscaler
 
 `eks-platform-gitops`에서 그 티어의 `versions.clusterAutoscalerImage`를 올린 커밋을 revert해 PR로
